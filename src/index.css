@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 220 20% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+
+    --primary: 210 80% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 220 20% 20%;
+
+    --muted: 210 15% 93%;
+    --muted-foreground: 215 14% 46%;
+
+    --accent: 160 60% 40%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 10%;
+
+    --info: 200 80% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --iot-online: 142 71% 45%;
+    --iot-offline: 0 72% 51%;
+    --iot-connecting: 38 92% 50%;
+    --iot-weight-bg: 220 25% 12%;
+    --iot-weight-text: 142 80% 55%;
+    --iot-scan-success: 142 71% 45%;
+    --iot-scan-fail: 0 72% 51%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 210 80% 42%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 220 25% 12%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 210 80% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 18%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 220 15% 20%;
+    --sidebar-ring: 210 80% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .weight-display {
+    background: hsl(var(--iot-weight-bg));
+    color: hsl(var(--iot-weight-text));
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  .device-online {
+    color: hsl(var(--iot-online));
+  }
+
+  .device-offline {
+    color: hsl(var(--iot-offline));
+  }
+
+  .device-connecting {
+    color: hsl(var(--iot-connecting));
+  }
+
+  .scan-success {
+    border-color: hsl(var(--iot-scan-success));
+    background: hsl(var(--iot-scan-success) / 0.1);
+  }
+
+  .scan-fail {
+    border-color: hsl(var(--iot-scan-fail));
+    background: hsl(var(--iot-scan-fail) / 0.1);
+  }
+
+  .status-badge-online {
+    background: hsl(var(--success) / 0.15);
+    color: hsl(var(--success));
+  }
+
+  .status-badge-offline {
+    background: hsl(var(--destructive) / 0.15);
+    color: hsl(var(--destructive));
+  }
+
+  .status-badge-warning {
+    background: hsl(var(--warning) / 0.15);
+    color: hsl(var(--warning));
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 4px hsl(var(--iot-online) / 0.4); }
+  50% { box-shadow: 0 0 16px hsl(var(--iot-online) / 0.8); }
+}
+
+@keyframes weight-update {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-weight-update {
+  animation: weight-update 0.3s ease-out;
+}
