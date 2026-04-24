@@ -1,65 +1,195 @@
-import { useState } from "react";
-import { Box, Plus, Search, Filter, Tag } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useDeferredValue, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, Box, FileSpreadsheet, Loader2, Plus, RefreshCw, Search } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "@/components/ui/sonner";
 import ModuleFormFieldsReference from "@/components/ModuleFormFieldsReference";
 
-type ItemCategory = "raw_material" | "blend_item" | "consumable" | "accessory" | "general" | "scrap" | "maintenance" | "finished_good";
+const ITEMS_API_URL = import.meta.env.VITE_ITEMS_API_URL ?? "/api/items/";
+const ITEMS_IMPORT_API_URL = import.meta.env.VITE_ITEMS_IMPORT_API_URL ?? "/api/items/import/";
+const ITEM_IMPORT_SAMPLE_URL = "/item-import-sample.xlsx";
 
-interface Item {
-  id: string;
-  name: string;
-  category: ItemCategory;
-  hsn: string;
-  unit: string;
-  stock: number;
-  reorderLevel: number;
-  rate: number;
-  gstPercent: number;
-  status: "active" | "obsolete" | "discontinued";
+interface ItemImportError {
+  row: number;
+  message: string;
+  details?: Record<string, unknown>;
 }
 
-const MOCK_ITEMS: Item[] = [
-  { id: "RM-001", name: "HDPE Granules (Virgin)", category: "raw_material", hsn: "3901", unit: "KG", stock: 5200, reorderLevel: 1000, rate: 95.5, gstPercent: 18, status: "active" },
-  { id: "RM-002", name: "LDPE Flakes", category: "raw_material", hsn: "3901", unit: "KG", stock: 3800, reorderLevel: 800, rate: 72.0, gstPercent: 18, status: "active" },
-  { id: "RM-003", name: "PP Granules", category: "raw_material", hsn: "3902", unit: "KG", stock: 4100, reorderLevel: 900, rate: 88.0, gstPercent: 18, status: "active" },
-  { id: "RM-004", name: "Carbon Black Masterbatch", category: "raw_material", hsn: "3206", unit: "KG", stock: 620, reorderLevel: 200, rate: 145.0, gstPercent: 18, status: "active" },
-  { id: "RM-005", name: "UV Stabilizer", category: "raw_material", hsn: "3812", unit: "KG", stock: 180, reorderLevel: 50, rate: 320.0, gstPercent: 18, status: "active" },
-  { id: "BL-001", name: "HSM 500 WPE Blend", category: "blend_item", hsn: "3901", unit: "KG", stock: 1200, reorderLevel: 300, rate: 110.0, gstPercent: 18, status: "active" },
-  { id: "BL-002", name: "Standard WPE Mix", category: "blend_item", hsn: "3901", unit: "KG", stock: 900, reorderLevel: 200, rate: 98.0, gstPercent: 18, status: "active" },
-  { id: "BL-003", name: "Premium HDPE Blend", category: "blend_item", hsn: "3901", unit: "KG", stock: 650, reorderLevel: 150, rate: 125.0, gstPercent: 18, status: "active" },
-  { id: "CN-001", name: "Packing Tape (48mm)", category: "consumable", hsn: "3919", unit: "ROLL", stock: 450, reorderLevel: 100, rate: 35.0, gstPercent: 18, status: "active" },
-  { id: "CN-002", name: "Stretch Wrap Film", category: "consumable", hsn: "3920", unit: "ROLL", stock: 120, reorderLevel: 30, rate: 280.0, gstPercent: 18, status: "active" },
-  { id: "CN-003", name: "PP Bags (25 KG)", category: "consumable", hsn: "6305", unit: "PCS", stock: 8500, reorderLevel: 2000, rate: 12.0, gstPercent: 18, status: "active" },
-  { id: "AC-001", name: "Extruder Die (60mm)", category: "accessory", hsn: "8477", unit: "PCS", stock: 3, reorderLevel: 1, rate: 45000.0, gstPercent: 18, status: "active" },
-  { id: "SC-001", name: "WPE Scrap (Regrind)", category: "scrap", hsn: "3915", unit: "KG", stock: 2200, reorderLevel: 0, rate: 32.0, gstPercent: 18, status: "active" },
-  { id: "MT-001", name: "Extruder Screw (Replacement)", category: "maintenance", hsn: "8477", unit: "PCS", stock: 2, reorderLevel: 1, rate: 85000.0, gstPercent: 18, status: "active" },
-  { id: "FG-001", name: "WPE Pipe 110mm Class 6", category: "finished_good", hsn: "3917", unit: "MTR", stock: 15000, reorderLevel: 3000, rate: 185.0, gstPercent: 18, status: "active" },
-  { id: "FG-002", name: "WPE Pipe 75mm Class 4", category: "finished_good", hsn: "3917", unit: "MTR", stock: 22000, reorderLevel: 5000, rate: 95.0, gstPercent: 18, status: "active" },
-];
+interface ItemImportResponse {
+  created_count: number;
+  failed_count: number;
+  processed_count: number;
+  errors: ItemImportError[];
+  detail?: string;
+}
 
-const categoryLabels: Record<ItemCategory, string> = {
-  raw_material: "Raw Material", blend_item: "Blend Item", consumable: "Consumable", accessory: "Accessory",
-  general: "General", scrap: "Scrap", maintenance: "Maintenance", finished_good: "Finished Good",
+interface ItemRecord {
+  id: number;
+  category: string;
+  group: string;
+  sub_group: string;
+  item_name: string;
+  item_code: string;
+  hsn_code: string | null;
+  unit: string;
+  product_details: string | null;
+  description: string | null;
+  min_max_status: boolean;
+  status: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+const formatLabel = (value: string) =>
+  value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+
+const fetchItems = async (): Promise<ItemRecord[]> => {
+  const response = await fetch(ITEMS_API_URL, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Items request failed with ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data.results)) {
+    return data.results;
+  }
+
+  throw new Error("Unexpected items response received from the backend.");
 };
 
 const ItemsPage = () => {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [selectedGroup, setSelectedGroup] = useState("all");
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
-  const filtered = MOCK_ITEMS.filter((item) => {
-    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) || item.id.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = activeTab === "all" || item.category === activeTab;
-    return matchesSearch && matchesTab;
+  const { data: items = [], error, isError, isFetching, isLoading, refetch } = useQuery({
+    queryKey: ["items"],
+    queryFn: fetchItems,
+    staleTime: 30_000,
   });
+
+  const categories = Array.from(new Set(items.map((item) => item.category).filter(Boolean))).sort((left, right) =>
+    formatLabel(left).localeCompare(formatLabel(right)),
+  );
+  const groups = Array.from(new Set(items.map((item) => item.group).filter(Boolean))).sort((left, right) =>
+    formatLabel(left).localeCompare(formatLabel(right)),
+  );
+
+  const selectedTab = activeTab === "all" || categories.includes(activeTab) ? activeTab : "all";
+  const selectedGroupValue = selectedGroup === "all" || groups.includes(selectedGroup) ? selectedGroup : "all";
+
+  const filtered = items.filter((item) => {
+    const haystack = [item.item_name, item.item_code, item.category, item.group, item.sub_group, item.hsn_code ?? ""]
+      .join(" ")
+      .toLowerCase();
+    const matchesSearch = deferredSearch.length === 0 || haystack.includes(deferredSearch);
+    const matchesTab = selectedTab === "all" || item.category === selectedTab;
+    const matchesGroup = selectedGroupValue === "all" || item.group === selectedGroupValue;
+    return matchesSearch && matchesTab && matchesGroup;
+  });
+
+  const stats = [
+    { label: "Active Items", count: items.filter((item) => item.status).length },
+    { label: "Categories", count: categories.length },
+    { label: "Groups", count: groups.length },
+    { label: "Min/Max Enabled", count: items.filter((item) => item.min_max_status).length },
+    { label: "Total Items", count: items.length },
+  ];
+
+  const openImportDialog = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      toast.error("Please upload a .xlsx Excel file.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setIsImporting(true);
+    try {
+      const response = await fetch(ITEMS_IMPORT_API_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      const responseText = await response.text();
+      let payload: Partial<ItemImportResponse> = {};
+
+      if (responseText.length > 0) {
+        try {
+          payload = JSON.parse(responseText) as ItemImportResponse;
+        } catch {
+          payload = { detail: responseText };
+        }
+      }
+
+      if (!response.ok) {
+        const firstError = Array.isArray(payload.errors) ? payload.errors[0] : undefined;
+        const errorMessage = payload.detail
+          ?? (firstError ? `Row ${firstError.row}: ${firstError.message}` : undefined)
+          ?? "The Excel file could not be imported.";
+        throw new Error(errorMessage);
+      }
+
+      await refetch();
+
+      const createdCount = payload.created_count ?? 0;
+      const failedCount = payload.failed_count ?? 0;
+      const firstError = Array.isArray(payload.errors) ? payload.errors[0] : undefined;
+
+      if (failedCount > 0) {
+        toast(`Imported ${createdCount} item${createdCount === 1 ? "" : "s"} with ${failedCount} skipped row${failedCount === 1 ? "" : "s"}.`, {
+          description: firstError ? `Row ${firstError.row}: ${firstError.message}` : "Review the backend response for row-level details.",
+        });
+      } else {
+        toast.success(`Imported ${createdCount} item${createdCount === 1 ? "" : "s"} from Excel.`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The Excel import failed.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-2">
           <Box className="h-6 w-6 text-primary" />
           <div>
@@ -67,80 +197,184 @@ const ItemsPage = () => {
             <p className="text-sm text-muted-foreground">Raw materials, blends, consumables & finished goods</p>
           </div>
         </div>
-        <Button className="gap-2"><Plus className="h-4 w-4" /> Add Item</Button>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-2">
+            <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleExcelImport} />
+            <Button variant="outline" className="gap-2" onClick={openImportDialog} disabled={isImporting}>
+              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              {isImporting ? "Importing..." : "Import Excel"}
+            </Button>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" /> Add Item
+            </Button>
+          </div>
+          <p className="max-w-md text-xs text-muted-foreground sm:text-right">
+            Upload the sample Excel format and it will create item records in the backend database.{" "}
+            <a href={ITEM_IMPORT_SAMPLE_URL} download className="font-medium text-primary underline-offset-4 hover:underline">
+              Download the sample file
+            </a>
+            .
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        {[
-          { label: "Raw Materials", count: MOCK_ITEMS.filter(i => i.category === "raw_material").length },
-          { label: "Blend Items", count: MOCK_ITEMS.filter(i => i.category === "blend_item").length },
-          { label: "Consumables", count: MOCK_ITEMS.filter(i => i.category === "consumable").length },
-          { label: "Finished Goods", count: MOCK_ITEMS.filter(i => i.category === "finished_good").length },
-          { label: "Total Items", count: MOCK_ITEMS.length },
-        ].map((s) => (
-          <Card key={s.label}>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
+        {stats.map((stat) => (
+          <Card key={stat.label}>
             <CardContent className="p-3 text-center">
-              <div className="text-2xl font-bold text-foreground">{s.count}</div>
-              <div className="text-xs text-muted-foreground">{s.label}</div>
+              <div className="text-2xl font-bold text-foreground">{stat.count}</div>
+              <div className="text-xs text-muted-foreground">{stat.label}</div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col gap-3 lg:ml-auto lg:flex-row lg:items-center lg:justify-end">
+        <Select value={selectedGroupValue} onValueChange={setSelectedGroup}>
+          <SelectTrigger className="w-full sm:w-56">
+            <SelectValue placeholder="Filter by group" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Groups</SelectItem>
+            {groups.map((group) => (
+              <SelectItem key={group} value={group}>
+                {formatLabel(group)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="relative w-full sm:w-[22rem]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search items..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input
+            placeholder="Search items..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="pl-9"
+          />
         </div>
-        <Button variant="outline" size="sm" className="gap-1"><Filter className="h-3.5 w-3.5" /> Filter</Button>
+
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => void refetch()}>
+          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap h-auto">
+      {isError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Unable to load items</AlertTitle>
+          <AlertDescription>
+            {error instanceof Error ? error.message : "The frontend could not reach the items API."}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Tabs value={selectedTab} onValueChange={setActiveTab}>
+        <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="raw_material">Raw Materials</TabsTrigger>
-          <TabsTrigger value="blend_item">Blend Items</TabsTrigger>
-          <TabsTrigger value="consumable">Consumables</TabsTrigger>
-          <TabsTrigger value="accessory">Accessories</TabsTrigger>
-          <TabsTrigger value="scrap">Scrap</TabsTrigger>
-          <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
-          <TabsTrigger value="finished_good">Finished Goods</TabsTrigger>
+          {categories.map((category) => (
+            <TabsTrigger key={category} value={category}>
+              {formatLabel(category)}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
-        <TabsContent value={activeTab} className="mt-4">
+        <TabsContent value={selectedTab} className="mt-4">
           <Card>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-16 text-center">S.No</TableHead>
                     <TableHead>Item Code</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Category</TableHead>
+                    <TableHead>Group</TableHead>
+                    <TableHead>Sub Group</TableHead>
                     <TableHead>HSN</TableHead>
                     <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Stock</TableHead>
-                    <TableHead className="text-right">Rate (₹)</TableHead>
-                    <TableHead>GST %</TableHead>
+                    <TableHead>Min/Max</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((item) => (
-                    <TableRow key={item.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell className="font-mono text-xs">{item.id}</TableCell>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-xs">{categoryLabels[item.category]}</Badge></TableCell>
-                      <TableCell className="font-mono text-xs">{item.hsn}</TableCell>
-                      <TableCell>{item.unit}</TableCell>
-                      <TableCell className={`text-right font-medium ${item.stock <= item.reorderLevel ? "text-destructive" : ""}`}>
-                        {item.stock.toLocaleString()}
-                        {item.stock <= item.reorderLevel && <span className="text-xs ml-1">⚠</span>}
+                  {isLoading &&
+                    Array.from({ length: 6 }).map((_, index) => (
+                      <TableRow key={index}>
+                        <TableCell>
+                          <Skeleton className="h-4 w-8" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-40" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-16" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-12" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-16" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+
+                  {!isLoading &&
+                    filtered.map((item, index) => (
+                      <TableRow key={item.id} className="hover:bg-muted/50">
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell className="font-mono text-xs">{item.item_code}</TableCell>
+                        <TableCell>
+                          <div className="font-medium">{item.item_name}</div>
+                          {item.description && (
+                            <div className="max-w-[20rem] truncate text-xs text-muted-foreground">{item.description}</div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {formatLabel(item.category)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{item.group || "-"}</TableCell>
+                        <TableCell>{item.sub_group || "-"}</TableCell>
+                        <TableCell className="font-mono text-xs">{item.hsn_code || "-"}</TableCell>
+                        <TableCell>{item.unit}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={item.min_max_status ? "bg-primary/10 text-primary" : "text-muted-foreground"}>
+                            {item.min_max_status ? "Enabled" : "Disabled"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={item.status ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}>
+                            {item.status ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+
+                  {!isLoading && filtered.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                        {items.length === 0 ? "No items found in the backend yet." : "No items match the current search or group filter."}
                       </TableCell>
-                      <TableCell className="text-right">{item.rate.toFixed(2)}</TableCell>
-                      <TableCell>{item.gstPercent}%</TableCell>
-                      <TableCell><Badge variant="outline" className={item.status === "active" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}>{item.status}</Badge></TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
