@@ -41,6 +41,7 @@ const navSections = [
       { to: "/indents", icon: ClipboardList, label: "Indents" },
       { to: "/purchases-inwards", icon: PackageOpen, label: "Purchases & Inwards" },
       { to: "/payments", icon: Wallet, label: "Payments" },
+      
     ],
   },
   {
