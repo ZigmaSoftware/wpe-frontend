@@ -135,8 +135,8 @@ const AppLayout = () => {
 
         {!collapsed && (
           <div className="px-4 py-3 border-t border-sidebar-border">
-            <div className="text-[10px] text-sidebar-foreground/40">BluePlanet × Zigma</div>
-            <div className="text-[10px] text-sidebar-foreground/40">v2.0 — IoT Integrated</div>
+            <div className="text-[10px] text-sidebar-foreground/40"> Zigma</div>
+            <div className="text-[10px] text-sidebar-foreground/40"></div>
           </div>
         )}
       </aside>
@@ -147,12 +147,12 @@ const AppLayout = () => {
             <Menu className="h-5 w-5" />
           </button>
           <div className="text-sm text-muted-foreground hidden lg:block">
-            WPE Production — OIMS Hardware Integrated
+            WPE
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs">
               <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
-              <span className="text-muted-foreground">System Online</span>
+              {/* <span className="text-muted-foreground">System Online</span> */}
             </div>
           </div>
         </header>
