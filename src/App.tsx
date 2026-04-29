@@ -25,6 +25,7 @@ import IndentsPage from "@/pages/IndentsPage";
 import PurchasesInwardsPage from "@/pages/PurchasesInwardsPage";
 import PaymentsPage from "@/pages/PaymentsPage";
 import ReportsPage from "@/pages/ReportsPage";
+import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,28 +37,29 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/contacts" element={<ContactsPage />} />
-            <Route path="/items" element={<ItemsPage />} />
-            <Route path="/presales" element={<PresalesPage />} />
-            <Route path="/sales-outwards" element={<SalesOutwardsPage />} />
-            <Route path="/production-monitor" element={<ProductionMonitorPage />} />
-            <Route path="/indents" element={<IndentsPage />} />
-            <Route path="/purchases-inwards" element={<PurchasesInwardsPage />} />
-            <Route path="/payments" element={<PaymentsPage />} />
-            <Route path="/blending" element={<BlendingPage />} />
-            <Route path="/granulation" element={<GranulationPage />} />
-            <Route path="/extrusion" element={<ExtrusionPage />} />
-            <Route path="/packing" element={<PackingPage />} />
-            <Route path="/qc" element={<QCPage />} />
-            <Route path="/warehouse" element={<WarehousePage />} />
-            <Route path="/dispatch" element={<DispatchPage />} />
-            <Route path="/live-weight" element={<LiveWeightPage />} />
-            <Route path="/device-status" element={<DeviceStatusPage />} />
-            <Route path="/qr-scanner" element={<QRScannerPage />} />
-            <Route path="/bin-tracking" element={<BinTrackingPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/" element={<LoginPage />} />
+          <Route path="/app" element={<AppLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="contacts" element={<ContactsPage />} />
+            <Route path="items" element={<ItemsPage />} />
+            <Route path="presales" element={<PresalesPage />} />
+            <Route path="sales-outwards" element={<SalesOutwardsPage />} />
+            <Route path="production-monitor" element={<ProductionMonitorPage />} />
+            <Route path="indents" element={<IndentsPage />} />
+            <Route path="purchases-inwards" element={<PurchasesInwardsPage />} />
+            <Route path="payments" element={<PaymentsPage />} />
+            <Route path="blending" element={<BlendingPage />} />
+            <Route path="granulation" element={<GranulationPage />} />
+            <Route path="extrusion" element={<ExtrusionPage />} />
+            <Route path="packing" element={<PackingPage />} />
+            <Route path="qc" element={<QCPage />} />
+            <Route path="warehouse" element={<WarehousePage />} />
+            <Route path="dispatch" element={<DispatchPage />} />
+            <Route path="live-weight" element={<LiveWeightPage />} />
+            <Route path="device-status" element={<DeviceStatusPage />} />
+            <Route path="qr-scanner" element={<QRScannerPage />} />
+            <Route path="bin-tracking" element={<BinTrackingPage />} />
+            <Route path="reports" element={<ReportsPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

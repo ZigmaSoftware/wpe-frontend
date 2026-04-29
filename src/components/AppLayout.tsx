@@ -1,64 +1,66 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard, Scale, ScanLine, Package, Blend, Cog, Layers,
   PackageCheck, ClipboardCheck, Warehouse, Truck, Wifi, ChevronLeft,
   ChevronRight, Activity, Menu, X, Users, Box, FileText, ShoppingCart,
   ClipboardList, PackageOpen, Wallet, BarChart3
 } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 const navSections = [
   {
     label: "Main",
     items: [
-      { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-      { to: "/contacts", icon: Users, label: "Contacts" },
-      { to: "/items", icon: Box, label: "Items" },
+      { to: "/app", icon: LayoutDashboard, label: "Dashboard" },
+      { to: "/app/contacts", icon: Users, label: "Contacts" },
+      { to: "/app/items", icon: Box, label: "Items" },
     ],
   },
   {
     label: "Sales",
     items: [
-      { to: "/presales", icon: FileText, label: "Presales" },
-      { to: "/sales-outwards", icon: ShoppingCart, label: "Sales & Outwards" },
+      { to: "/app/presales", icon: FileText, label: "Presales" },
+      { to: "/app/sales-outwards", icon: ShoppingCart, label: "Sales & Outwards" },
     ],
   },
   {
     label: "Production",
     items: [
-      { to: "/production-monitor", icon: Activity, label: "Production Monitor" },
-      { to: "/blending", icon: Blend, label: "Blending" },
-      { to: "/granulation", icon: Cog, label: "Granulation" },
-      { to: "/extrusion", icon: Layers, label: "Extrusion" },
-      { to: "/packing", icon: PackageCheck, label: "Packing" },
-      { to: "/qc", icon: ClipboardCheck, label: "QC Inspection" },
+      { to: "/app/production-monitor", icon: Activity, label: "Production Monitor" },
+      { to: "/app/blending", icon: Blend, label: "Blending" },
+      { to: "/app/granulation", icon: Cog, label: "Granulation" },
+      { to: "/app/extrusion", icon: Layers, label: "Extrusion" },
+      { to: "/app/packing", icon: PackageCheck, label: "Packing" },
+      { to: "/app/qc", icon: ClipboardCheck, label: "QC Inspection" },
     ],
   },
   {
     label: "Procurement",
     items: [
-      { to: "/indents", icon: ClipboardList, label: "Indents" },
-      { to: "/purchases-inwards", icon: PackageOpen, label: "Purchases & Inwards" },
-      { to: "/payments", icon: Wallet, label: "Payments" },
+      { to: "/app/indents", icon: ClipboardList, label: "Indents" },
+      { to: "/app/purchases-inwards", icon: PackageOpen, label: "Purchases & Inwards" },
+      { to: "/app/payments", icon: Wallet, label: "Payments" },
       
     ],
   },
   {
     label: "Warehouse & IoT",
     items: [
-      { to: "/warehouse", icon: Warehouse, label: "Warehouse" },
-      { to: "/dispatch", icon: Truck, label: "Dispatch" },
-      { to: "/bin-tracking", icon: Package, label: "Bin Tracking" },
-      { to: "/live-weight", icon: Scale, label: "Live Weight" },
-      { to: "/qr-scanner", icon: ScanLine, label: "QR Scanner" },
-      { to: "/device-status", icon: Wifi, label: "Device Status" },
+      { to: "/app/warehouse", icon: Warehouse, label: "Warehouse" },
+      { to: "/app/dispatch", icon: Truck, label: "Dispatch" },
+      { to: "/app/bin-tracking", icon: Package, label: "Bin Tracking" },
+      { to: "/app/live-weight", icon: Scale, label: "Live Weight" },
+      { to: "/app/qr-scanner", icon: ScanLine, label: "QR Scanner" },
+      { to: "/app/device-status", icon: Wifi, label: "Device Status" },
     ],
   },
   {
     label: "Reports",
     items: [
-      { to: "/reports", icon: BarChart3, label: "Reports & Tools" },
+      { to: "/app/reports", icon: BarChart3, label: "Reports & Tools" },
     ],
   },
 ];
@@ -115,7 +117,7 @@ const AppLayout = () => {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={item.to === "/"}
+                    end={item.to === "/app"}
                     onClick={() => setMobileOpen(false)}
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
@@ -155,6 +157,12 @@ const AppLayout = () => {
               <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
               {/* <span className="text-muted-foreground">System Online</span> */}
             </div>
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link to="/">
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Link>
+            </Button>
           </div>
         </header>
 
