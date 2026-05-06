@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
+  Archive,
   Blend,
   Box,
   ChevronLeft,
@@ -28,6 +29,7 @@ const navSections = [
       { to: "/app/items", icon: Box, label: "Items" },
       { to: "/app/blending", icon: Blend, label: "Blending" },
       { to: "/app/presales", icon: FileText, label: "Presales" },
+      { to: "/app/store", icon: Archive, label: "Store" },
       { to: "/app/grn", icon: Truck, label: "GRN" },
       { to: "/app/qcr", icon: ClipboardCheck, label: "QCR" },
     ],
