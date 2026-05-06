@@ -12,8 +12,12 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
     proxy: {
-      "/api": {
+      "/api/auth": {
         target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/api": {
+        target: "http://127.0.0.1:8001",
         changeOrigin: true,
       },
     },
@@ -22,6 +26,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      axios: path.resolve(__dirname, "./src/vendor/axios.ts"),
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },

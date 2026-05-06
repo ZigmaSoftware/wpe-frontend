@@ -1,9 +1,52 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Droplets, Factory, ShieldCheck } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { useLocation, useNavigate } from "react-router-dom";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/providers/AuthProvider";
+
+const loginSchema = z.object({
+  username: z.string().min(1, "Username is required."),
+  password: z.string().min(1, "Password is required."),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 const LoginPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated, signIn, user } = useAuth();
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      username: "",
+      password: "",
+    },
+  });
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/app", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  const onSubmit = async (values: LoginFormValues) => {
+    try {
+      await signIn(values.username, values.password);
+      const destination = (location.state as { from?: string } | null)?.from ?? "/app";
+      toast.success(`Welcome back${user?.username ? `, ${user.username}` : ""}.`);
+      navigate(destination, { replace: true });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Login failed. Please check your credentials.");
+    }
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(90deg,#dbe8f8_0%,#eef2f7_32%,#fff2e6_100%)]">
       <div className="absolute inset-0 opacity-50">
@@ -24,46 +67,70 @@ const LoginPage = () => {
                   <img src="/logo.png" alt="WPE logo" className="h-8 w-8 object-contain" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#46ad22]/80">
-                    WPE ERP
-                  </p>
-                  <h1 className="text-2xl font-semibold text-slate-900">Welcome</h1>
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#46ad22]/80">WPE ERP</p>
+                  <h1 className="text-2xl font-semibold text-slate-900">Sign in</h1>
                 </div>
               </div>
 
               <p className="mb-8 max-w-sm text-sm leading-6 text-slate-500">
-                Initial access page for the WPE application. Credentials are not required yet, so you can enter directly.
+                Use your backend credentials to access the live operations admin for Core, GRN, and QCR workflows.
               </p>
 
-              <div className="w-full space-y-4">
-                <Input
-                  type="text"
-                  placeholder="Username"
-                  disabled
-                  className="h-12 rounded-xl border-slate-200 bg-slate-50 px-4 text-slate-500 placeholder:text-slate-400"
-                />
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  disabled
-                  className="h-12 rounded-xl border-slate-200 bg-slate-50 px-4 text-slate-500 placeholder:text-slate-400"
-                />
+              <Form {...form}>
+                <form className="w-full space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-700">Username</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            className="h-12 rounded-xl border-slate-200 bg-slate-50 px-4 text-slate-900"
+                            autoComplete="username"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <Button
-                  asChild
-                  size="lg"
-                  className="h-12 w-full rounded-xl bg-[#f59f0b] text-base font-semibold text-white shadow-lg shadow-amber-500/30 transition-transform duration-300 hover:scale-[1.01] hover:bg-[#e28f08]"
-                >
-                  <Link to="/app">
-                    Enter WPE App
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-700">Password</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="password"
+                            className="h-12 rounded-xl border-slate-200 bg-slate-50 px-4 text-slate-900"
+                            autoComplete="current-password"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button
+                    type="submit"
+                    size="lg"
+                    disabled={form.formState.isSubmitting}
+                    className="h-12 w-full rounded-xl bg-[#f59f0b] text-base font-semibold text-white shadow-lg shadow-amber-500/30 transition-transform duration-300 hover:scale-[1.01] hover:bg-[#e28f08]"
+                  >
+                    {form.formState.isSubmitting ? "Signing in..." : "Sign In"}
                     <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
+                  </Button>
+                </form>
+              </Form>
 
               <div className="mt-8 flex flex-wrap gap-3 text-xs text-slate-500">
-                <span className="rounded-full bg-slate-100 px-3 py-1.5">No credentials required</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5">UI preview mode</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1.5">JWT token auth</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1.5">Auto refresh on 401</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1.5">Core + GRN services</span>
               </div>
             </div>
           </section>
@@ -73,7 +140,7 @@ const LoginPage = () => {
 
             <div className="relative flex items-center justify-between">
               <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium tracking-[0.2em] text-white/80">
-                BLUE PLANET STYLE
+                LIVE BACKEND
               </span>
               <ShieldCheck className="h-5 w-5 text-white/70" />
             </div>
@@ -97,10 +164,6 @@ const LoginPage = () => {
           </section>
         </div>
       </div>
-
-      <p className="relative pb-6 text-center text-sm text-slate-500">
-        © 2026 WPE. Initial login interface.
-      </p>
     </div>
   );
 };
