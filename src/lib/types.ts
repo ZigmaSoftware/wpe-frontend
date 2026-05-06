@@ -93,6 +93,30 @@ export type DepartmentStock = {
   updated_at: string;
 };
 
+export type StoreStockRecord = {
+  id: number;
+  item: number;
+  item_code: string;
+  item_name: string;
+  unit: string;
+  quantity: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StoreTransactionRecord = {
+  id: number;
+  item: number;
+  item_code: string;
+  item_name: string;
+  unit: string;
+  transaction_type: string;
+  quantity: string;
+  reference_id: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 export type Presale = {
   id: number;
   order_code: string;

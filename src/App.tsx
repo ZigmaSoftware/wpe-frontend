@@ -16,6 +16,7 @@ import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import PresalesPage from "@/pages/PresalesPage";
 import QCRPage from "@/pages/QCRPage";
+import StorePage from "@/pages/StorePage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +44,7 @@ const App = () => (
                   <Route path="items" element={<ItemsPage />} />
                   <Route path="blending" element={<BlendingPage />} />
                   <Route path="presales" element={<PresalesPage />} />
+                  <Route path="store" element={<StorePage />} />
                   <Route path="grn" element={<GRNPage />} />
                   <Route path="qcr" element={<QCRPage />} />
                 </Route>
