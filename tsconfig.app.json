@@ -17,6 +17,9 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "paths": {
+      "axios": [
+        "./src/vendor/axios.ts"
+      ],
       "@/*": [
         "./src/*"
       ]

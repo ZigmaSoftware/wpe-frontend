@@ -1,58 +1,104 @@
-import { Scale, ScanLine, Package, Activity, AlertTriangle, TrendingUp, Wifi, WifiOff } from "lucide-react";
-import { useDeviceStatus } from "@/hooks/useDeviceStatus";
-import ProductionTracker from "@/components/ProductionTracker";
-import BinVisualizer, { BinInfo } from "@/components/BinVisualizer";
-
-const SAMPLE_BINS: BinInfo[] = [
-  { id: "B-R", label: "BIN R", status: "occupied", materialName: "HSM 500 WPE Blend", weightKg: 99.8, capacityKg: 150 },
-  { id: "B-Q", label: "BIN Q", status: "in_process", materialName: "Granulated WPE", weightKg: 120, capacityKg: 150 },
-  { id: "B-S", label: "BIN S", status: "empty", capacityKg: 150 },
-  { id: "B-T", label: "BIN T", status: "full", materialName: "WPE Blend Output", weightKg: 148, capacityKg: 150 },
-  { id: "B-U", label: "BIN U", status: "occupied", materialName: "Raw Material Mix", weightKg: 65, capacityKg: 150 },
-  { id: "B-V", label: "BIN V", status: "empty", capacityKg: 150 },
-];
+import { useQuery } from "@tanstack/react-query";
+import { coreApi, grnApi } from "@/lib/api";
+import { normalizeGrnResponse, normalizeListResponse } from "@/lib/api-helpers";
+import type { Contact, DepartmentStock, GrnListResponse, Item, Presale, QcrRecord } from "@/lib/types";
+import PageHeader from "@/components/PageHeader";
+import StatCard from "@/components/StatCard";
+import { ErrorState, LoadingState } from "@/components/QueryState";
 
 const DashboardPage = () => {
-  const { onlineCount, offlineCount, totalCount } = useDeviceStatus();
+  const overviewQuery = useQuery({
+    queryKey: ["dashboard-overview"],
+    queryFn: async () => {
+      const [contacts, items, blending, presales, grnActive, qcrActive] = await Promise.all([
+        coreApi.get<Contact[] | { data: Contact[] }>("/api/contacts/contacts/"),
+        coreApi.get<Item[] | { data: Item[] }>("/api/items/items/"),
+        coreApi.get<DepartmentStock[]>("/api/blending/stock/"),
+        coreApi.get<Presale[]>("/api/presales/presales/"),
+        grnApi.get<GrnListResponse>("/api/grn/"),
+        grnApi.get<QcrRecord[]>("/api/qcr/"),
+      ]);
 
-  const stats = [
-    { label: "Devices Online", value: `${onlineCount}/${totalCount}`, icon: Wifi, color: "text-success" },
-    { label: "Devices Offline", value: offlineCount.toString(), icon: WifiOff, color: "text-destructive" },
-    { label: "Today's Output", value: "1,470 pcs", icon: TrendingUp, color: "text-primary" },
-    { label: "Active Bins", value: "4", icon: Package, color: "text-accent" },
-    { label: "Scans Today", value: "238", icon: ScanLine, color: "text-info" },
-    { label: "Weight Captures", value: "156", icon: Scale, color: "text-primary" },
-    { label: "QC Alerts", value: "3", icon: AlertTriangle, color: "text-warning" },
-    { label: "Lines Running", value: "2/4", icon: Activity, color: "text-success" },
-  ];
+      return {
+        contacts: normalizeListResponse(contacts.data),
+        items: normalizeListResponse(items.data),
+        blending: blending.data,
+        presales: normalizeListResponse(presales.data),
+        grn: normalizeGrnResponse(grnActive.data).data,
+        qcr: qcrActive.data,
+      };
+    },
+  });
+
+  if (overviewQuery.isLoading) {
+    return <LoadingState label="Loading dashboard..." />;
+  }
+
+  if (overviewQuery.isError) {
+    return <ErrorState description="The dashboard overview could not be loaded from the live backend." />;
+  }
+
+  const { contacts, items, blending, presales, grn, qcr } = overviewQuery.data;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Production Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Real-time plant floor monitoring — WPE Production</p>
+      <PageHeader
+        title="Operations Dashboard"
+        description="Live counts from the exact Core and GRN endpoints used by the admin app."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard label="Contacts" value={contacts.length} hint={`${contacts.filter((contact) => contact.is_active).length} active`} />
+        <StatCard label="Items" value={items.length} hint={`${items.filter((item) => item.status).length} enabled`} />
+        <StatCard label="Blending Stock" value={blending.length} hint="Department stock rows" />
+        <StatCard label="Presales" value={presales.length} hint="All presales records" />
+        <StatCard label="GRN" value={grn.length} hint="Active GRN Process records" />
+        <StatCard label="QCR" value={qcr.length} hint="Active QCR queue" />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {stats.map((stat) => (
-          <div key={stat.label} className="rounded-lg border border-border bg-card p-4">
-            <div className="flex items-center justify-between mb-2">
-              <stat.icon className={`h-5 w-5 ${stat.color}`} />
-            </div>
-            <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-card-foreground">Recent Contacts</h2>
+          <div className="mt-4 space-y-3">
+            {contacts.slice(0, 5).map((contact) => (
+              <div key={contact.id} className="flex items-center justify-between rounded-xl border border-border/80 px-4 py-3">
+                <div>
+                  <div className="font-medium text-card-foreground">{contact.name}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {contact.category} · {contact.company_name || "No company"}
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">{contact.ref_code}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground mb-3">Production Lines</h2>
-          <ProductionTracker lines={[]} />
         </div>
-        <div>
-          <h2 className="text-lg font-semibold text-foreground mb-3">Bin Status Overview</h2>
-          <BinVisualizer bins={SAMPLE_BINS} />
+
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-card-foreground">GRN and QCR Snapshot</h2>
+          <div className="mt-4 space-y-3">
+            {grn.slice(0, 3).map((record) => (
+              <div key={`grn-${record.id}`} className="rounded-xl border border-border/80 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-card-foreground">{record.grn_no}</div>
+                  <div className="text-xs text-muted-foreground">{record.process_status}</div>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {record.supplier_details.trade_name || record.trade_name || "Unknown supplier"}
+                </div>
+              </div>
+            ))}
+
+            {qcr.slice(0, 2).map((record) => (
+              <div key={`qcr-${record.id}`} className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-slate-900">{record.grn_reference_no}</div>
+                  <div className="text-xs font-medium text-amber-700">{record.status}</div>
+                </div>
+                <div className="text-sm text-slate-600">QCR unique id: {record.unique_id}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

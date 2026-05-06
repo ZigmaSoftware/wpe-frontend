@@ -1,115 +1,170 @@
-import LiveWeightDisplay from "@/components/LiveWeightDisplay";
-import QRScannerComponent from "@/components/QRScannerComponent";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRightLeft } from "lucide-react";
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import PageHeader from "@/components/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
+import StatCard from "@/components/StatCard";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { coreApi } from "@/lib/api";
+import { formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
+import type { DepartmentStock } from "@/lib/types";
+import { toast } from "@/components/ui/sonner";
 
-interface Recipe {
-  code: string;
-  name: string;
-  targetWeight: number;
-  actualWeight: number | null;
-  status: "pending" | "weighed" | "error";
-}
-
-const RECIPES: Recipe[] = [
-  { code: "WOO-2001", name: "Wood Powder", targetWeight: 30.0, actualWeight: null, status: "pending" },
-  { code: "HDP-2020", name: "HDPE", targetWeight: 15.0, actualWeight: null, status: "pending" },
-  { code: "CAL-2004", name: "Calcium Powder", targetWeight: 8.0, actualWeight: null, status: "pending" },
-  { code: "COU-2003", name: "Coupling Agent", targetWeight: 3.5, actualWeight: null, status: "pending" },
-  { code: "LUB-2007", name: "Lubricant", targetWeight: 2.0, actualWeight: null, status: "pending" },
-  { code: "ANT-2005", name: "Antioxidant", targetWeight: 1.5, actualWeight: null, status: "pending" },
-];
+const transferSchema = z.object({
+  quantity: z.string().min(1, "Quantity is required."),
+});
 
 const BlendingPage = () => {
-  const [recipes, setRecipes] = useState<Recipe[]>(RECIPES);
-  const [activeRecipeIdx, setActiveRecipeIdx] = useState(0);
+  const queryClient = useQueryClient();
+  const [selectedStock, setSelectedStock] = useState<DepartmentStock | null>(null);
+  const form = useForm<{ quantity: string }>({
+    resolver: zodResolver(transferSchema),
+    defaultValues: {
+      quantity: "",
+    },
+  });
 
-  const handleWeightCapture = (weight: number) => {
-    setRecipes((prev) => {
-      const next = [...prev];
-      const recipe = next[activeRecipeIdx];
-      const deviation = Math.abs(weight - recipe.targetWeight) / recipe.targetWeight * 100;
-      next[activeRecipeIdx] = {
-        ...recipe,
-        actualWeight: weight,
-        status: deviation <= 0.5 ? "weighed" : "error",
-      };
-      return next;
-    });
-    if (activeRecipeIdx < recipes.length - 1) {
-      setActiveRecipeIdx(activeRecipeIdx + 1);
-    }
-  };
+  const blendingQuery = useQuery({
+    queryKey: ["blending-stock"],
+    queryFn: async () => {
+      const response = await coreApi.get<DepartmentStock[]>("/api/blending/stock/");
+      return response.data;
+    },
+  });
 
-  const totalTarget = recipes.reduce((sum, r) => sum + r.targetWeight, 0);
-  const totalActual = recipes.reduce((sum, r) => sum + (r.actualWeight || 0), 0);
-  const allWeighed = recipes.every((r) => r.status === "weighed");
+  const requestStockMutation = useMutation({
+    mutationFn: async (payload: { item_id: number; quantity: string }) => {
+      const response = await coreApi.post("/api/blending/request-stock/", payload);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Stock transferred to blending department.");
+      setSelectedStock(null);
+      form.reset({ quantity: "" });
+      queryClient.invalidateQueries({ queryKey: ["blending-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Unable to transfer stock. Insufficient stock may be available."));
+    },
+  });
+
+  const totalQuantity = (blendingQuery.data ?? []).reduce((sum, stock) => sum + Number(stock.quantity), 0);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Blending Module</h1>
-        <p className="text-sm text-muted-foreground mt-1">Recipe-based weighing with hardware validation — Recipe: WPE RG 0107.6.22</p>
+      <PageHeader
+        title="Blending Stock"
+        description="Shows the blending department stock table and the live stock transfer modal."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard label="Blending Rows" value={blendingQuery.data?.length ?? 0} />
+        <StatCard label="Total Quantity" value={formatDecimal(totalQuantity)} />
+        <StatCard label="Department" value="BLENDING" />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="space-y-4">
-          <LiveWeightDisplay
-            deviceId="WS-001"
-            label={`Scale — ${recipes[activeRecipeIdx]?.name || "Ready"}`}
-            expectedWeight={recipes[activeRecipeIdx]?.targetWeight}
-            tolerancePercent={0.5}
-            onWeightStable={handleWeightCapture}
-          />
-          <QRScannerComponent label="Scan Input Bin" />
-        </div>
+      {blendingQuery.isLoading ? <LoadingState label="Loading blending stock..." /> : null}
+      {blendingQuery.isError ? <ErrorState description="Blending stock could not be loaded from the backend." /> : null}
 
-        <div className="lg:col-span-2">
-          <h2 className="text-lg font-semibold text-foreground mb-3">Recipe Components</h2>
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-secondary">
-                <tr>
-                  <th className="text-left px-4 py-2 text-secondary-foreground">Code</th>
-                  <th className="text-left px-4 py-2 text-secondary-foreground">Material</th>
-                  <th className="text-right px-4 py-2 text-secondary-foreground">Target (kg)</th>
-                  <th className="text-right px-4 py-2 text-secondary-foreground">Actual (kg)</th>
-                  <th className="text-center px-4 py-2 text-secondary-foreground">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recipes.map((r, i) => (
-                  <tr
-                    key={r.code}
-                    className={`border-t border-border cursor-pointer transition-colors ${
-                      i === activeRecipeIdx ? "bg-primary/5" : ""
-                    }`}
-                    onClick={() => setActiveRecipeIdx(i)}
-                  >
-                    <td className="px-4 py-2 font-mono text-xs text-foreground">{r.code}</td>
-                    <td className="px-4 py-2 text-foreground">{r.name}</td>
-                    <td className="px-4 py-2 text-right font-mono text-foreground">{r.targetWeight.toFixed(3)}</td>
-                    <td className="px-4 py-2 text-right font-mono text-foreground">{r.actualWeight?.toFixed(3) || "—"}</td>
-                    <td className="px-4 py-2 text-center">
-                      {r.status === "weighed" && <CheckCircle2 className="h-4 w-4 text-success inline" />}
-                      {r.status === "error" && <AlertTriangle className="h-4 w-4 text-destructive inline" />}
-                      {r.status === "pending" && <span className="text-xs text-muted-foreground">Pending</span>}
-                    </td>
-                  </tr>
+      {!blendingQuery.isLoading && !blendingQuery.isError ? (
+        blendingQuery.data?.length ? (
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item Code</TableHead>
+                  <TableHead>Item Name</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {blendingQuery.data.map((stock) => (
+                  <TableRow key={stock.id}>
+                    <TableCell className="font-mono text-xs">{stock.item_code}</TableCell>
+                    <TableCell>{stock.item_name}</TableCell>
+                    <TableCell>{formatDecimal(stock.quantity)}</TableCell>
+                    <TableCell>{stock.unit}</TableCell>
+                    <TableCell>{stock.department}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" onClick={() => setSelectedStock(stock)}>
+                        <ArrowRightLeft className="mr-2 h-4 w-4" />
+                        Transfer More
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-                <tr className="border-t-2 border-border bg-secondary">
-                  <td colSpan={2} className="px-4 py-2 font-semibold text-secondary-foreground">Total</td>
-                  <td className="px-4 py-2 text-right font-mono font-semibold text-secondary-foreground">{totalTarget.toFixed(3)}</td>
-                  <td className="px-4 py-2 text-right font-mono font-semibold text-secondary-foreground">{totalActual.toFixed(3)}</td>
-                  <td className="px-4 py-2 text-center">
-                    {allWeighed && <CheckCircle2 className="h-4 w-4 text-success inline" />}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-        </div>
-      </div>
+        ) : (
+          <EmptyState title="No blending stock yet" description="Request stock from the store through the transfer modal." />
+        )
+      ) : null}
+
+      <Dialog open={Boolean(selectedStock)} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedStock(null);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer stock to blending</DialogTitle>
+            <DialogDescription>
+              Uses `POST CORE/api/blending/request-stock/` with `item_id` and `quantity`.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit((values) => {
+                if (selectedStock) {
+                  requestStockMutation.mutate({ item_id: selectedStock.item, quantity: values.quantity });
+                }
+              })}
+              className="space-y-4"
+            >
+              <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+                <div className="font-medium">{selectedStock?.item_name}</div>
+                <div className="text-muted-foreground">{selectedStock?.item_code}</div>
+              </div>
+              <FormField control={form.control} name="quantity" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Quantity</FormLabel>
+                  <FormControl><Input {...field} placeholder="0.000" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setSelectedStock(null)}>Cancel</Button>
+                <Button type="submit" disabled={requestStockMutation.isPending}>Transfer</Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

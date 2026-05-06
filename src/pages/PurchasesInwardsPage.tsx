@@ -122,6 +122,14 @@ interface GRNRecord {
   moved_to_qcr_by: string | null;
 }
 
+interface NestedGrnRecord extends Partial<GRNRecord> {
+  document_details?: Partial<GRNRecord>;
+  document_requirement_details?: Partial<GRNRecord>;
+  supplier_details?: Partial<GRNRecord>;
+  items?: Array<Partial<GRNRecord>>;
+  value_details?: Partial<GRNRecord>;
+}
+
 interface QCRRecord {
   id: number;
   source_grn: number;
@@ -189,6 +197,82 @@ const toNumber = (value: string | number | null | undefined) => {
 
 const toDisplayDate = (value: string | null | undefined) => value ?? "-";
 
+const normalizeGrnRecord = (record: NestedGrnRecord): GRNRecord => {
+  const documentDetails = record.document_details ?? {};
+  const requirementDetails = record.document_requirement_details ?? {};
+  const supplierDetails = record.supplier_details ?? {};
+  const firstItem = record.items?.[0] ?? {};
+  const valueDetails = record.value_details ?? {};
+
+  return {
+    id: record.id ?? 0,
+    po_no: record.po_no ?? documentDetails.po_no ?? null,
+    po_date: record.po_date ?? documentDetails.po_date ?? null,
+    grn_no: record.grn_no ?? documentDetails.grn_no ?? "",
+    grn_date: record.grn_date ?? documentDetails.grn_date ?? null,
+    supplier_invoice_no: record.supplier_invoice_no ?? documentDetails.supplier_invoice_no ?? null,
+    supplier_invoice_date: record.supplier_invoice_date ?? documentDetails.supplier_invoice_date ?? null,
+    gateentry_bookno: record.gateentry_bookno ?? documentDetails.gateentry_bookno ?? null,
+    gateentry_bookdate: record.gateentry_bookdate ?? documentDetails.gateentry_bookdate ?? null,
+    tolerance: record.tolerance ?? documentDetails.tolerance ?? null,
+    req_date: record.req_date ?? requirementDetails.req_date ?? null,
+    req_person_name: record.req_person_name ?? requirementDetails.req_person_name ?? null,
+    req_person_id: record.req_person_id ?? requirementDetails.req_person_id ?? null,
+    req_department: record.req_department ?? requirementDetails.req_department ?? null,
+    req_reason: record.req_reason ?? requirementDetails.req_reason ?? null,
+    supplier_id: record.supplier_id ?? supplierDetails.supplier_id ?? null,
+    gstin: record.gstin ?? supplierDetails.gstin ?? null,
+    contact_name: record.contact_name ?? supplierDetails.contact_name ?? null,
+    trade_name: record.trade_name ?? supplierDetails.trade_name ?? null,
+    contact_type: record.contact_type ?? supplierDetails.contact_type ?? null,
+    address1: record.address1 ?? supplierDetails.address1 ?? null,
+    address2: record.address2 ?? supplierDetails.address2 ?? null,
+    location: record.location ?? supplierDetails.location ?? null,
+    pincode: record.pincode ?? supplierDetails.pincode ?? null,
+    state_name: record.state_name ?? supplierDetails.state_name ?? null,
+    state_code: record.state_code ?? supplierDetails.state_code ?? null,
+    country: record.country ?? supplierDetails.country ?? null,
+    person_name: record.person_name ?? supplierDetails.person_name ?? null,
+    phone_number: record.phone_number ?? supplierDetails.phone_number ?? null,
+    email: record.email ?? supplierDetails.email ?? null,
+    category: record.category ?? supplierDetails.category ?? null,
+    segment: record.segment ?? supplierDetails.segment ?? null,
+    sub_segment: record.sub_segment ?? supplierDetails.sub_segment ?? null,
+    sales_contact_id: record.sales_contact_id ?? supplierDetails.sales_contact_id ?? null,
+    currency: record.currency ?? supplierDetails.currency ?? null,
+    item_id: record.item_id ?? firstItem.item_id ?? null,
+    item_serial_number: record.item_serial_number ?? firstItem.item_serial_number ?? null,
+    product_description: record.product_description ?? firstItem.product_description ?? null,
+    hsn_code: record.hsn_code ?? firstItem.hsn_code ?? null,
+    total_quantity: record.total_quantity ?? firstItem.total_quantity ?? null,
+    quantity: record.quantity ?? firstItem.quantity ?? null,
+    free_quantity: record.free_quantity ?? firstItem.free_quantity ?? null,
+    accepted_qty: record.accepted_qty ?? firstItem.accepted_qty ?? null,
+    rejected_qty: record.rejected_qty ?? firstItem.rejected_qty ?? null,
+    unit: record.unit ?? firstItem.unit ?? null,
+    unit_price: record.unit_price ?? firstItem.unit_price ?? null,
+    total_amount: record.total_amount ?? firstItem.total_amount ?? null,
+    discount: record.discount ?? firstItem.discount ?? null,
+    assessable_value: record.assessable_value ?? firstItem.assessable_value ?? null,
+    gst_rate: record.gst_rate ?? firstItem.gst_rate ?? null,
+    igst_amount: record.igst_amount ?? firstItem.igst_amount ?? null,
+    cgst_amount: record.cgst_amount ?? firstItem.cgst_amount ?? null,
+    sgst_amount: record.sgst_amount ?? firstItem.sgst_amount ?? null,
+    total_item_value: record.total_item_value ?? firstItem.total_item_value ?? null,
+    freight_charge: record.freight_charge ?? valueDetails.freight_charge ?? null,
+    loading_unloading_charge: record.loading_unloading_charge ?? valueDetails.loading_unloading_charge ?? null,
+    total_before_tax: record.total_before_tax ?? valueDetails.total_before_tax ?? null,
+    total_tax_amount: record.total_tax_amount ?? valueDetails.total_tax_amount ?? null,
+    total_after_tax: record.total_after_tax ?? valueDetails.total_after_tax ?? null,
+    created_at: record.created_at ?? "",
+    updated_at: record.updated_at ?? "",
+    status: record.status ?? true,
+    process_status: record.process_status ?? (record.status === false ? "Moved to QCR" : "GRN Process"),
+    moved_to_qcr_at: record.moved_to_qcr_at ?? null,
+    moved_to_qcr_by: record.moved_to_qcr_by ?? null,
+  };
+};
+
 const fetchGrnRecords = async (scope: "process" | "moved" = "process"): Promise<GRNRecord[]> => {
   const url = scope === "moved" ? GRN_MOVED_API_URL : GRN_API_URL;
   const response = await fetch(url, {
@@ -204,11 +288,15 @@ const fetchGrnRecords = async (scope: "process" | "moved" = "process"): Promise<
   const data = await response.json();
 
   if (Array.isArray(data)) {
-    return data as GRNRecord[];
+    return data.map((record) => normalizeGrnRecord(record as NestedGrnRecord));
   }
 
   if (Array.isArray(data.results)) {
-    return data.results as GRNRecord[];
+    return data.results.map((record: NestedGrnRecord) => normalizeGrnRecord(record));
+  }
+
+  if (Array.isArray(data.data)) {
+    return data.data.map((record: NestedGrnRecord) => normalizeGrnRecord(record));
   }
 
   throw new Error("Unexpected GRN response received from the backend.");

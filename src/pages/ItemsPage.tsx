@@ -1,388 +1,524 @@
-import { useDeferredValue, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Box, FileSpreadsheet, Loader2, Plus, RefreshCw, Search } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileSpreadsheet, LineChart, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import PageHeader from "@/components/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
+import StatCard from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { coreApi } from "@/lib/api";
+import {
+  formatDate,
+  formatDecimal,
+  getApiErrorMessage,
+  normalizeListResponse,
+  summarizeImportResponse,
+} from "@/lib/api-helpers";
+import type { ImportResponse, Item, ItemStockAnalysis, StockTransaction } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
-import ModuleFormFieldsReference from "@/components/ModuleFormFieldsReference";
 
-const ITEMS_API_URL = import.meta.env.VITE_ITEMS_API_URL ?? "/api/items/";
-const ITEMS_IMPORT_API_URL = import.meta.env.VITE_ITEMS_IMPORT_API_URL ?? "/api/items/import/";
-const ITEM_IMPORT_SAMPLE_URL = "/item-import-sample.xlsx";
+const itemSchema = z.object({
+  product_type: z.string().default("General Item"),
+  category: z.string().min(1, "Category is required."),
+  group: z.string().min(1, "Group is required."),
+  sub_group: z.string().min(1, "Sub group is required."),
+  item_name: z.string().min(1, "Item name is required."),
+  hsn_code: z.string().optional(),
+  unit: z.string().min(1, "Unit is required."),
+  opening_stock: z.string().default("0"),
+  product_details: z.string().optional(),
+  description: z.string().optional(),
+  min_max_status: z.boolean(),
+  status: z.boolean(),
+});
 
-interface ItemImportError {
-  row: number;
-  message: string;
-  details?: Record<string, unknown>;
-}
+const stockMovementSchema = z.object({
+  date: z.string().optional(),
+  ref_id: z.string().optional(),
+  trans_type: z.string().optional(),
+  sale_type: z.string().optional(),
+  doc_id: z.string().optional(),
+  contact: z.string().optional(),
+  warehouse: z.string().optional(),
+  bin: z.string().optional(),
+  quantity: z.string().min(1, "Quantity is required."),
+});
 
-interface ItemImportResponse {
-  created_count: number;
-  failed_count: number;
-  processed_count: number;
-  errors: ItemImportError[];
-  detail?: string;
-}
+type ItemFormValues = z.infer<typeof itemSchema>;
+type StockMovementValues = z.infer<typeof stockMovementSchema>;
 
-interface ItemRecord {
-  id: number;
-  category: string;
-  group: string;
-  sub_group: string;
-  item_name: string;
-  item_code: string;
-  hsn_code: string | null;
-  unit: string;
-  product_details: string | null;
-  description: string | null;
-  min_max_status: boolean;
-  status: boolean;
-  created_at: string;
-  updated_at: string;
-}
+const itemDefaults: ItemFormValues = {
+  product_type: "General Item",
+  category: "",
+  group: "",
+  sub_group: "",
+  item_name: "",
+  hsn_code: "",
+  unit: "",
+  opening_stock: "0",
+  product_details: "",
+  description: "",
+  min_max_status: false,
+  status: true,
+};
 
-const formatLabel = (value: string) =>
-  value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
-
-const fetchItems = async (): Promise<ItemRecord[]> => {
-  const response = await fetch(ITEMS_API_URL, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Items request failed with ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data.results)) {
-    return data.results;
-  }
-
-  throw new Error("Unexpected items response received from the backend.");
+const movementDefaults: StockMovementValues = {
+  date: "",
+  ref_id: "",
+  trans_type: "",
+  sale_type: "",
+  doc_id: "",
+  contact: "",
+  warehouse: "",
+  bin: "",
+  quantity: "",
 };
 
 const ItemsPage = () => {
+  const queryClient = useQueryClient();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
-  const [selectedGroup, setSelectedGroup] = useState("all");
-  const [isImporting, setIsImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
+  const [movementMode, setMovementMode] = useState<"inward" | "outward" | null>(null);
+  const [movementItem, setMovementItem] = useState<Item | null>(null);
+  const [analysisItem, setAnalysisItem] = useState<Item | null>(null);
 
-  const { data: items = [], error, isError, isFetching, isLoading, refetch } = useQuery({
+  const itemForm = useForm<ItemFormValues>({
+    resolver: zodResolver(itemSchema),
+    defaultValues: itemDefaults,
+  });
+
+  const movementForm = useForm<StockMovementValues>({
+    resolver: zodResolver(stockMovementSchema),
+    defaultValues: movementDefaults,
+  });
+
+  const itemsQuery = useQuery({
     queryKey: ["items"],
-    queryFn: fetchItems,
-    staleTime: 30_000,
+    queryFn: async () => {
+      const response = await coreApi.get<Item[] | { data: Item[] }>("/api/items/items/");
+      return normalizeListResponse(response.data);
+    },
   });
 
-  const categories = Array.from(new Set(items.map((item) => item.category).filter(Boolean))).sort((left, right) =>
-    formatLabel(left).localeCompare(formatLabel(right)),
-  );
-  const groups = Array.from(new Set(items.map((item) => item.group).filter(Boolean))).sort((left, right) =>
-    formatLabel(left).localeCompare(formatLabel(right)),
-  );
-
-  const selectedTab = activeTab === "all" || categories.includes(activeTab) ? activeTab : "all";
-  const selectedGroupValue = selectedGroup === "all" || groups.includes(selectedGroup) ? selectedGroup : "all";
-
-  const filtered = items.filter((item) => {
-    const haystack = [item.item_name, item.item_code, item.category, item.group, item.sub_group, item.hsn_code ?? ""]
-      .join(" ")
-      .toLowerCase();
-    const matchesSearch = deferredSearch.length === 0 || haystack.includes(deferredSearch);
-    const matchesTab = selectedTab === "all" || item.category === selectedTab;
-    const matchesGroup = selectedGroupValue === "all" || item.group === selectedGroupValue;
-    return matchesSearch && matchesTab && matchesGroup;
+  const stockAnalysisQuery = useQuery({
+    queryKey: ["item-stock-analysis", analysisItem?.id],
+    enabled: Boolean(analysisItem),
+    queryFn: async () => {
+      const response = await coreApi.get<ItemStockAnalysis>(`/api/items/items/${analysisItem?.id}/stock-analysis/`);
+      return response.data;
+    },
   });
 
-  const stats = [
-    { label: "Active Items", count: items.filter((item) => item.status).length },
-    { label: "Categories", count: categories.length },
-    { label: "Groups", count: groups.length },
-    { label: "Min/Max Enabled", count: items.filter((item) => item.min_max_status).length },
-    { label: "Total Items", count: items.length },
-  ];
+  const createMutation = useMutation({
+    mutationFn: async (values: ItemFormValues) => {
+      const response = await coreApi.post<Item & { created: boolean; stock_updated: boolean; detail?: string; stock_transaction?: StockTransaction }>(
+        "/api/items/items/",
+        values,
+      );
+      return response.data;
+    },
+    onSuccess: (payload) => {
+      toast.success(payload.detail || (payload.created ? "Item created." : "Item updated by stock merge."));
+      setDialogOpen(false);
+      itemForm.reset(itemDefaults);
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to create item.")),
+  });
 
-  const openImportDialog = () => {
-    fileInputRef.current?.click();
+  const updateMutation = useMutation({
+    mutationFn: async (values: ItemFormValues) => {
+      if (!editingItem) {
+        throw new Error("No item selected for update.");
+      }
+
+      const response = await coreApi.put<Item>(`/api/items/items/${editingItem.id}/`, values);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Item updated.");
+      setDialogOpen(false);
+      setEditingItem(null);
+      itemForm.reset(itemDefaults);
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update item.")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (itemId: number) => {
+      await coreApi.delete(`/api/items/items/${itemId}/`);
+    },
+    onSuccess: () => {
+      toast.success("Item deleted.");
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to delete item.")),
+  });
+
+  const stockMutation = useMutation({
+    mutationFn: async (values: StockMovementValues) => {
+      if (!movementItem || !movementMode) {
+        throw new Error("No movement context selected.");
+      }
+
+      const response = await coreApi.post<{ detail: string }>(
+        `/api/items/items/${movementItem.id}/stock/${movementMode}/`,
+        values,
+      );
+      return response.data;
+    },
+    onSuccess: (payload) => {
+      toast.success(payload.detail);
+      setMovementMode(null);
+      setMovementItem(null);
+      movementForm.reset(movementDefaults);
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+      if (analysisItem) {
+        queryClient.invalidateQueries({ queryKey: ["item-stock-analysis", analysisItem.id] });
+      }
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update stock.")),
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await coreApi.post<ImportResponse>("/api/items/items/import/", formData);
+      return { payload: response.data, status: response.status };
+    },
+    onSuccess: ({ payload }) => {
+      toast.success(summarizeImportResponse(payload));
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Unable to import items."));
+    },
+  });
+
+  const filteredItems = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const items = itemsQuery.data ?? [];
+    if (!needle) {
+      return items;
+    }
+
+    return items.filter((item) =>
+      [item.item_name, item.item_code, item.category, item.group, item.sub_group]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [itemsQuery.data, search]);
+
+  const openCreateDialog = () => {
+    setEditingItem(null);
+    itemForm.reset(itemDefaults);
+    setDialogOpen(true);
   };
 
-  const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const openEditDialog = (item: Item) => {
+    setEditingItem(item);
+    itemForm.reset({
+      product_type: item.product_type,
+      category: item.category,
+      group: item.group,
+      sub_group: item.sub_group,
+      item_name: item.item_name,
+      hsn_code: item.hsn_code ?? "",
+      unit: item.unit,
+      opening_stock: item.opening_stock,
+      product_details: item.product_details ?? "",
+      description: item.description ?? "",
+      min_max_status: item.min_max_status,
+      status: item.status,
+    });
+    setDialogOpen(true);
+  };
+
+  const openMovementDialog = (item: Item, mode: "inward" | "outward") => {
+    setMovementItem(item);
+    setMovementMode(mode);
+    movementForm.reset({
+      ...movementDefaults,
+      warehouse: mode === "inward" ? "STORE" : "STORE",
+    });
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-
     if (!file) {
       return;
     }
 
-    if (!file.name.toLowerCase().endsWith(".xlsx")) {
-      toast.error("Please upload a .xlsx Excel file.");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    setIsImporting(true);
-    try {
-      const response = await fetch(ITEMS_IMPORT_API_URL, {
-        method: "POST",
-        body: formData,
-      });
-
-      const responseText = await response.text();
-      let payload: Partial<ItemImportResponse> = {};
-
-      if (responseText.length > 0) {
-        try {
-          payload = JSON.parse(responseText) as ItemImportResponse;
-        } catch {
-          payload = { detail: responseText };
-        }
-      }
-
-      if (!response.ok) {
-        const firstError = Array.isArray(payload.errors) ? payload.errors[0] : undefined;
-        const errorMessage = payload.detail
-          ?? (firstError ? `Row ${firstError.row}: ${firstError.message}` : undefined)
-          ?? "The Excel file could not be imported.";
-        throw new Error(errorMessage);
-      }
-
-      await refetch();
-
-      const createdCount = payload.created_count ?? 0;
-      const failedCount = payload.failed_count ?? 0;
-      const firstError = Array.isArray(payload.errors) ? payload.errors[0] : undefined;
-
-      if (failedCount > 0) {
-        toast(`Imported ${createdCount} item${createdCount === 1 ? "" : "s"} with ${failedCount} skipped row${failedCount === 1 ? "" : "s"}.`, {
-          description: firstError ? `Row ${firstError.row}: ${firstError.message}` : "Review the backend response for row-level details.",
-        });
-      } else {
-        toast.success(`Imported ${createdCount} item${createdCount === 1 ? "" : "s"} from Excel.`);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The Excel import failed.");
-    } finally {
-      setIsImporting(false);
-    }
+    importMutation.mutate(file);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-center gap-2">
-          <Box className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Items</h1>
-            <p className="text-sm text-muted-foreground">Raw materials, blends, consumables & finished goods</p>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2 sm:items-end">
-          <div className="flex flex-wrap gap-2">
-            <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleExcelImport} />
-            <Button variant="outline" className="gap-2" onClick={openImportDialog} disabled={isImporting}>
-              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-              {isImporting ? "Importing..." : "Import Excel"}
+      <PageHeader
+        title="Items"
+        description="CRUD, import, stock analysis, and stock movements using the exact item endpoints."
+        actions={
+          <>
+            <input ref={importInputRef} type="file" accept=".xlsx,.xlsm,.xltx,.xltm" className="hidden" onChange={handleImportFile} />
+            <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importMutation.isPending}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              {importMutation.isPending ? "Importing..." : "Import Excel"}
             </Button>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" /> Add Item
+            <Button onClick={openCreateDialog}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Item
             </Button>
-          </div>
-          <p className="max-w-md text-xs text-muted-foreground sm:text-right">
-            Upload the sample Excel format and it will create item records in the backend database.{" "}
-            <a href={ITEM_IMPORT_SAMPLE_URL} download className="font-medium text-primary underline-offset-4 hover:underline">
-              Download the sample file
-            </a>
-            .
-          </p>
-        </div>
+          </>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Items" value={itemsQuery.data?.length ?? 0} />
+        <StatCard label="Active" value={(itemsQuery.data ?? []).filter((item) => item.status).length} />
+        <StatCard label="Min/Max" value={(itemsQuery.data ?? []).filter((item) => item.min_max_status).length} />
+        <StatCard label="Results" value={filteredItems.length} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
-        {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-3 text-center">
-              <div className="text-2xl font-bold text-foreground">{stat.count}</div>
-              <div className="text-xs text-muted-foreground">{stat.label}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-3 lg:ml-auto lg:flex-row lg:items-center lg:justify-end">
-        <Select value={selectedGroupValue} onValueChange={setSelectedGroup}>
-          <SelectTrigger className="w-full sm:w-56">
-            <SelectValue placeholder="Filter by group" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Groups</SelectItem>
-            {groups.map((group) => (
-              <SelectItem key={group} value={group}>
-                {formatLabel(group)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="relative w-full sm:w-[22rem]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search items..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="pl-9"
-          />
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item name, code, category, or group" className="pl-9" />
         </div>
-
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => void refetch()}>
-          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+        <Button variant="outline" onClick={() => itemsQuery.refetch()}>
+          <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
       </div>
 
-      {isError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Unable to load items</AlertTitle>
-          <AlertDescription>
-            {error instanceof Error ? error.message : "The frontend could not reach the items API."}
-          </AlertDescription>
-        </Alert>
-      )}
+      {itemsQuery.isLoading ? <LoadingState label="Loading items..." /> : null}
+      {itemsQuery.isError ? <ErrorState description="Items could not be loaded from the backend." /> : null}
 
-      <Tabs value={selectedTab} onValueChange={setActiveTab}>
-        <TabsList className="h-auto flex-wrap">
-          <TabsTrigger value="all">All</TabsTrigger>
-          {categories.map((category) => (
-            <TabsTrigger key={category} value={category}>
-              {formatLabel(category)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        <TabsContent value={selectedTab} className="mt-4">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16 text-center">S.No</TableHead>
-                    <TableHead>Item Code</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Group</TableHead>
-                    <TableHead>Sub Group</TableHead>
-                    <TableHead>HSN</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Min/Max</TableHead>
-                    <TableHead>Status</TableHead>
+      {!itemsQuery.isLoading && !itemsQuery.isError ? (
+        filteredItems.length ? (
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>On Hand</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[240px] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-mono text-xs">{item.item_code}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{item.item_name}</div>
+                      <div className="text-xs text-muted-foreground">{item.group} / {item.sub_group}</div>
+                    </TableCell>
+                    <TableCell>{item.category}</TableCell>
+                    <TableCell>{item.unit}</TableCell>
+                    <TableCell>{formatDecimal(item.on_hand)}</TableCell>
+                    <TableCell>{item.status ? "Active" : "Inactive"}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setAnalysisItem(item)}>
+                          <LineChart className="mr-2 h-4 w-4" />
+                          Analysis
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => openMovementDialog(item, "inward")}>Inward</Button>
+                        <Button variant="outline" size="sm" onClick={() => openMovementDialog(item, "outward")}>Outward</Button>
+                        <Button variant="outline" size="icon" onClick={() => openEditDialog(item)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" size="icon" onClick={() => setDeleteTarget(item)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading &&
-                    Array.from({ length: 6 }).map((_, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <Skeleton className="h-4 w-8" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-40" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-16" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-12" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-20" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-4 w-16" />
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <EmptyState title="No items found" description="Create an item or import an Excel file to populate inventory." />
+        )
+      ) : null}
 
-                  {!isLoading &&
-                    filtered.map((item, index) => (
-                      <TableRow key={item.id} className="hover:bg-muted/50">
-                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell className="font-mono text-xs">{item.item_code}</TableCell>
-                        <TableCell>
-                          <div className="font-medium">{item.item_name}</div>
-                          {item.description && (
-                            <div className="max-w-[20rem] truncate text-xs text-muted-foreground">{item.description}</div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {formatLabel(item.category)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{item.group || "-"}</TableCell>
-                        <TableCell>{item.sub_group || "-"}</TableCell>
-                        <TableCell className="font-mono text-xs">{item.hsn_code || "-"}</TableCell>
-                        <TableCell>{item.unit}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={item.min_max_status ? "bg-primary/10 text-primary" : "text-muted-foreground"}>
-                            {item.min_max_status ? "Enabled" : "Disabled"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={item.status ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}>
-                            {item.status ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{editingItem ? "Edit item" : "Create item"}</DialogTitle>
+            <DialogDescription>The item create endpoint can return `201` for new items or `200` if stock merges into an existing identity.</DialogDescription>
+          </DialogHeader>
+          <Form {...itemForm}>
+            <form onSubmit={itemForm.handleSubmit((values) => editingItem ? updateMutation.mutate(values) : createMutation.mutate(values))} className="grid gap-4 md:grid-cols-2">
+              {(["product_type", "category", "group", "sub_group", "item_name", "hsn_code", "unit", "opening_stock"] as const).map((name) => (
+                <FormField key={name} control={itemForm.control} name={name} render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{name.replaceAll("_", " ")}</FormLabel>
+                    <FormControl><Input {...field} value={field.value ?? ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              ))}
+              <FormField control={itemForm.control} name="min_max_status" render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border px-4 py-3">
+                  <div><FormLabel>Min Max Status</FormLabel></div>
+                  <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={itemForm.control} name="status" render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border px-4 py-3">
+                  <div><FormLabel>Status</FormLabel></div>
+                  <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={itemForm.control} name="product_details" render={({ field }) => (
+                <FormItem className="md:col-span-2"><FormLabel>Product Details</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} rows={3} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={itemForm.control} name="description" render={({ field }) => (
+                <FormItem className="md:col-span-2"><FormLabel>Description</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} rows={3} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <div className="md:col-span-2 flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                  {editingItem ? "Save Changes" : "Create Item"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
-                  {!isLoading && filtered.length === 0 && (
+      <Dialog open={Boolean(movementMode && movementItem)} onOpenChange={(open) => {
+        if (!open) {
+          setMovementMode(null);
+          setMovementItem(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{movementMode === "inward" ? "Inward Stock" : "Outward Stock"}</DialogTitle>
+            <DialogDescription>
+              Payload uses the exact stock metadata fields plus `quantity`.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...movementForm}>
+            <form onSubmit={movementForm.handleSubmit((values) => stockMutation.mutate(values))} className="grid gap-4 md:grid-cols-2">
+              {(["date", "ref_id", "trans_type", "sale_type", "doc_id", "contact", "warehouse", "bin", "quantity"] as const).map((name) => (
+                <FormField key={name} control={movementForm.control} name={name} render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{name.replaceAll("_", " ")}</FormLabel>
+                    <FormControl><Input {...field} type={name === "date" ? "date" : "text"} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              ))}
+              <div className="md:col-span-2 flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setMovementMode(null)}>Cancel</Button>
+                <Button type="submit" disabled={stockMutation.isPending}>
+                  {movementMode === "inward" ? "Add Inward" : "Add Outward"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(analysisItem)} onOpenChange={(open) => {
+        if (!open) {
+          setAnalysisItem(null);
+        }
+      }}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Stock Analysis</DialogTitle>
+            <DialogDescription>
+              {analysisItem ? `${analysisItem.item_name} (${analysisItem.item_code})` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {stockAnalysisQuery.isLoading ? <LoadingState label="Loading stock analysis..." /> : null}
+          {stockAnalysisQuery.data ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <StatCard label="Opening Stock" value={stockAnalysisQuery.data.opening_stock} />
+                <StatCard label="Current Stock" value={stockAnalysisQuery.data.current_stock} />
+                <StatCard label="On Hand" value={stockAnalysisQuery.data.on_hand} />
+              </div>
+              <div className="overflow-auto rounded-xl border border-border">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
-                        {items.length === 0 ? "No items found in the backend yet." : "No items match the current search or group filter."}
-                      </TableCell>
+                      {stockAnalysisQuery.data.columns.map((column) => (
+                        <TableHead key={column}>{column}</TableHead>
+                      ))}
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                  </TableHeader>
+                  <TableBody>
+                    {stockAnalysisQuery.data.rows.map((row, index) => (
+                      <TableRow key={index}>
+                        {stockAnalysisQuery.data.columns.map((column) => (
+                          <TableCell key={column}>{String(row[column] ?? "")}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
-      <ModuleFormFieldsReference moduleId="item" />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+          }
+        }}
+        title="Delete item"
+        description={`Delete ${deleteTarget?.item_name ?? "this item"}?`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate(deleteTarget.id);
+          }
+        }}
+      />
     </div>
   );
 };
