@@ -168,6 +168,9 @@ const defaultValues: GrnFormValues = {
   },
 };
 
+const getPrimaryItemQuantity = (record: GrnRecord) =>
+  record.items?.[0]?.quantity ?? record.items?.[0]?.total_quantity ?? null;
+
 const GRNPage = () => {
   const queryClient = useQueryClient();
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -256,9 +259,15 @@ const GRNPage = () => {
             <TableRow>
               <TableHead>GRN No</TableHead>
               <TableHead>GRN Date</TableHead>
+              <TableHead>PO No</TableHead>
               <TableHead>Supplier</TableHead>
+              <TableHead>Invoice No</TableHead>
+              <TableHead>Item</TableHead>
+              <TableHead>Quantity</TableHead>
+              <TableHead>Department</TableHead>
               <TableHead>Total After Tax</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Moved To QCR</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -267,9 +276,15 @@ const GRNPage = () => {
               <TableRow key={record.id}>
                 <TableCell className="font-medium">{record.grn_no}</TableCell>
                 <TableCell>{formatDate(record.grn_date)}</TableCell>
+                <TableCell>{record.document_details.po_no || "-"}</TableCell>
                 <TableCell>{record.supplier_details.trade_name || record.trade_name || "-"}</TableCell>
+                <TableCell>{record.document_details.supplier_invoice_no || "-"}</TableCell>
+                <TableCell>{record.product_description || record.items?.[0]?.product_description || "-"}</TableCell>
+                <TableCell>{formatDecimal(getPrimaryItemQuantity(record))}</TableCell>
+                <TableCell>{record.document_requirement_details.req_department || "-"}</TableCell>
                 <TableCell>{formatDecimal(record.value_details.total_after_tax ?? record.total_after_tax, 2)}</TableCell>
                 <TableCell>{record.process_status}</TableCell>
+                <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => setDetailRecord(record)}>View</Button>
@@ -357,7 +372,7 @@ const GRNPage = () => {
                 {(["po_no", "po_date", "grn_no", "grn_date", "supplier_invoice_no", "supplier_invoice_date", "gateentry_bookno", "gateentry_bookdate", "tolerance"] as const).map((fieldName) => (
                   <FormField key={fieldName} control={form.control} name={`document_details.${fieldName}`} render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{fieldName.replaceAll("_", " ")}</FormLabel>
+                      <FormLabel>{fieldName.replace(/_/g, " ")}</FormLabel>
                       <FormControl><Input {...field} type={fieldName.includes("date") ? "date" : "text"} /></FormControl>
                       <FormMessage />
                     </FormItem>
@@ -369,7 +384,7 @@ const GRNPage = () => {
                 {(["req_date", "req_person_name", "req_person_id", "req_department", "req_reason"] as const).map((fieldName) => (
                   <FormField key={fieldName} control={form.control} name={`document_requirement_details.${fieldName}`} render={({ field }) => (
                     <FormItem className={fieldName === "req_reason" ? "xl:col-span-3" : undefined}>
-                      <FormLabel>{fieldName.replaceAll("_", " ")}</FormLabel>
+                      <FormLabel>{fieldName.replace(/_/g, " ")}</FormLabel>
                       <FormControl>{fieldName === "req_reason" ? <Textarea {...field} rows={2} /> : <Input {...field} type={fieldName === "req_date" ? "date" : "text"} />}</FormControl>
                       <FormMessage />
                     </FormItem>
@@ -381,7 +396,7 @@ const GRNPage = () => {
                 {(["supplier_id", "gstin", "contact_name", "trade_name", "contact_type", "address1", "address2", "location", "pincode", "state_name", "state_code", "country", "person_name", "phone_number", "email", "category", "segment", "sub_segment", "sales_contact_id", "currency"] as const).map((fieldName) => (
                   <FormField key={fieldName} control={form.control} name={`supplier_details.${fieldName}`} render={({ field }) => (
                     <FormItem className={fieldName === "address1" || fieldName === "address2" ? "xl:col-span-3" : undefined}>
-                      <FormLabel>{fieldName.replaceAll("_", " ")}</FormLabel>
+                      <FormLabel>{fieldName.replace(/_/g, " ")}</FormLabel>
                       <FormControl>{fieldName === "address1" || fieldName === "address2" ? <Textarea {...field} rows={2} /> : <Input {...field} />}</FormControl>
                       <FormMessage />
                     </FormItem>
@@ -409,7 +424,7 @@ const GRNPage = () => {
                       {(["item_id", "item_serial_number", "product_description", "hsn_code", "total_quantity", "quantity", "free_quantity", "accepted_qty", "rejected_qty", "unit", "unit_price", "total_amount", "discount", "assessable_value", "gst_rate", "igst_amount", "cgst_amount", "sgst_amount", "total_item_value"] as const).map((fieldName) => (
                         <FormField key={fieldName} control={form.control} name={`items.${index}.${fieldName}`} render={({ field }) => (
                           <FormItem className={fieldName === "product_description" ? "xl:col-span-3" : undefined}>
-                            <FormLabel>{fieldName.replaceAll("_", " ")}</FormLabel>
+                            <FormLabel>{fieldName.replace(/_/g, " ")}</FormLabel>
                             <FormControl>{fieldName === "product_description" ? <Textarea {...field} rows={2} /> : <Input {...field} />}</FormControl>
                             <FormMessage />
                           </FormItem>
@@ -424,7 +439,7 @@ const GRNPage = () => {
                 {(["freight_charge", "loading_unloading_charge", "total_before_tax", "total_tax_amount", "total_after_tax"] as const).map((fieldName) => (
                   <FormField key={fieldName} control={form.control} name={`value_details.${fieldName}`} render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{fieldName.replaceAll("_", " ")}</FormLabel>
+                      <FormLabel>{fieldName.replace(/_/g, " ")}</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>

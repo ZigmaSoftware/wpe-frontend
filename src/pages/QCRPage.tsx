@@ -13,6 +13,21 @@ import { formatDateTime, getApiErrorMessage } from "@/lib/api-helpers";
 import type { QcrRecord } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
 
+const readText = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+  return String(value);
+};
+
+const getQcrField = (record: QcrRecord, key: string) => {
+  const sourceValue = record.source_grn_data?.[key];
+  if (sourceValue !== null && sourceValue !== undefined && sourceValue !== "") {
+    return sourceValue;
+  }
+  return record.snapshot?.[key];
+};
+
 const QCRPage = () => {
   const queryClient = useQueryClient();
   const [detailRecord, setDetailRecord] = useState<QcrRecord | null>(null);
@@ -68,9 +83,14 @@ const QCRPage = () => {
           <TableHeader>
             <TableRow>
               <TableHead>GRN Reference</TableHead>
+              <TableHead>Supplier</TableHead>
+              <TableHead>Item</TableHead>
+              <TableHead>Quantity</TableHead>
+              <TableHead>Department</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Moved To QCR</TableHead>
               <TableHead>Moved By</TableHead>
+              <TableHead>Updated</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -78,9 +98,14 @@ const QCRPage = () => {
             {records.map((record) => (
               <TableRow key={record.id}>
                 <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
+                <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
+                <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
+                <TableCell>{readText(getQcrField(record, "quantity"))}</TableCell>
+                <TableCell>{readText(getQcrField(record, "req_department"))}</TableCell>
                 <TableCell>{record.status}</TableCell>
                 <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
                 <TableCell>{record.moved_to_qcr_by || "-"}</TableCell>
+                <TableCell>{formatDateTime(record.updated_at)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" size="icon" onClick={() => setDetailRecord(record)}>
