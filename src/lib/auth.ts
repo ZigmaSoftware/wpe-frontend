@@ -6,15 +6,27 @@ type LoginResponse = AuthTokens & {
 };
 
 export const loginRequest = async (username: string, password: string) => {
-  const response = await coreApi.post<LoginResponse>("/api/token/", { username, password });
-  setAuthTokens(
-    {
-      access: response.data.access,
-      refresh: response.data.refresh,
-    },
-    response.data.user,
-  );
-  return response.data;
+  try {
+    const response = await coreApi.post<LoginResponse>("/api/token/", { username, password });
+    setAuthTokens(
+      {
+        access: response.data.access,
+        refresh: response.data.refresh,
+      },
+      response.data.user,
+    );
+    return response.data;
+  } catch {
+    const response = await coreApi.post<LoginResponse>("/api/auth/login/", { username, password });
+    setAuthTokens(
+      {
+        access: response.data.access,
+        refresh: response.data.refresh,
+      },
+      response.data.user,
+    );
+    return response.data;
+  }
 };
 
 export const fetchCurrentUser = async () => {

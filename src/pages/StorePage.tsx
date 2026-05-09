@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Pencil, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { coreApi, grnApi } from "@/lib/api";
-import { formatDateTime } from "@/lib/api-helpers";
-import type { QcrRecord, StoreTransactionRecord } from "@/lib/types";
+import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
+import type { QcrRecord, StoreStockRequest, StoreTransactionRecord } from "@/lib/types";
+import { toast } from "@/components/ui/sonner";
 
 const readText = (value: unknown) => {
   if (value === null || value === undefined || value === "") {
@@ -25,6 +27,11 @@ const getQcrField = (record: QcrRecord, key: string) => {
     return sourceValue;
   }
   return record.snapshot?.[key];
+};
+
+const getStoreDepartment = (record: QcrRecord) => {
+  const value = getQcrField(record, "req_department");
+  return value === null || value === undefined || value === "" ? "Unassigned" : String(value).trim();
 };
 
 const detailFieldGroups: Array<{
@@ -77,7 +84,9 @@ const detailFieldGroups: Array<{
 ];
 
 const StorePage = () => {
+  const queryClient = useQueryClient();
   const [detailRecord, setDetailRecord] = useState<QcrRecord | null>(null);
+  const [departmentFilter, setDepartmentFilter] = useState("all");
 
   const intakeQuery = useQuery({
     queryKey: ["store", "intake"],
@@ -95,7 +104,56 @@ const StorePage = () => {
     },
   });
 
+  const requestsQuery = useQuery({
+    queryKey: ["store", "requests"],
+    queryFn: async () => {
+      const response = await coreApi.get<StoreStockRequest[]>("/api/store/requests/");
+      return response.data;
+    },
+  });
+
+  const approveRequestMutation = useMutation({
+    mutationFn: async (requestId: number) => {
+      const response = await coreApi.post(`/api/store/approve-request/${requestId}/`, {});
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Store request approved.");
+      queryClient.invalidateQueries({ queryKey: ["store", "requests"] });
+      queryClient.invalidateQueries({ queryKey: ["store", "transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["store-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["blending-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["store-requests"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to approve store request.")),
+  });
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: async (requestId: number) => {
+      const response = await coreApi.post(`/api/store/reject-request/${requestId}/`, {});
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Store request rejected.");
+      queryClient.invalidateQueries({ queryKey: ["store", "requests"] });
+      queryClient.invalidateQueries({ queryKey: ["store-requests"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to reject store request.")),
+  });
+
+  const departmentOptions = useMemo(
+    () => Array.from(new Set((intakeQuery.data ?? []).map((record) => getStoreDepartment(record)))).sort((left, right) => left.localeCompare(right)),
+    [intakeQuery.data],
+  );
+
+  const filteredIntakeRecords =
+    departmentFilter === "all" ? intakeQuery.data ?? [] : (intakeQuery.data ?? []).filter((record) => getStoreDepartment(record) === departmentFilter);
+
   const grnInTransactions = (transactionsQuery.data ?? []).filter((row) => row.transaction_type === "GRN_IN").length;
+  const additiveBlendingRequests = (requestsQuery.data ?? []).filter(
+    (row) => row.request_type === "ADDITIVE" && row.department.toUpperCase() === "BLENDING",
+  );
+  const pendingAdditiveRequests = additiveBlendingRequests.filter((row) => row.status === "PENDING").length;
 
   const renderIntakeTable = (records: QcrRecord[]) => {
     if (!records.length) {
@@ -115,7 +173,7 @@ const StorePage = () => {
               <TableHead>GRN Reference</TableHead>
               <TableHead>Supplier</TableHead>
               <TableHead>Item</TableHead>
-              <TableHead>Quantity</TableHead>
+              <TableHead>Quantity</TableHead>               
               <TableHead>Department</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Moved To QCR</TableHead>
@@ -186,8 +244,81 @@ const StorePage = () => {
     );
   };
 
-  const isLoading = intakeQuery.isLoading || transactionsQuery.isLoading;
-  const isError = intakeQuery.isError || transactionsQuery.isError;
+  const renderRequestsTable = (rows: StoreStockRequest[]) => {
+    if (!rows.length) {
+      return <EmptyState title="No additive requests" description="No blending additive store requests are waiting in the queue." />;
+    }
+
+    return (
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Requested</TableHead>
+              <TableHead>Item</TableHead>
+              <TableHead>Qty</TableHead>
+              <TableHead>Requested For</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Requested By</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Approved By</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{formatDateTime(row.requested_at)}</TableCell>
+                <TableCell>
+                  <div className="font-medium">{row.item_name}</div>
+                  <div className="font-mono text-xs text-muted-foreground">{row.item_code}</div>
+                </TableCell>
+                <TableCell>
+                  {formatDecimal(row.quantity)} {row.unit}
+                </TableCell>
+                <TableCell>{row.requested_for_name}</TableCell>
+                <TableCell className="max-w-xs truncate" title={row.request_reason}>
+                  {row.request_reason || "-"}
+                </TableCell>
+                <TableCell>{row.requested_by_username}</TableCell>
+                <TableCell>{row.status}</TableCell>
+                <TableCell>{row.approved_by_username || "-"}</TableCell>
+                <TableCell className="text-right">
+                  {row.status === "PENDING" ? (
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => approveRequestMutation.mutate(row.id)}
+                        disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
+                      >
+                        <Check className="mr-2 h-4 w-4" />
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => rejectRequestMutation.mutate(row.id)}
+                        disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Reject
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">Closed</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
+  const isLoading = intakeQuery.isLoading || transactionsQuery.isLoading || requestsQuery.isLoading;
+  const isError = intakeQuery.isError || transactionsQuery.isError || requestsQuery.isError;
 
   return (
     <div className="space-y-6">
@@ -199,7 +330,23 @@ const StorePage = () => {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Store Intake" value={intakeQuery.data?.length ?? 0} hint="Moved to GRN from QCR" />
         <StatCard label="GRN In Transactions" value={grnInTransactions} />
-        <StatCard label="Transactions" value={transactionsQuery.data?.length ?? 0} />
+        <StatCard label="Pending Additive Requests" value={pendingAdditiveRequests} />
+      </div>
+
+      <div className="flex justify-end">
+        <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+          <SelectTrigger className="w-full sm:w-64">
+            <SelectValue placeholder="Filter by department" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Departments</SelectItem>
+            {departmentOptions.map((department) => (
+              <SelectItem key={department} value={department}>
+                {department}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? <LoadingState label="Loading store workspace..." /> : null}
@@ -211,9 +358,11 @@ const StorePage = () => {
         <Tabs defaultValue="intake" className="space-y-4">
           <TabsList>
             <TabsTrigger value="intake">Store Intake</TabsTrigger>
+            <TabsTrigger value="requests">Additive Requests</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
           </TabsList>
-          <TabsContent value="intake">{renderIntakeTable(intakeQuery.data ?? [])}</TabsContent>
+          <TabsContent value="intake">{renderIntakeTable(filteredIntakeRecords)}</TabsContent>
+          <TabsContent value="requests">{renderRequestsTable(additiveBlendingRequests)}</TabsContent>
           <TabsContent value="transactions">{renderTransactionsTable(transactionsQuery.data ?? [])}</TabsContent>
         </Tabs>
       ) : null}

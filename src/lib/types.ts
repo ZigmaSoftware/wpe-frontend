@@ -86,6 +86,9 @@ export type DepartmentStock = {
   item: number;
   item_code: string;
   item_name: string;
+  category?: string;
+  group?: string;
+  sub_group?: string;
   unit: string;
   department: string;
   quantity: string;
@@ -98,10 +101,36 @@ export type StoreStockRecord = {
   item: number;
   item_code: string;
   item_name: string;
+  category: string;
+  group: string;
+  sub_group: string;
   unit: string;
   quantity: string;
   created_at: string;
   updated_at: string;
+};
+
+export type StoreStockRequest = {
+  id: number;
+  item: number;
+  item_code: string;
+  item_name: string;
+  category: string;
+  group: string;
+  sub_group: string;
+  unit: string;
+  quantity: string;
+  request_type: "GENERAL" | "ADDITIVE";
+  department: string;
+  requested_for_name: string;
+  request_reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requested_by: number;
+  requested_by_username: string;
+  approved_by: number | null;
+  approved_by_username: string | null;
+  requested_at: string;
+  approved_at: string | null;
 };
 
 export type StoreTransactionRecord = {

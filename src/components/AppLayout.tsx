@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
   Blend,
@@ -8,15 +8,33 @@ import {
   ChevronRight,
   ClipboardCheck,
   FileText,
+  Globe2,
   LayoutDashboard,
+  Landmark,
   Menu,
+  Map,
+  MapPinned,
+  PackageSearch,
+  ReceiptText,
+  Route,
+  Shield,
   Truck,
   Users,
   X,
 } from "lucide-react";
 import { LogOut } from "lucide-react";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { adminRouteRegistry, getAdminRouteTitle, resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
+import type { AdminMenuMain } from "@/features/admin-master/types";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -34,6 +52,21 @@ const navSections = [
       { to: "/app/qcr", icon: ClipboardCheck, label: "QCR" },
     ],
   },
+  {
+    label: "Common Masters",
+    items: [
+      { to: "/masters/continents", icon: Globe2, label: "Continents" },
+      { to: "/masters/countries", icon: Map, label: "Countries" },
+      { to: "/masters/states", icon: MapPinned, label: "States" },
+      { to: "/masters/cities", icon: Landmark, label: "Cities" },
+      { to: "/masters/taxes", icon: ReceiptText, label: "Taxes" },
+      { to: "/masters/currencies", icon: ReceiptText, label: "Currencies" },
+      { to: "/masters/customers", icon: Users, label: "Customers" },
+      { to: "/masters/suppliers", icon: PackageSearch, label: "Suppliers" },
+      { to: "/masters/companies", icon: Users, label: "Companies" },
+      { to: "/masters/projects", icon: Route, label: "Projects" },
+    ],
+  },
 ];
 
 const AppLayout = () => {
@@ -41,7 +74,36 @@ const AppLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const location = useLocation();
+  const { user, signOut, adminMenu } = useAuth();
+
+  const adminNavSections = useMemo(
+    () =>
+      adminMenu.map((main: AdminMenuMain) => ({
+        label: main.name,
+        items: main.sections.flatMap((section) =>
+          section.screens.map((screen) => ({
+            to: resolveAdminRoutePath(screen.code, screen.route_path),
+            icon: Shield,
+            label: getAdminRouteTitle(screen.code, screen.screen_name),
+          })),
+        ),
+      })),
+    [adminMenu],
+  );
+
+  const breadcrumbItems = useMemo(() => {
+    const path = location.pathname;
+    if (path === "/app" || path === "/dashboard") {
+      return ["Dashboard"];
+    }
+    const adminMatch = Object.values(adminRouteRegistry).find((entry) => entry.path === path);
+    if (adminMatch) {
+      return ["Admin Master", adminMatch.title];
+    }
+    const workspaceMatch = navSections.flatMap((section) => section.items).find((item) => item.to === path);
+    return workspaceMatch ? ["Workspace", workspaceMatch.label] : [];
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     try {
@@ -98,7 +160,7 @@ const AppLayout = () => {
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto px-2 py-3">
-          {navSections.map((section, sectionIndex) => (
+          {[...navSections, ...adminNavSections].map((section, sectionIndex) => (
             <div key={section.label}>
               {sectionIndex > 0 ? <Separator className="my-2 bg-sidebar-border" /> : null}
               {!collapsed ? (
@@ -111,7 +173,7 @@ const AppLayout = () => {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={item.to === "/app"}
+                    end={item.to === "/app" || item.to === "/dashboard"}
                     onClick={() => setMobileOpen(false)}
                     className={({ isActive }) =>
                       `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
@@ -143,9 +205,29 @@ const AppLayout = () => {
             <Menu className="h-5 w-5" />
           </button>
 
-          <div className="hidden sm:block">
+          <div className="hidden min-w-0 sm:block">
             <div className="text-sm font-medium text-foreground">Operations Admin</div>
-            <div className="text-xs text-muted-foreground">JWT-secured frontend for Core and GRN services</div>
+            <div className="text-xs text-muted-foreground">JWT-secured frontend for Core, GRN, and Admin Master services</div>
+            {breadcrumbItems.length ? (
+              <Breadcrumb className="mt-1">
+                <BreadcrumbList>
+                  {breadcrumbItems.map((item, index) => (
+                    <div key={item} className="inline-flex items-center gap-1.5">
+                      <BreadcrumbItem>
+                        {index === breadcrumbItems.length - 1 ? (
+                          <BreadcrumbPage>{item}</BreadcrumbPage>
+                        ) : (
+                          <BreadcrumbLink asChild>
+                            <Link to={index === 0 && item === "Dashboard" ? "/dashboard" : "#"}>{item}</Link>
+                          </BreadcrumbLink>
+                        )}
+                      </BreadcrumbItem>
+                      {index < breadcrumbItems.length - 1 ? <BreadcrumbSeparator /> : null}
+                    </div>
+                  ))}
+                </BreadcrumbList>
+              </Breadcrumb>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-3">
