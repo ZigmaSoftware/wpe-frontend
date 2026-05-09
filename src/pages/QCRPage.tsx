@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Eye, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { grnApi } from "@/lib/api";
 import { formatDateTime, getApiErrorMessage } from "@/lib/api-helpers";
 import type { QcrRecord } from "@/lib/types";
@@ -28,9 +29,15 @@ const getQcrField = (record: QcrRecord, key: string) => {
   return record.snapshot?.[key];
 };
 
+const getQcrDepartment = (record: QcrRecord) => {
+  const value = getQcrField(record, "req_department");
+  return value === null || value === undefined || value === "" ? "Unassigned" : String(value).trim();
+};
+
 const QCRPage = () => {
   const queryClient = useQueryClient();
   const [detailRecord, setDetailRecord] = useState<QcrRecord | null>(null);
+  const [departmentFilter, setDepartmentFilter] = useState("all");
 
   const activeQuery = useQuery({
     queryKey: ["qcr", "active"],
@@ -71,6 +78,14 @@ const QCRPage = () => {
       toast.error(getApiErrorMessage(error, "Unable to update QCR status."));
     },
   });
+
+  const departmentOptions = useMemo(() => {
+    const records = [...(activeQuery.data ?? []), ...(movedQuery.data ?? []), ...(rejectedQuery.data ?? [])];
+    return Array.from(new Set(records.map((record) => getQcrDepartment(record)))).sort((left, right) => left.localeCompare(right));
+  }, [activeQuery.data, movedQuery.data, rejectedQuery.data]);
+
+  const filterRecordsByDepartment = (records: QcrRecord[]) =>
+    departmentFilter === "all" ? records : records.filter((record) => getQcrDepartment(record) === departmentFilter);
 
   const renderTable = (records: QcrRecord[], showActions: boolean) => {
     if (!records.length) {
@@ -147,6 +162,22 @@ const QCRPage = () => {
         <StatCard label="Status Updates" value={statusMutation.isPending ? "Working" : "Ready"} />
       </div>
 
+      <div className="flex justify-end">
+        <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+          <SelectTrigger className="w-full sm:w-64">
+            <SelectValue placeholder="Filter by department" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Departments</SelectItem>
+            {departmentOptions.map((department) => (
+              <SelectItem key={department} value={department}>
+                {department}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {activeQuery.isLoading || movedQuery.isLoading || rejectedQuery.isLoading ? <LoadingState label="Loading QCR records..." /> : null}
       {activeQuery.isError || movedQuery.isError || rejectedQuery.isError ? <ErrorState description="QCR records could not be loaded from the GRN service." /> : null}
 
@@ -157,9 +188,9 @@ const QCRPage = () => {
             <TabsTrigger value="moved">Moved to GRN</TabsTrigger>
             <TabsTrigger value="rejected">Rejected</TabsTrigger>
           </TabsList>
-          <TabsContent value="active">{renderTable(activeQuery.data ?? [], true)}</TabsContent>
-          <TabsContent value="moved">{renderTable(movedQuery.data ?? [], false)}</TabsContent>
-          <TabsContent value="rejected">{renderTable(rejectedQuery.data ?? [], false)}</TabsContent>
+          <TabsContent value="active">{renderTable(filterRecordsByDepartment(activeQuery.data ?? []), true)}</TabsContent>
+          <TabsContent value="moved">{renderTable(filterRecordsByDepartment(movedQuery.data ?? []), false)}</TabsContent>
+          <TabsContent value="rejected">{renderTable(filterRecordsByDepartment(rejectedQuery.data ?? []), false)}</TabsContent>
         </Tabs>
       ) : null}
 

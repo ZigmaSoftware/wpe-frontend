@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, MoveRight, Plus, RefreshCw } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { grnApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeGrnResponse, summarizeImportResponse } from "@/lib/api-helpers";
 import type { GrnListResponse, GrnRecord, ImportResponse } from "@/lib/types";
@@ -171,12 +172,15 @@ const defaultValues: GrnFormValues = {
 const getPrimaryItemQuantity = (record: GrnRecord) =>
   record.items?.[0]?.quantity ?? record.items?.[0]?.total_quantity ?? null;
 
+const getGrnDepartment = (record: GrnRecord) => record.document_requirement_details.req_department?.trim() || "Unassigned";
+
 const GRNPage = () => {
   const queryClient = useQueryClient();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<GrnRecord | null>(null);
   const [moveTarget, setMoveTarget] = useState<GrnRecord | null>(null);
+  const [departmentFilter, setDepartmentFilter] = useState("all");
   const form = useForm<GrnFormValues>({
     resolver: zodResolver(grnSchema),
     defaultValues,
@@ -246,6 +250,14 @@ const GRNPage = () => {
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to import GRN file.")),
   });
+
+  const departmentOptions = useMemo(() => {
+    const records = [...(activeQuery.data?.data ?? []), ...(movedQuery.data?.data ?? [])];
+    return Array.from(new Set(records.map((record) => getGrnDepartment(record)))).sort((left, right) => left.localeCompare(right));
+  }, [activeQuery.data?.data, movedQuery.data?.data]);
+
+  const filterRecordsByDepartment = (records: GrnRecord[]) =>
+    departmentFilter === "all" ? records : records.filter((record) => getGrnDepartment(record) === departmentFilter);
 
   const renderTable = (records: GrnRecord[], showMoveAction: boolean) => {
     if (!records.length) {
@@ -344,6 +356,22 @@ const GRNPage = () => {
         <StatCard label="Multi-item Support" value="Enabled" hint="Frontend submits `items[]` exactly." />
       </div>
 
+      <div className="flex justify-end">
+        <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+          <SelectTrigger className="w-full sm:w-64">
+            <SelectValue placeholder="Filter by department" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Departments</SelectItem>
+            {departmentOptions.map((department) => (
+              <SelectItem key={department} value={department}>
+                {department}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {activeQuery.isLoading || movedQuery.isLoading ? <LoadingState label="Loading GRN records..." /> : null}
       {activeQuery.isError || movedQuery.isError ? <ErrorState description="GRN records could not be loaded from the GRN service." /> : null}
 
@@ -353,8 +381,8 @@ const GRNPage = () => {
             <TabsTrigger value="active">Active GRN</TabsTrigger>
             <TabsTrigger value="moved">Moved to QCR</TabsTrigger>
           </TabsList>
-          <TabsContent value="active">{renderTable(activeQuery.data?.data ?? [], true)}</TabsContent>
-          <TabsContent value="moved">{renderTable(movedQuery.data?.data ?? [], false)}</TabsContent>
+          <TabsContent value="active">{renderTable(filterRecordsByDepartment(activeQuery.data?.data ?? []), true)}</TabsContent>
+          <TabsContent value="moved">{renderTable(filterRecordsByDepartment(movedQuery.data?.data ?? []), false)}</TabsContent>
         </Tabs>
       ) : null}
 
