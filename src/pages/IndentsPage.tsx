@@ -479,17 +479,19 @@ const IndentsPage = () => {
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
+                <TableHead className="w-16 text-center">S.No</TableHead>
                 <TableHead>Ref #</TableHead><TableHead>Requested By</TableHead><TableHead>Dept</TableHead>
                 <TableHead>Items</TableHead><TableHead className="text-right">Amount (₹)</TableHead>
                 <TableHead>Priority</TableHead><TableHead>Stage</TableHead><TableHead>Progress</TableHead><TableHead>Date</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {filtered.map((ind) => (
+                {filtered.map((ind, index) => (
                   <TableRow
                     key={ind.id}
                     className={`cursor-pointer hover:bg-muted/50 ${selectedIndentId === ind.id ? "bg-primary/5" : ""}`}
                     onClick={() => handleSelectIndent(ind)}
                   >
+                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                     <TableCell className="font-mono text-xs">{ind.ref}</TableCell>
                     <TableCell className="font-medium">{ind.requestedBy}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{ind.department}</Badge></TableCell>

@@ -97,13 +97,15 @@ const PaymentsPage = () => {
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
+                <TableHead className="w-16 text-center">S.No</TableHead>
                 <TableHead>Voucher #</TableHead><TableHead>Type</TableHead><TableHead>Party</TableHead>
                 <TableHead className="text-right">Amount (₹)</TableHead><TableHead>Mode</TableHead>
                 <TableHead>Reference</TableHead><TableHead>Narration</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {filtered.map((t) => (
+                {filtered.map((t, index) => (
                   <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                     <TableCell className="font-mono text-xs">{t.voucherNo}</TableCell>
                     <TableCell><Badge variant="outline" className={`text-xs ${typeColors[t.type]}`}>{typeLabels[t.type]}</Badge></TableCell>
                     <TableCell className="font-medium">{t.party}</TableCell>

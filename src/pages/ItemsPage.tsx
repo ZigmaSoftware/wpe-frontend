@@ -330,6 +330,7 @@ const ItemsPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-16 text-center">S.No</TableHead>
                   <TableHead>Item Code</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
@@ -340,8 +341,9 @@ const ItemsPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredItems.map((item) => (
+                {filteredItems.map((item, index) => (
                   <TableRow key={item.id}>
+                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                     <TableCell className="font-mono text-xs">{item.item_code}</TableCell>
                     <TableCell>
                       <div className="font-medium">{item.item_name}</div>

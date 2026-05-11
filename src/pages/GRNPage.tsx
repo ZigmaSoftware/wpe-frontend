@@ -269,6 +269,7 @@ const GRNPage = () => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-16 text-center">S.No</TableHead>
               <TableHead>GRN No</TableHead>
               <TableHead>GRN Date</TableHead>
               <TableHead>PO No</TableHead>
@@ -284,8 +285,9 @@ const GRNPage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {records.map((record) => (
+            {records.map((record, index) => (
               <TableRow key={record.id}>
+                <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                 <TableCell className="font-medium">{record.grn_no}</TableCell>
                 <TableCell>{formatDate(record.grn_date)}</TableCell>
                 <TableCell>{record.document_details.po_no || "-"}</TableCell>

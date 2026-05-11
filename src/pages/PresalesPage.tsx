@@ -242,6 +242,7 @@ const PresalesPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-16 text-center">S.No</TableHead>
                   <TableHead>Order Code</TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Stage</TableHead>
@@ -252,8 +253,9 @@ const PresalesPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPresales.map((record) => (
+                {filteredPresales.map((record, index) => (
                   <TableRow key={record.id}>
+                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                     <TableCell className="font-mono text-xs">{record.order_code}</TableCell>
                     <TableCell>{record.project_name}</TableCell>
                     <TableCell>{record.stage}</TableCell>

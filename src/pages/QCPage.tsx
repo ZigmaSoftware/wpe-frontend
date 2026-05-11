@@ -79,6 +79,7 @@ const QCPage = () => {
             <table className="w-full text-sm">
               <thead className="bg-secondary">
                 <tr>
+                  <th className="text-center px-3 py-2 text-secondary-foreground">S.No</th>
                   <th className="text-left px-3 py-2 text-secondary-foreground">ID</th>
                   <th className="text-left px-3 py-2 text-secondary-foreground">Product</th>
                   <th className="text-right px-3 py-2 text-secondary-foreground">Expected</th>
@@ -94,6 +95,7 @@ const QCPage = () => {
                     className={`border-t border-border cursor-pointer ${i === activeIdx ? "bg-primary/5" : ""}`}
                     onClick={() => r.status === "pending" && setActiveIdx(i)}
                   >
+                    <td className="px-3 py-2 text-center font-medium text-muted-foreground">{i + 1}</td>
                     <td className="px-3 py-2 font-mono text-xs text-foreground">{r.id}</td>
                     <td className="px-3 py-2 text-foreground text-xs">{r.productName}</td>
                     <td className="px-3 py-2 text-right font-mono text-foreground">{r.expectedWeight.toFixed(3)}</td>
