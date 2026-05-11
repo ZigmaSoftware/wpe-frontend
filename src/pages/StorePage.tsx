@@ -14,6 +14,9 @@ import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-hel
 import type { QcrRecord, StoreStockRequest, StoreTransactionRecord } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
 
+const unwrapResults = <T,>(payload: { data?: { results?: T[] } } | T[]) =>
+  Array.isArray(payload) ? payload : payload.data?.results ?? [];
+
 const readText = (value: unknown) => {
   if (value === null || value === undefined || value === "") {
     return "-";
@@ -99,16 +102,16 @@ const StorePage = () => {
   const transactionsQuery = useQuery({
     queryKey: ["store", "transactions"],
     queryFn: async () => {
-      const response = await coreApi.get<StoreTransactionRecord[]>("/api/store/transactions/");
-      return response.data;
+      const response = await coreApi.get<StoreTransactionRecord[] | { data?: { results?: StoreTransactionRecord[] } }>("/api/store/transactions/");
+      return unwrapResults(response.data);
     },
   });
 
   const requestsQuery = useQuery({
     queryKey: ["store", "requests"],
     queryFn: async () => {
-      const response = await coreApi.get<StoreStockRequest[]>("/api/store/requests/");
-      return response.data;
+      const response = await coreApi.get<StoreStockRequest[] | { data?: { results?: StoreStockRequest[] } }>("/api/store/requests/");
+      return unwrapResults(response.data);
     },
   });
 
@@ -149,7 +152,9 @@ const StorePage = () => {
   const filteredIntakeRecords =
     departmentFilter === "all" ? intakeQuery.data ?? [] : (intakeQuery.data ?? []).filter((record) => getStoreDepartment(record) === departmentFilter);
 
-  const grnInTransactions = (transactionsQuery.data ?? []).filter((row) => row.transaction_type === "GRN_IN").length;
+  const grnInTransactions = (transactionsQuery.data ?? []).filter(
+    (row) => row.transaction_type === "GRN_IN" || row.transaction_type === "GRN_INWARD",
+  ).length;
   const additiveBlendingRequests = (requestsQuery.data ?? []).filter(
     (row) => row.request_type === "ADDITIVE" && row.department.toUpperCase() === "BLENDING",
   );
@@ -170,6 +175,7 @@ const StorePage = () => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-16 text-center">S.No</TableHead>
               <TableHead>GRN Reference</TableHead>
               <TableHead>Supplier</TableHead>
               <TableHead>Item</TableHead>
@@ -183,8 +189,9 @@ const StorePage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {records.map((record) => (
+            {records.map((record, index) => (
               <TableRow key={record.id}>
+                <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                 <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
                 <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
                 <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
@@ -217,6 +224,7 @@ const StorePage = () => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-16 text-center">S.No</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Item Code</TableHead>
               <TableHead>Item Name</TableHead>
@@ -227,8 +235,9 @@ const StorePage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row) => (
+            {rows.map((row, index) => (
               <TableRow key={row.id}>
+                <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                 <TableCell>{formatDateTime(row.created_at)}</TableCell>
                 <TableCell className="font-mono text-xs">{row.item_code}</TableCell>
                 <TableCell>{row.item_name}</TableCell>
@@ -254,6 +263,7 @@ const StorePage = () => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-16 text-center">S.No</TableHead>
               <TableHead>Requested</TableHead>
               <TableHead>Item</TableHead>
               <TableHead>Qty</TableHead>
@@ -266,8 +276,9 @@ const StorePage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row) => (
+            {rows.map((row, index) => (
               <TableRow key={row.id}>
+                <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                 <TableCell>{formatDateTime(row.requested_at)}</TableCell>
                 <TableCell>
                   <div className="font-medium">{row.item_name}</div>

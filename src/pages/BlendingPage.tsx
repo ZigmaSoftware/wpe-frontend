@@ -4,6 +4,7 @@ import { FlaskConical, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import AdditiveItemAutocomplete from "@/components/AdditiveItemAutocomplete";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
@@ -24,7 +25,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +32,9 @@ import { coreApi } from "@/lib/api";
 import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
 import type { DepartmentStock, StoreStockRecord, StoreStockRequest } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
+
+const unwrapResults = <T,>(payload: { data?: { results?: T[] } } | T[]) =>
+  Array.isArray(payload) ? payload : payload.data?.results ?? [];
 
 const additiveRequestSchema = z.object({
   item_id: z.string().min(1, "Additive item is required."),
@@ -67,6 +70,7 @@ const statusTone = (status: StoreStockRequest["status"]) => {
 const BlendingPage = () => {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedAdditiveItem, setSelectedAdditiveItem] = useState<StoreStockRecord | null>(null);
   const form = useForm<AdditiveRequestValues>({
     resolver: zodResolver(additiveRequestSchema),
     defaultValues: additiveRequestDefaults,
@@ -75,24 +79,26 @@ const BlendingPage = () => {
   const blendingQuery = useQuery({
     queryKey: ["blending-stock"],
     queryFn: async () => {
-      const response = await coreApi.get<DepartmentStock[]>("/api/blending/stock/");
-      return response.data;
+      const response = await coreApi.get<DepartmentStock[] | { data?: { results?: DepartmentStock[] } }>("/api/blending/stock/");
+      return unwrapResults(response.data);
     },
   });
 
   const storeStockQuery = useQuery({
-    queryKey: ["store-stock"],
+    queryKey: ["store-intake-options"],
     queryFn: async () => {
-      const response = await coreApi.get<StoreStockRecord[]>("/api/store/stock/");
-      return response.data;
+      const response = await coreApi.get<StoreStockRecord[] | { data?: { results?: StoreStockRecord[] } }>(
+        "/api/blending/request-stock/",
+      );
+      return unwrapResults(response.data);
     },
   });
 
   const requestsQuery = useQuery({
     queryKey: ["store-requests"],
     queryFn: async () => {
-      const response = await coreApi.get<StoreStockRequest[]>("/api/store/requests/");
-      return response.data;
+      const response = await coreApi.get<StoreStockRequest[] | { data?: { results?: StoreStockRequest[] } }>("/api/blending/store-requests/");
+      return unwrapResults(response.data);
     },
   });
 
@@ -107,8 +113,8 @@ const BlendingPage = () => {
     },
     onSuccess: () => {
       toast.success("Additive store request submitted.");
-      setDialogOpen(false);
-      form.reset(additiveRequestDefaults);
+      setSelectedAdditiveItem(null);
+      handleDialogOpenChange(false);
       queryClient.invalidateQueries({ queryKey: ["store-requests"] });
     },
     onError: (error) => {
@@ -120,10 +126,7 @@ const BlendingPage = () => {
     () => (blendingQuery.data ?? []).filter((row) => isAdditiveRecord(row)),
     [blendingQuery.data],
   );
-  const additiveStoreStock = useMemo(
-    () => (storeStockQuery.data ?? []).filter((row) => isAdditiveRecord(row)),
-    [storeStockQuery.data],
-  );
+  const additiveStoreStock = useMemo(() => storeStockQuery.data ?? [], [storeStockQuery.data]);
   const additiveRequests = useMemo(
     () =>
       (requestsQuery.data ?? []).filter(
@@ -142,6 +145,17 @@ const BlendingPage = () => {
 
   const totalQuantity = additiveBlendingStock.reduce((sum, stock) => sum + Number(stock.quantity), 0);
   const pendingRequests = additiveRequests.filter((request) => request.status === "PENDING").length;
+  const additiveItemFieldValue = form.watch("item_id");
+  const canSubmitAdditiveRequest = Boolean(additiveItemFieldValue && selectedAdditiveItem) && !requestStockMutation.isPending;
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+
+    if (!open) {
+      form.reset(additiveRequestDefaults);
+      setSelectedAdditiveItem(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -183,6 +197,7 @@ const BlendingPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-16 text-center">S.No</TableHead>
                       <TableHead>Item Code</TableHead>
                       <TableHead>Item Name</TableHead>
                       <TableHead>Category</TableHead>
@@ -192,8 +207,9 @@ const BlendingPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {additiveBlendingStock.map((stock) => (
+                    {additiveBlendingStock.map((stock, index) => (
                       <TableRow key={stock.id}>
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                         <TableCell className="font-mono text-xs">{stock.item_code}</TableCell>
                         <TableCell>{stock.item_name}</TableCell>
                         <TableCell>{stock.sub_group || stock.group || stock.category || "-"}</TableCell>
@@ -216,6 +232,7 @@ const BlendingPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-16 text-center">S.No</TableHead>
                       <TableHead>Requested</TableHead>
                       <TableHead>Item</TableHead>
                       <TableHead>Qty</TableHead>
@@ -227,8 +244,9 @@ const BlendingPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {additiveRequests.map((request) => (
+                    {additiveRequests.map((request, index) => (
                       <TableRow key={request.id}>
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                         <TableCell>{formatDateTime(request.requested_at)}</TableCell>
                         <TableCell>
                           <div className="font-medium">{request.item_name}</div>
@@ -260,21 +278,25 @@ const BlendingPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-16 text-center">S.No</TableHead>
+                      <TableHead>GRN Reference</TableHead>
                       <TableHead>Item Code</TableHead>
                       <TableHead>Item Name</TableHead>
-                      <TableHead>Category</TableHead>
+                      <TableHead>Supplier</TableHead>
                       <TableHead>Store Qty</TableHead>
-                      <TableHead>Unit</TableHead>
+                      <TableHead>Department</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {additiveStoreOptions.map((stock) => (
+                    {additiveStoreOptions.map((stock, index) => (
                       <TableRow key={stock.id}>
-                        <TableCell className="font-mono text-xs">{stock.item_code}</TableCell>
-                        <TableCell>{stock.item_name}</TableCell>
-                        <TableCell>{stock.sub_group || stock.group || stock.category}</TableCell>
-                        <TableCell>{formatDecimal(stock.quantity)}</TableCell>
-                        <TableCell>{stock.unit}</TableCell>
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell className="font-medium">STORE</TableCell>
+                        <TableCell className="font-mono text-xs">{stock.item_code || "-"}</TableCell>
+                        <TableCell>{stock.item_name || "-"}</TableCell>
+                        <TableCell>{stock.category || "-"}</TableCell>
+                        <TableCell>{formatDecimal(stock.quantity || "0")}</TableCell>
+                        <TableCell>BLENDING</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -287,7 +309,7 @@ const BlendingPage = () => {
         </Tabs>
       ) : null}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Additive Store Request</DialogTitle>
@@ -304,20 +326,17 @@ const BlendingPage = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Additive Item</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choose additive from store stock" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {additiveStoreOptions.map((stock) => (
-                          <SelectItem key={stock.item} value={String(stock.item)}>
-                            {stock.item_name} ({stock.item_code}) - {formatDecimal(stock.quantity)} {stock.unit}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <AdditiveItemAutocomplete
+                        selectedItem={selectedAdditiveItem}
+                        onSelectedItemChange={(item) => {
+                          setSelectedAdditiveItem(item);
+                          field.onChange(item ? String(item.item) : "");
+                          form.clearErrors("item_id");
+                        }}
+                        error={form.formState.errors.item_id?.message}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -374,10 +393,10 @@ const BlendingPage = () => {
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={requestStockMutation.isPending}>
+                <Button type="submit" disabled={!canSubmitAdditiveRequest}>
                   Submit Request
                 </Button>
               </div>

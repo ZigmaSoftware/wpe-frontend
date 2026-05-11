@@ -58,6 +58,7 @@ const MasterTable = <T,>({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-16 text-center">S.No</TableHead>
             {columns.map((column) => (
               <TableHead key={column.key} className={column.className}>
                 {column.title}
@@ -68,6 +69,9 @@ const MasterTable = <T,>({
         <TableBody>
           {records.map((record, index) => (
             <TableRow key={index}>
+              <TableCell className="text-center font-medium text-muted-foreground">
+                {(page - 1) * pageSize + index + 1}
+              </TableCell>
               {columns.map((column) => (
                 <TableCell key={column.key} className={column.className}>
                   {column.render(record)}

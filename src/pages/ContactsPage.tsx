@@ -249,6 +249,7 @@ const ContactsPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-16 text-center">S.No</TableHead>
                   <TableHead>Ref</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
@@ -260,8 +261,9 @@ const ContactsPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contactsQuery.data.map((contact) => (
+                {contactsQuery.data.map((contact, index) => (
                   <TableRow key={contact.id}>
+                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                     <TableCell className="font-mono text-xs">{contact.ref_code}</TableCell>
                     <TableCell>
                       <div className="font-medium">{contact.name}</div>
