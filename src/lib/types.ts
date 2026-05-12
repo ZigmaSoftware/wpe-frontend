@@ -1,9 +1,25 @@
 export type ApiListEnvelope<T> = {
   count?: number;
+  next?: string | null;
+  previous?: string | null;
   results?: T[];
-  data?: T[];
+  data?: T[] | ApiPaginatedResult<T>;
   status?: string;
   message?: string;
+  success?: boolean;
+};
+
+export type ApiSuccessEnvelope<T> = {
+  success: boolean;
+  message: string;
+  data: T;
+};
+
+export type ApiPaginatedResult<T> = {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: T[];
 };
 
 export type Contact = {
@@ -22,63 +38,6 @@ export type Contact = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-};
-
-export type Item = {
-  id: number;
-  product_type: string;
-  category: string;
-  group: string;
-  sub_group: string;
-  item_name: string;
-  hsn_code: string | null;
-  unit: string;
-  opening_stock: string;
-  product_details: string | null;
-  description: string | null;
-  min_max_status: boolean;
-  status: boolean;
-  item_code: string;
-  current_stock: string;
-  on_hand: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type StockTransaction = {
-  id: number;
-  item: number;
-  item_code?: string;
-  item_name?: string;
-  date: string;
-  ref_id: string | null;
-  trans_type: string | null;
-  sale_type: string | null;
-  doc_id: string | null;
-  contact: string | null;
-  warehouse: string | null;
-  bin: string | null;
-  inwards: string;
-  outwards: string;
-  balance: string;
-  created_at: string;
-};
-
-export type ItemStockAnalysis = {
-  item_id: number;
-  item_code: string;
-  item_name: string;
-  unit: string;
-  opening_stock: string;
-  current_stock: string;
-  on_hand: string;
-  columns: string[];
-  rows: Record<string, string | number>[];
-  totals: {
-    Inwards: string;
-    Outwards: string;
-    Balance: string;
-  };
 };
 
 export type DepartmentStock = {

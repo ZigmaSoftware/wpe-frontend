@@ -1,7 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { coreApi, grnApi } from "@/lib/api";
-import { normalizeGrnResponse, normalizeListResponse } from "@/lib/api-helpers";
-import type { Contact, DepartmentStock, GrnListResponse, Item, Presale, QcrRecord } from "@/lib/types";
+import { normalizeGrnResponse, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
+import type {
+  ApiSuccessEnvelope,
+  Contact,
+  GrnListResponse,
+  Presale,
+  QcrRecord,
+  StoreStockRecord,
+  ApiPaginatedResult,
+} from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
 import { ErrorState, LoadingState } from "@/components/QueryState";
@@ -10,20 +18,27 @@ const DashboardPage = () => {
   const overviewQuery = useQuery({
     queryKey: ["dashboard-overview"],
     queryFn: async () => {
-      const [contacts, items, blending, presales, grnActive, qcrActive] = await Promise.all([
+      const [contacts, storeStock, blendingStock, presales, grnActive, qcrActive] = await Promise.all([
         coreApi.get<Contact[] | { data: Contact[] }>("/api/contacts/contacts/"),
-        coreApi.get<Item[] | { data: Item[] }>("/api/items/items/"),
-        coreApi.get<DepartmentStock[]>("/api/blending/stock/"),
+        coreApi.get<ApiSuccessEnvelope<ApiPaginatedResult<StoreStockRecord>>>("/api/store/stock/", {
+          params: { page_size: 1 },
+        }),
+        coreApi.get<ApiSuccessEnvelope<ApiPaginatedResult<StoreStockRecord>>>("/api/store/stock/", {
+          params: { warehouse_code: "BLENDING", page_size: 1 },
+        }),
         coreApi.get<Presale[]>("/api/presales/presales/"),
         grnApi.get<GrnListResponse>("/api/grn/"),
         grnApi.get<QcrRecord[]>("/api/qcr/"),
       ]);
 
+      const storeStockPayload = unwrapSuccessEnvelope(storeStock.data);
+      const blendingStockPayload = unwrapSuccessEnvelope(blendingStock.data);
+
       return {
-        contacts: normalizeListResponse(contacts.data),
-        items: normalizeListResponse(items.data),
-        blending: blending.data,
-        presales: normalizeListResponse(presales.data),
+        contacts: normalizeListResponse<Contact>(contacts.data),
+        storeStockCount: storeStockPayload.count ?? 0,
+        blendingStockCount: blendingStockPayload.count ?? 0,
+        presales: normalizeListResponse<Presale>(presales.data),
         grn: normalizeGrnResponse(grnActive.data).data,
         qcr: qcrActive.data,
       };
@@ -38,7 +53,7 @@ const DashboardPage = () => {
     return <ErrorState description="The dashboard overview could not be loaded from the live backend." />;
   }
 
-  const { contacts, items, blending, presales, grn, qcr } = overviewQuery.data;
+  const { contacts, storeStockCount, blendingStockCount, presales, grn, qcr } = overviewQuery.data;
 
   return (
     <div className="space-y-6">
@@ -49,8 +64,8 @@ const DashboardPage = () => {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Contacts" value={contacts.length} hint={`${contacts.filter((contact) => contact.is_active).length} active`} />
-        <StatCard label="Items" value={items.length} hint={`${items.filter((item) => item.status).length} enabled`} />
-        <StatCard label="Blending Stock" value={blending.length} hint="Department stock rows" />
+        <StatCard label="Store Stock Rows" value={storeStockCount} hint="Persisted warehouse balances" />
+        <StatCard label="Blending Stock Rows" value={blendingStockCount} hint="Warehouse-scoped inventory rows" />
         <StatCard label="Presales" value={presales.length} hint="All presales records" />
         <StatCard label="GRN" value={grn.length} hint="Active GRN Process records" />
         <StatCard label="QCR" value={qcr.length} hint="Active QCR queue" />
