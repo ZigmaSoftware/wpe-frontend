@@ -110,7 +110,6 @@ const reportSections = [
       { name: "Find/Fix Wrong Transactions (Indent)", description: "Indent correction tool", category: "tools" },
       { name: "Find/Fix Wrong Transactions (Purchase)", description: "Purchase correction tool", category: "tools" },
       { name: "Bulk Import Contacts", description: "Mass contact upload", category: "tools" },
-      { name: "Bulk Import Items", description: "Mass item upload", category: "tools" },
       { name: "Bulk Import Users", description: "Mass user upload", category: "tools" },
       { name: "Demand Sheet", description: "Demand planning tool", category: "tools" },
       { name: "Demand Sheet with Plan", description: "Demand planning with production plan", category: "tools" },

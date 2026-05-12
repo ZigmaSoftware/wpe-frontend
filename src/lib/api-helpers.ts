@@ -1,17 +1,80 @@
 import axios from "axios";
-import type { ApiListEnvelope, GrnListResponse, ImportResponse } from "@/lib/types";
+import type { ApiSuccessEnvelope, GrnListResponse, ImportResponse } from "@/lib/types";
 
-export const normalizeListResponse = <T>(payload: T[] | ApiListEnvelope<T>): T[] => {
-  if (Array.isArray(payload)) {
-    return payload;
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+const readFirstErrorValue = (value: unknown): string | null => {
+  if (typeof value === "string" && value.trim()) {
+    return value;
   }
 
-  if (Array.isArray(payload.data)) {
-    return payload.data;
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const message = readFirstErrorValue(entry);
+      if (message) {
+        return message;
+      }
+    }
   }
 
-  if (Array.isArray(payload.results)) {
-    return payload.results;
+  if (isRecord(value)) {
+    for (const entry of Object.values(value)) {
+      const message = readFirstErrorValue(entry);
+      if (message) {
+        return message;
+      }
+    }
+  }
+
+  return null;
+};
+
+const getFirstFieldError = (payload: Record<string, unknown>, ignoredKeys: string[] = []) => {
+  const ignoredKeySet = new Set(ignoredKeys);
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (ignoredKeySet.has(key)) {
+      continue;
+    }
+
+    const message = readFirstErrorValue(value);
+    if (message) {
+      return message;
+    }
+  }
+
+  return null;
+};
+
+export const unwrapSuccessEnvelope = <T>(payload: ApiSuccessEnvelope<T> | T): T => {
+  if (isRecord(payload) && "success" in payload && "data" in payload) {
+    return (payload as ApiSuccessEnvelope<T>).data;
+  }
+
+  return payload as T;
+};
+
+export const normalizeListResponse = <T>(payload: unknown): T[] => {
+  const unwrappedPayload = unwrapSuccessEnvelope(payload as ApiSuccessEnvelope<unknown> | unknown);
+
+  if (Array.isArray(unwrappedPayload)) {
+    return unwrappedPayload as T[];
+  }
+
+  if (!isRecord(unwrappedPayload)) {
+    return [];
+  }
+
+  if (Array.isArray(unwrappedPayload.results)) {
+    return unwrappedPayload.results as T[];
+  }
+
+  if (Array.isArray(unwrappedPayload.data)) {
+    return unwrappedPayload.data as T[];
+  }
+
+  if (isRecord(unwrappedPayload.data) && Array.isArray(unwrappedPayload.data.results)) {
+    return unwrappedPayload.data.results as T[];
   }
 
   return [];
@@ -37,22 +100,38 @@ export const normalizeGrnResponse = (payload: GrnListResponse | unknown) => {
 
 export const getApiErrorMessage = (error: unknown, fallback: string) => {
   if (axios.isAxiosError(error)) {
-    const detail =
-      (error.response?.data as Record<string, unknown> | undefined)?.detail ??
-      (error.response?.data as Record<string, unknown> | undefined)?.message;
-
-    if (typeof detail === "string" && detail.trim()) {
-      return detail;
+    if (typeof error.response?.data === "string" && error.response.data.trim()) {
+      return error.response.data;
     }
 
-    const errors = (error.response?.data as Record<string, unknown> | undefined)?.errors;
-    if (errors && typeof errors === "object") {
-      const firstValue = Object.values(errors)[0];
-      if (Array.isArray(firstValue) && typeof firstValue[0] === "string") {
-        return firstValue[0];
+    const responseData = isRecord(error.response?.data) ? error.response.data : undefined;
+    if (responseData) {
+      const detail = responseData.detail ?? responseData.message;
+
+      if (typeof detail === "string" && detail.trim()) {
+        return detail;
       }
-      if (typeof firstValue === "string") {
-        return firstValue;
+
+      const rootFieldError = getFirstFieldError(responseData, [
+        "detail",
+        "message",
+        "errors",
+        "success",
+        "data",
+        "status",
+        "count",
+        "next",
+        "previous",
+      ]);
+      if (rootFieldError) {
+        return rootFieldError;
+      }
+
+      if (isRecord(responseData.errors)) {
+        const nestedError = getFirstFieldError(responseData.errors);
+        if (nestedError) {
+          return nestedError;
+        }
       }
     }
   }

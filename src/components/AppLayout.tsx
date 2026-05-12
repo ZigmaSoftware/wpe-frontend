@@ -44,7 +44,7 @@ const navSections = [
     items: [
       { to: "/app", icon: LayoutDashboard, label: "Dashboard" },
       { to: "/app/contacts", icon: Users, label: "Contacts" },
-      { to: "/app/items", icon: Box, label: "Items" },
+      { to: "/app/items", icon: Box, label: "Inventory" },
       { to: "/app/blending", icon: Blend, label: "Blending" },
       { to: "/app/presales", icon: FileText, label: "Presales" },
       { to: "/app/store", icon: Archive, label: "Store" },
