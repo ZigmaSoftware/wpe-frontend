@@ -277,15 +277,30 @@ const StorePage = () => {
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
-              <TableRow key={row.id}>
+                <TableRow key={row.id}>
                 <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                 <TableCell>{formatDateTime(row.requested_at)}</TableCell>
                 <TableCell>
-                  <div className="font-medium">{row.item_name}</div>
-                  <div className="font-mono text-xs text-muted-foreground">{row.item_code}</div>
+                  <div className="space-y-2">
+                    {(row.items?.length ? row.items : []).map((item) => (
+                      <div key={item.id}>
+                        <div className="font-medium">{item.item_name}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{item.item_code}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatDecimal(item.requested_qty)} {item.unit}
+                        </div>
+                      </div>
+                    ))}
+                    {!row.items?.length ? (
+                      <div>
+                        <div className="font-medium">{row.item_name || "-"}</div>
+                        {row.item_code ? <div className="font-mono text-xs text-muted-foreground">{row.item_code}</div> : null}
+                      </div>
+                    ) : null}
+                  </div>
                 </TableCell>
                 <TableCell>
-                  {formatDecimal(row.quantity)} {row.unit}
+                  {formatDecimal(row.total_requested_qty ?? row.quantity)} {row.unit || row.items?.[0]?.unit || ""}
                 </TableCell>
                 <TableCell>{row.requested_for_name}</TableCell>
                 <TableCell className="max-w-xs truncate" title={row.request_reason}>
@@ -320,8 +335,8 @@ const StorePage = () => {
                     <span className="text-muted-foreground">Closed</span>
                   )}
                 </TableCell>
-              </TableRow>
-            ))}
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       </div>

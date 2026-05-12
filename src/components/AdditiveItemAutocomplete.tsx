@@ -40,6 +40,18 @@ const highlightText = (text: string, query: string) => {
 
 const formatOptionLabel = (item: StoreStockRecord) => item.item_name || item.item_code || `Item ${item.item}`;
 
+const matchesSearchTerm = (item: StoreStockRecord, query: string) => {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return false;
+  }
+
+  return [item.item_name, item.item_code, item.category]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => value.toLowerCase().includes(normalizedQuery));
+};
+
 const AdditiveItemAutocomplete = ({
   selectedItem,
   onSelectedItemChange,
@@ -80,7 +92,7 @@ const AdditiveItemAutocomplete = ({
 
   const suggestionsQuery = useQuery({
     queryKey: ["additive-item-suggestions", debouncedSearchTerm],
-    enabled: open,
+    enabled: open && debouncedSearchTerm.length > 0,
     queryFn: async () => {
       const response = await coreApi.get<StoreStockRecord[] | { data?: { results?: StoreStockRecord[] } }>(
         "/api/blending/request-stock/",
@@ -96,7 +108,10 @@ const AdditiveItemAutocomplete = ({
     },
   });
 
-  const suggestions = suggestionsQuery.data ?? [];
+  const suggestions = useMemo(
+    () => (suggestionsQuery.data ?? []).filter((item) => matchesSearchTerm(item, debouncedSearchTerm || searchTerm)),
+    [debouncedSearchTerm, searchTerm, suggestionsQuery.data],
+  );
   const hasTypedValue = searchTerm.trim().length > 0;
   const hasExactSelection =
     selectedItem !== null && searchTerm.trim().toLowerCase() === formatOptionLabel(selectedItem).trim().toLowerCase();
@@ -245,7 +260,13 @@ const AdditiveItemAutocomplete = ({
               </div>
             ) : null}
 
-            {!suggestionsQuery.isLoading && suggestions.length ? (
+            {!suggestionsQuery.isLoading && !hasTypedValue ? (
+              <div className="min-h-14 px-3 py-3 text-sm text-muted-foreground">
+                Start typing to search products
+              </div>
+            ) : null}
+
+            {!suggestionsQuery.isLoading && hasTypedValue && suggestions.length ? (
               suggestions.map((item, index) => {
                 const isSelected = selectedItem?.item === item.item;
                 const isActive = highlightedIndex === index;
@@ -282,7 +303,7 @@ const AdditiveItemAutocomplete = ({
               })
             ) : null}
 
-            {!suggestionsQuery.isLoading && suggestions.length === 0 ? (
+            {!suggestionsQuery.isLoading && hasTypedValue && suggestions.length === 0 ? (
               <div className="min-h-14 px-3 py-3 text-sm text-muted-foreground">
                 No matching products found
               </div>
