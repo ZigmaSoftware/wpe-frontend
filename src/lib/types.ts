@@ -271,6 +271,7 @@ export type GrnRecord = {
   process_status: string;
   moved_to_qcr_at: string | null;
   moved_to_qcr_by: string | null;
+  raw_payload?: Record<string, unknown>;
   document_details: GrnDocumentDetails;
   document_requirement_details: GrnRequirementDetails;
   supplier_details: GrnSupplierDetails;
