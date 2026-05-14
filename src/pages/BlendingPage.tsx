@@ -1,115 +1,409 @@
-import LiveWeightDisplay from "@/components/LiveWeightDisplay";
-import QRScannerComponent from "@/components/QRScannerComponent";
-import { useState } from "react";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FlaskConical, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import AdditiveItemAutocomplete from "@/components/AdditiveItemAutocomplete";
+import PageHeader from "@/components/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
+import StatCard from "@/components/StatCard";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { coreApi } from "@/lib/api";
+import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
+import type { DepartmentStock, StoreStockRecord, StoreStockRequest } from "@/lib/types";
+import { toast } from "@/components/ui/sonner";
 
-interface Recipe {
-  code: string;
-  name: string;
-  targetWeight: number;
-  actualWeight: number | null;
-  status: "pending" | "weighed" | "error";
-}
+const unwrapResults = <T,>(payload: { data?: { results?: T[] } } | T[]) =>
+  Array.isArray(payload) ? payload : payload.data?.results ?? [];
 
-const RECIPES: Recipe[] = [
-  { code: "WOO-2001", name: "Wood Powder", targetWeight: 30.0, actualWeight: null, status: "pending" },
-  { code: "HDP-2020", name: "HDPE", targetWeight: 15.0, actualWeight: null, status: "pending" },
-  { code: "CAL-2004", name: "Calcium Powder", targetWeight: 8.0, actualWeight: null, status: "pending" },
-  { code: "COU-2003", name: "Coupling Agent", targetWeight: 3.5, actualWeight: null, status: "pending" },
-  { code: "LUB-2007", name: "Lubricant", targetWeight: 2.0, actualWeight: null, status: "pending" },
-  { code: "ANT-2005", name: "Antioxidant", targetWeight: 1.5, actualWeight: null, status: "pending" },
-];
+const additiveRequestSchema = z.object({
+  item_id: z.string().min(1, "Additive item is required."),
+  quantity: z.string().min(1, "Quantity is required."),
+  requested_for_name: z.string().min(1, "Requested person is required."),
+  request_reason: z.string().min(1, "Reason is required."),
+});
+
+type AdditiveRequestValues = z.infer<typeof additiveRequestSchema>;
+
+const additiveRequestDefaults: AdditiveRequestValues = {
+  item_id: "",
+  quantity: "",
+  requested_for_name: "",
+  request_reason: "",
+};
+
+const isAdditiveRecord = (record: { category?: string; group?: string; sub_group?: string; item_name?: string }) =>
+  [record.category, record.group, record.sub_group, record.item_name].some((value) =>
+    String(value ?? "").toLowerCase().includes("additive"),
+  );
+
+const statusTone = (status: StoreStockRequest["status"]) => {
+  if (status === "APPROVED") {
+    return "text-emerald-700";
+  }
+  if (status === "REJECTED") {
+    return "text-rose-700";
+  }
+  return "text-amber-700";
+};
 
 const BlendingPage = () => {
-  const [recipes, setRecipes] = useState<Recipe[]>(RECIPES);
-  const [activeRecipeIdx, setActiveRecipeIdx] = useState(0);
+  const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedAdditiveItem, setSelectedAdditiveItem] = useState<StoreStockRecord | null>(null);
+  const form = useForm<AdditiveRequestValues>({
+    resolver: zodResolver(additiveRequestSchema),
+    defaultValues: additiveRequestDefaults,
+  });
 
-  const handleWeightCapture = (weight: number) => {
-    setRecipes((prev) => {
-      const next = [...prev];
-      const recipe = next[activeRecipeIdx];
-      const deviation = Math.abs(weight - recipe.targetWeight) / recipe.targetWeight * 100;
-      next[activeRecipeIdx] = {
-        ...recipe,
-        actualWeight: weight,
-        status: deviation <= 0.5 ? "weighed" : "error",
-      };
-      return next;
-    });
-    if (activeRecipeIdx < recipes.length - 1) {
-      setActiveRecipeIdx(activeRecipeIdx + 1);
+  const blendingQuery = useQuery({
+    queryKey: ["blending-stock"],
+    queryFn: async () => {
+      const response = await coreApi.get<DepartmentStock[] | { data?: { results?: DepartmentStock[] } }>("/api/blending/stock/");
+      return unwrapResults(response.data);
+    },
+  });
+
+  const storeStockQuery = useQuery({
+    queryKey: ["store-intake-options"],
+    queryFn: async () => {
+      const response = await coreApi.get<StoreStockRecord[] | { data?: { results?: StoreStockRecord[] } }>(
+        "/api/blending/request-stock/",
+      );
+      return unwrapResults(response.data);
+    },
+  });
+
+  const requestsQuery = useQuery({
+    queryKey: ["store-requests"],
+    queryFn: async () => {
+      const response = await coreApi.get<StoreStockRequest[] | { data?: { results?: StoreStockRequest[] } }>("/api/blending/store-requests/");
+      return unwrapResults(response.data);
+    },
+  });
+
+  const requestStockMutation = useMutation({
+    mutationFn: async (payload: AdditiveRequestValues) => {
+      const response = await coreApi.post("/api/blending/request-stock/", {
+        ...payload,
+        item_id: Number(payload.item_id),
+        department: "BLENDING",
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Additive store request submitted.");
+      setSelectedAdditiveItem(null);
+      handleDialogOpenChange(false);
+      queryClient.invalidateQueries({ queryKey: ["store-requests"] });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Unable to submit additive request."));
+    },
+  });
+
+  const additiveBlendingStock = useMemo(
+    () => (blendingQuery.data ?? []).filter((row) => isAdditiveRecord(row)),
+    [blendingQuery.data],
+  );
+  const additiveStoreStock = useMemo(() => storeStockQuery.data ?? [], [storeStockQuery.data]);
+  const additiveRequests = useMemo(
+    () =>
+      (requestsQuery.data ?? []).filter(
+        (row) => row.request_type === "ADDITIVE" && row.department.toUpperCase() === "BLENDING",
+      ),
+    [requestsQuery.data],
+  );
+
+  const additiveStoreOptions = useMemo(
+    () =>
+      additiveStoreStock
+        .slice()
+        .sort((left, right) => left.item_name.localeCompare(right.item_name)),
+    [additiveStoreStock],
+  );
+
+  const totalQuantity = additiveBlendingStock.reduce((sum, stock) => sum + Number(stock.quantity), 0);
+  const pendingRequests = additiveRequests.filter((request) => request.status === "PENDING").length;
+  const additiveItemFieldValue = form.watch("item_id");
+  const canSubmitAdditiveRequest = Boolean(additiveItemFieldValue && selectedAdditiveItem) && !requestStockMutation.isPending;
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+
+    if (!open) {
+      form.reset(additiveRequestDefaults);
+      setSelectedAdditiveItem(null);
     }
   };
 
-  const totalTarget = recipes.reduce((sum, r) => sum + r.targetWeight, 0);
-  const totalActual = recipes.reduce((sum, r) => sum + (r.actualWeight || 0), 0);
-  const allWeighed = recipes.every((r) => r.status === "weighed");
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Blending Module</h1>
-        <p className="text-sm text-muted-foreground mt-1">Recipe-based weighing with hardware validation — Recipe: WPE RG 0107.6.22</p>
+      <PageHeader
+        title="Blending Additive Requests"
+        description="Create store requests for additive materials, track approvals, and monitor additive stock available in blending."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Additive Stock Rows" value={additiveBlendingStock.length} />
+        <StatCard label="Blending Qty" value={formatDecimal(totalQuantity)} />
+        <StatCard label="Pending Requests" value={pendingRequests} />
+        <StatCard label="Department" value="BLENDING" />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="space-y-4">
-          <LiveWeightDisplay
-            deviceId="WS-001"
-            label={`Scale — ${recipes[activeRecipeIdx]?.name || "Ready"}`}
-            expectedWeight={recipes[activeRecipeIdx]?.targetWeight}
-            tolerancePercent={0.5}
-            onWeightStable={handleWeightCapture}
-          />
-          <QRScannerComponent label="Scan Input Bin" />
-        </div>
-
-        <div className="lg:col-span-2">
-          <h2 className="text-lg font-semibold text-foreground mb-3">Recipe Components</h2>
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-secondary">
-                <tr>
-                  <th className="text-left px-4 py-2 text-secondary-foreground">Code</th>
-                  <th className="text-left px-4 py-2 text-secondary-foreground">Material</th>
-                  <th className="text-right px-4 py-2 text-secondary-foreground">Target (kg)</th>
-                  <th className="text-right px-4 py-2 text-secondary-foreground">Actual (kg)</th>
-                  <th className="text-center px-4 py-2 text-secondary-foreground">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recipes.map((r, i) => (
-                  <tr
-                    key={r.code}
-                    className={`border-t border-border cursor-pointer transition-colors ${
-                      i === activeRecipeIdx ? "bg-primary/5" : ""
-                    }`}
-                    onClick={() => setActiveRecipeIdx(i)}
-                  >
-                    <td className="px-4 py-2 font-mono text-xs text-foreground">{r.code}</td>
-                    <td className="px-4 py-2 text-foreground">{r.name}</td>
-                    <td className="px-4 py-2 text-right font-mono text-foreground">{r.targetWeight.toFixed(3)}</td>
-                    <td className="px-4 py-2 text-right font-mono text-foreground">{r.actualWeight?.toFixed(3) || "—"}</td>
-                    <td className="px-4 py-2 text-center">
-                      {r.status === "weighed" && <CheckCircle2 className="h-4 w-4 text-success inline" />}
-                      {r.status === "error" && <AlertTriangle className="h-4 w-4 text-destructive inline" />}
-                      {r.status === "pending" && <span className="text-xs text-muted-foreground">Pending</span>}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-border bg-secondary">
-                  <td colSpan={2} className="px-4 py-2 font-semibold text-secondary-foreground">Total</td>
-                  <td className="px-4 py-2 text-right font-mono font-semibold text-secondary-foreground">{totalTarget.toFixed(3)}</td>
-                  <td className="px-4 py-2 text-right font-mono font-semibold text-secondary-foreground">{totalActual.toFixed(3)}</td>
-                  <td className="px-4 py-2 text-center">
-                    {allWeighed && <CheckCircle2 className="h-4 w-4 text-success inline" />}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div className="flex justify-end">
+        <Button onClick={() => setDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Additive Request
+        </Button>
       </div>
+
+      {blendingQuery.isLoading || storeStockQuery.isLoading || requestsQuery.isLoading ? <LoadingState label="Loading additive workspace..." /> : null}
+      {blendingQuery.isError || storeStockQuery.isError || requestsQuery.isError ? (
+        <ErrorState description="Additive request data could not be loaded from the backend." />
+      ) : null}
+
+      {!blendingQuery.isLoading && !storeStockQuery.isLoading && !requestsQuery.isLoading && !blendingQuery.isError && !storeStockQuery.isError && !requestsQuery.isError ? (
+        <Tabs defaultValue="stock" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="stock">Blending Stock</TabsTrigger>
+            <TabsTrigger value="requests">Store Requests</TabsTrigger>
+            <TabsTrigger value="store">Store Additives</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="stock">
+            {additiveBlendingStock.length ? (
+              <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16 text-center">S.No</TableHead>
+                      <TableHead>Item Code</TableHead>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead>Department</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {additiveBlendingStock.map((stock, index) => (
+                      <TableRow key={stock.id}>
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell className="font-mono text-xs">{stock.item_code}</TableCell>
+                        <TableCell>{stock.item_name}</TableCell>
+                        <TableCell>{stock.sub_group || stock.group || stock.category || "-"}</TableCell>
+                        <TableCell>{formatDecimal(stock.quantity)}</TableCell>
+                        <TableCell>{stock.unit}</TableCell>
+                        <TableCell>{stock.department}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <EmptyState title="No additive stock yet" description="Approved additive requests will increase the blending stock table." />
+            )}
+          </TabsContent>
+
+          <TabsContent value="requests">
+            {additiveRequests.length ? (
+              <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16 text-center">S.No</TableHead>
+                      <TableHead>Requested</TableHead>
+                      <TableHead>Item</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Requested For</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead>Requested By</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Approved By</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {additiveRequests.map((request, index) => (
+                      <TableRow key={request.id}>
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell>{formatDateTime(request.requested_at)}</TableCell>
+                        <TableCell>
+                          <div className="font-medium">{request.item_name}</div>
+                          <div className="font-mono text-xs text-muted-foreground">{request.item_code}</div>
+                        </TableCell>
+                        <TableCell>
+                          {formatDecimal(request.quantity)} {request.unit}
+                        </TableCell>
+                        <TableCell>{request.requested_for_name}</TableCell>
+                        <TableCell className="max-w-xs truncate" title={request.request_reason}>
+                          {request.request_reason}
+                        </TableCell>
+                        <TableCell>{request.requested_by_username}</TableCell>
+                        <TableCell className={statusTone(request.status)}>{request.status}</TableCell>
+                        <TableCell>{request.approved_by_username || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <EmptyState title="No additive requests yet" description="Create the first store request for blending additives." />
+            )}
+          </TabsContent>
+
+          <TabsContent value="store">
+            {additiveStoreOptions.length ? (
+              <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16 text-center">S.No</TableHead>
+                      <TableHead>GRN Reference</TableHead>
+                      <TableHead>Item Code</TableHead>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Supplier</TableHead>
+                      <TableHead>Store Qty</TableHead>
+                      <TableHead>Department</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {additiveStoreOptions.map((stock, index) => (
+                      <TableRow key={stock.id}>
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell className="font-medium">STORE</TableCell>
+                        <TableCell className="font-mono text-xs">{stock.item_code || "-"}</TableCell>
+                        <TableCell>{stock.item_name || "-"}</TableCell>
+                        <TableCell>{stock.category || "-"}</TableCell>
+                        <TableCell>{formatDecimal(stock.quantity || "0")}</TableCell>
+                        <TableCell>BLENDING</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <EmptyState title="No additive stock in store" description="Store stock does not currently expose any additive items to request." />
+            )}
+          </TabsContent>
+        </Tabs>
+      ) : null}
+
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Additive Store Request</DialogTitle>
+            <DialogDescription>
+              Sends a pending store request to `POST /api/blending/request-stock/` with additive-specific request metadata for the blending team.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit((values) => requestStockMutation.mutate(values))} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="item_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Additive Item</FormLabel>
+                    <FormControl>
+                      <AdditiveItemAutocomplete
+                        selectedItem={selectedAdditiveItem}
+                        onSelectedItemChange={(item) => {
+                          setSelectedAdditiveItem(item);
+                          field.onChange(item ? String(item.item) : "");
+                          form.clearErrors("item_id");
+                        }}
+                        error={form.formState.errors.item_id?.message}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="0.000" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="requested_for_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Requested Person</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Blending operator or supervisor" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="request_reason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reason</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} rows={4} placeholder="Reason for additive request, batch, or production need" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 font-medium text-foreground">
+                  <FlaskConical className="h-4 w-4" />
+                  Request Type: Additive Store Request
+                </div>
+                <p className="mt-1">Department is fixed to BLENDING. Store will approve or reject this request from the store workspace.</p>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={!canSubmitAdditiveRequest}>
+                  Submit Request
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,342 +1,357 @@
-import { useState } from "react";
-import { FileText, Plus, Search } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import PageHeader from "@/components/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
+import StatCard from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import ModuleFormFieldsReference from "@/components/ModuleFormFieldsReference";
+import { Textarea } from "@/components/ui/textarea";
+import { coreApi } from "@/lib/api";
+import { formatDate, getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
+import type { Presale } from "@/lib/types";
+import { toast } from "@/components/ui/sonner";
 
-type PIStatus = "pending" | "confirmed" | "partially_reserved" | "fully_reserved" | "ready_for_dispatch" | "dispatch_in_progress" | "cancelled" | "lost" | "closed_won";
+const fieldNames = [
+  "order_code",
+  "stage",
+  "sale_type",
+  "sale_category",
+  "project_name",
+  "version_no",
+  "description",
+  "lead_source",
+  "sale_contact",
+  "gp_percent",
+  "gp_value",
+  "line_of_business",
+  "sub_segment",
+  "segment_keyword",
+  "required_date",
+  "request_person_id",
+  "request_department",
+  "required_time_start",
+  "required_time_end",
+  "required_reason",
+  "internal_ref_id",
+  "invoice_ref_id",
+  "tolerance",
+  "profile_type",
+  "capex",
+  "tl_code",
+  "delivery_challan_type",
+  "indent_number",
+  "indent_date",
+  "indent_receiving_datetime",
+  "movement_description",
+  "customer_po",
+  "customer_po_date",
+  "destination",
+  "document_contact",
+  "previous_document_contact",
+  "base_order_id",
+  "base_customer_id",
+  "base_customer_name",
+  "base_order_date",
+  "activity_id",
+] as const;
 
-interface ProformaInvoice {
-  id: string;
-  ref: string;
-  customer: string;
-  project: string;
-  items: number;
-  amount: number;
-  status: PIStatus;
-  date: string;
-  validTill: string;
-  salesPerson: string;
-}
+type PresaleFormValues = Record<(typeof fieldNames)[number], string>;
 
-interface NewPIFormState {
-  customer: string;
-  project: string;
-  items: string;
-  amount: string;
-  validTill: string;
-  salesPerson: string;
-}
+const presaleSchema = z.object(
+  Object.fromEntries(
+    fieldNames.map((name) => [name, z.string().default("")]),
+  ) as Record<(typeof fieldNames)[number], z.ZodDefault<z.ZodString>>,
+);
 
-const MOCK_PIS: ProformaInvoice[] = [
-  { id: "PI-2026-0412", ref: "ZG/PI/26-27/0412", customer: "ABC Plastics Pvt Ltd", project: "WPE Pipe Supply - Phase 2", items: 5, amount: 425000, status: "confirmed", date: "2026-04-08", validTill: "2026-05-08", salesPerson: "Rajesh K" },
-  { id: "PI-2026-0411", ref: "ZG/PI/26-27/0411", customer: "Metro Infrastructure", project: "Municipal Water Pipeline", items: 12, amount: 1850000, status: "fully_reserved", date: "2026-04-07", validTill: "2026-05-07", salesPerson: "Priya S" },
-  { id: "PI-2026-0410", ref: "ZG/PI/26-27/0410", customer: "Southern Polymers", project: "Agricultural Pipes", items: 8, amount: 680000, status: "partially_reserved", date: "2026-04-06", validTill: "2026-05-06", salesPerson: "Amit D" },
-  { id: "PI-2026-0409", ref: "ZG/PI/26-27/0409", customer: "Green Infra Ltd", project: "SWM Pipe Supply", items: 3, amount: 290000, status: "pending", date: "2026-04-05", validTill: "2026-05-05", salesPerson: "Rajesh K" },
-  { id: "PI-2026-0408", ref: "ZG/PI/26-27/0408", customer: "XYZ Polymers Ltd", project: "Industrial Drainage", items: 6, amount: 520000, status: "ready_for_dispatch", date: "2026-04-04", validTill: "2026-05-04", salesPerson: "Meena P" },
-  { id: "PI-2026-0407", ref: "ZG/PI/26-27/0407", customer: "National Distributors", project: "Retail Supply Q2", items: 15, amount: 2100000, status: "dispatch_in_progress", date: "2026-04-03", validTill: "2026-05-03", salesPerson: "Suresh J" },
-  { id: "PI-2026-0406", ref: "ZG/PI/26-27/0406", customer: "Kavitha Enterprises", project: "Small Bore Pipes", items: 4, amount: 175000, status: "closed_won", date: "2026-04-01", validTill: "2026-05-01", salesPerson: "Priya S" },
-  { id: "PI-2026-0405", ref: "ZG/PI/26-27/0405", customer: "Pan India Distribution", project: "Bulk WPE Order", items: 20, amount: 3200000, status: "pending", date: "2026-03-30", validTill: "2026-04-30", salesPerson: "Amit D" },
-  { id: "PI-2026-0404", ref: "ZG/PI/26-27/0404", customer: "GreenTech Solutions", project: "Irrigation Pipes", items: 7, amount: 450000, status: "lost", date: "2026-03-28", validTill: "2026-04-28", salesPerson: "Rajesh K" },
-  { id: "PI-2026-0403", ref: "ZG/PI/26-27/0403", customer: "BuildMax Corp", project: "Construction Pipes", items: 9, amount: 890000, status: "cancelled", date: "2026-03-25", validTill: "2026-04-25", salesPerson: "Meena P" },
-];
+const numericFields = new Set([
+  "request_person_id",
+  "internal_ref_id",
+  "invoice_ref_id",
+  "base_order_id",
+  "base_customer_id",
+  "activity_id",
+]);
 
-const statusLabels: Record<PIStatus, string> = {
-  pending: "Pending", confirmed: "Confirmed", partially_reserved: "Partially Reserved",
-  fully_reserved: "Fully Reserved", ready_for_dispatch: "Ready for Dispatch",
-  dispatch_in_progress: "Dispatch In Progress", cancelled: "Cancelled", lost: "Lost", closed_won: "Closed Won",
-};
+const textAreaFields = new Set(["description", "movement_description", "document_contact", "previous_document_contact"]);
+const dateFields = new Set(["required_date", "customer_po_date"]);
+const dateTimeFields = new Set(["indent_date", "indent_receiving_datetime", "base_order_date"]);
+const timeFields = new Set(["required_time_start", "required_time_end"]);
 
-const statusColors: Record<PIStatus, string> = {
-  pending: "bg-warning/10 text-warning border-warning/20",
-  confirmed: "bg-primary/10 text-primary border-primary/20",
-  partially_reserved: "bg-accent/20 text-accent-foreground border-accent/30",
-  fully_reserved: "bg-success/10 text-success border-success/20",
-  ready_for_dispatch: "bg-success/20 text-success border-success/30",
-  dispatch_in_progress: "bg-primary/20 text-primary border-primary/30",
-  cancelled: "bg-destructive/10 text-destructive border-destructive/20",
-  lost: "bg-muted text-muted-foreground border-muted",
-  closed_won: "bg-success/10 text-success border-success/20",
-};
+const defaultValues = fieldNames.reduce((accumulator, fieldName) => {
+  accumulator[fieldName] = "";
+  return accumulator;
+}, {} as PresaleFormValues);
 
-const getFiscalYearLabel = (date: Date) => {
-  const fiscalStartYear = date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
-  const fiscalEndYear = fiscalStartYear + 1;
-  return `${String(fiscalStartYear).slice(-2)}-${String(fiscalEndYear).slice(-2)}`;
-};
+const buildPayload = (values: PresaleFormValues) =>
+  Object.fromEntries(
+    Object.entries(values).map(([key, value]) => {
+      if (numericFields.has(key) && value !== "") {
+        return [key, Number(value)];
+      }
 
-const getNextPISequence = (pis: ProformaInvoice[]) => {
-  const sequenceNumbers = pis.map((pi) => {
-    const idMatch = pi.id.match(/-(\d{4})$/);
-    const refMatch = pi.ref.match(/\/(\d{4})$/);
-    return Number(idMatch?.[1] ?? refMatch?.[1] ?? 0);
-  });
-  return Math.max(0, ...sequenceNumbers) + 1;
-};
-
-const formatDateForInput = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const getDefaultFormState = (): NewPIFormState => {
-  const today = new Date();
-  const validTill = new Date(today);
-  validTill.setDate(today.getDate() + 30);
-
-  return {
-    customer: "",
-    project: "",
-    items: "",
-    amount: "",
-    validTill: formatDateForInput(validTill),
-    salesPerson: "",
-  };
-};
+      return [key, value === "" ? null : value];
+    }),
+  );
 
 const PresalesPage = () => {
-  const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>(MOCK_PIS);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newPIForm, setNewPIForm] = useState<NewPIFormState>(getDefaultFormState);
-  const [formError, setFormError] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingPresale, setEditingPresale] = useState<Presale | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Presale | null>(null);
 
-  const filtered = proformaInvoices.filter((pi) => {
-    const matchesSearch = pi.customer.toLowerCase().includes(search.toLowerCase()) || pi.ref.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = activeTab === "all" || pi.status === activeTab;
-    return matchesSearch && matchesTab;
+  const form = useForm<PresaleFormValues>({
+    resolver: zodResolver(presaleSchema),
+    defaultValues,
   });
 
-  const totalValue = proformaInvoices.reduce((sum, pi) => sum + pi.amount, 0);
+  const presalesQuery = useQuery({
+    queryKey: ["presales"],
+    queryFn: async () => {
+      const response = await coreApi.get<Presale[] | { data: Presale[] }>("/api/presales/presales/");
+      return normalizeListResponse(response.data);
+    },
+  });
 
-  const handleOpenChange = (open: boolean) => {
-    setIsCreateOpen(open);
-    if (!open) {
-      setFormError("");
-      setNewPIForm(getDefaultFormState());
+  const createMutation = useMutation({
+    mutationFn: async (values: PresaleFormValues) => {
+      const response = await coreApi.post<Presale>("/api/presales/presales/", buildPayload(values));
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Presales record created.");
+      setDialogOpen(false);
+      form.reset(defaultValues);
+      queryClient.invalidateQueries({ queryKey: ["presales"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to create presales record.")),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (values: PresaleFormValues) => {
+      if (!editingPresale) {
+        throw new Error("No presales record selected for update.");
+      }
+      const response = await coreApi.put<Presale>(`/api/presales/presales/${editingPresale.id}/`, buildPayload(values));
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Presales record updated.");
+      setDialogOpen(false);
+      setEditingPresale(null);
+      form.reset(defaultValues);
+      queryClient.invalidateQueries({ queryKey: ["presales"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update presales record.")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await coreApi.delete(`/api/presales/presales/${id}/`);
+    },
+    onSuccess: () => {
+      toast.success("Presales record deleted.");
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["presales"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to delete presales record.")),
+  });
+
+  const filteredPresales = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const records = presalesQuery.data ?? [];
+    if (!needle) {
+      return records;
     }
+
+    return records.filter((record) =>
+      [record.order_code, record.project_name, record.sale_contact, record.stage]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [presalesQuery.data, search]);
+
+  const openCreateDialog = () => {
+    setEditingPresale(null);
+    form.reset(defaultValues);
+    setDialogOpen(true);
   };
 
-  const handleCreatePI = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const customer = newPIForm.customer.trim();
-    const project = newPIForm.project.trim();
-    const salesPerson = newPIForm.salesPerson.trim();
-    const items = Number(newPIForm.items);
-    const amount = Number(newPIForm.amount);
-
-    if (!customer || !project || !salesPerson || !newPIForm.validTill) {
-      setFormError("Please fill all required fields.");
-      return;
-    }
-
-    if (!Number.isInteger(items) || items <= 0) {
-      setFormError("Items must be a whole number greater than zero.");
-      return;
-    }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setFormError("Amount must be greater than zero.");
-      return;
-    }
-
-    const currentDate = new Date();
-    const sequence = getNextPISequence(proformaInvoices);
-    const sequenceLabel = String(sequence).padStart(4, "0");
-    const fiscalYearLabel = getFiscalYearLabel(currentDate);
-
-    const newPI: ProformaInvoice = {
-      id: `PI-${currentDate.getFullYear()}-${sequenceLabel}`,
-      ref: `ZG/PI/${fiscalYearLabel}/${sequenceLabel}`,
-      customer,
-      project,
-      items,
-      amount: Math.round(amount),
-      status: "pending",
-      date: formatDateForInput(currentDate),
-      validTill: newPIForm.validTill,
-      salesPerson,
-    };
-
-    setProformaInvoices((previousPIs) => [newPI, ...previousPIs]);
-    setActiveTab("all");
-    setSearch("");
-    setFormError("");
-    setNewPIForm(getDefaultFormState());
-    setIsCreateOpen(false);
+  const openEditDialog = (record: Presale) => {
+    setEditingPresale(record);
+    form.reset(
+      fieldNames.reduce((accumulator, fieldName) => {
+        const value = record[fieldName];
+        accumulator[fieldName] = value === null || value === undefined ? "" : String(value);
+        return accumulator;
+      }, {} as PresaleFormValues),
+    );
+    setDialogOpen(true);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FileText className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Presales</h1>
-            <p className="text-sm text-muted-foreground">Proforma invoices, sales orders & store requests</p>
-          </div>
-        </div>
-        <Dialog open={isCreateOpen} onOpenChange={handleOpenChange}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" /> New PI</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Create New Proforma Invoice</DialogTitle>
-              <DialogDescription>Add PI details to start the presales flow.</DialogDescription>
-            </DialogHeader>
-            <form className="space-y-4" onSubmit={handleCreatePI}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="pi-customer">Customer</Label>
-                  <Input
-                    id="pi-customer"
-                    value={newPIForm.customer}
-                    onChange={(event) => setNewPIForm((previous) => ({ ...previous, customer: event.target.value }))}
-                    placeholder="Enter customer name"
-                    required
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="pi-project">Project</Label>
-                  <Input
-                    id="pi-project"
-                    value={newPIForm.project}
-                    onChange={(event) => setNewPIForm((previous) => ({ ...previous, project: event.target.value }))}
-                    placeholder="Enter project name"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pi-items">Items</Label>
-                  <Input
-                    id="pi-items"
-                    type="number"
-                    min={1}
-                    value={newPIForm.items}
-                    onChange={(event) => setNewPIForm((previous) => ({ ...previous, items: event.target.value }))}
-                    placeholder="0"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pi-amount">Amount (₹)</Label>
-                  <Input
-                    id="pi-amount"
-                    type="number"
-                    min={1}
-                    value={newPIForm.amount}
-                    onChange={(event) => setNewPIForm((previous) => ({ ...previous, amount: event.target.value }))}
-                    placeholder="0"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pi-sales-person">Sales Person</Label>
-                  <Input
-                    id="pi-sales-person"
-                    value={newPIForm.salesPerson}
-                    onChange={(event) => setNewPIForm((previous) => ({ ...previous, salesPerson: event.target.value }))}
-                    placeholder="Enter sales person"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pi-valid-till">Valid Till</Label>
-                  <Input
-                    id="pi-valid-till"
-                    type="date"
-                    value={newPIForm.validTill}
-                    onChange={(event) => setNewPIForm((previous) => ({ ...previous, validTill: event.target.value }))}
-                    required
-                  />
-                </div>
-              </div>
-              {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>Cancel</Button>
-                <Button type="submit" className="gap-2"><Plus className="h-4 w-4" /> Create PI</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+      <PageHeader
+        title="Presales"
+        description="Full CRUD against `/api/presales/presales/` using the backend field names exactly."
+        actions={<Button onClick={openCreateDialog}><Plus className="mr-2 h-4 w-4" />Create Presales Record</Button>}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Records" value={presalesQuery.data?.length ?? 0} />
+        <StatCard label="Projects" value={new Set((presalesQuery.data ?? []).map((item) => item.project_name)).size} />
+        <StatCard label="Stages" value={new Set((presalesQuery.data ?? []).map((item) => item.stage)).size} />
+        <StatCard label="Results" value={filteredPresales.length} />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="p-3 text-center"><div className="text-2xl font-bold text-warning">{proformaInvoices.filter(p => p.status === "pending").length}</div><div className="text-xs text-muted-foreground">Pending PIs</div></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><div className="text-2xl font-bold text-primary">{proformaInvoices.filter(p => p.status === "confirmed").length}</div><div className="text-xs text-muted-foreground">Confirmed</div></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><div className="text-2xl font-bold text-success">{proformaInvoices.filter(p => ["fully_reserved", "ready_for_dispatch"].includes(p.status)).length}</div><div className="text-xs text-muted-foreground">Ready</div></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><div className="text-2xl font-bold text-foreground">₹{(totalValue / 100000).toFixed(1)}L</div><div className="text-xs text-muted-foreground">Pipeline Value</div></CardContent></Card>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search by customer or ref..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order code, project, contact, or stage" className="pl-9" />
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="all">All ({proformaInvoices.length})</TabsTrigger>
-          <TabsTrigger value="pending">Pending PI</TabsTrigger>
-          <TabsTrigger value="confirmed">Confirmed PI</TabsTrigger>
-          <TabsTrigger value="partially_reserved">Partially Reserved</TabsTrigger>
-          <TabsTrigger value="fully_reserved">Fully Reserved</TabsTrigger>
-          <TabsTrigger value="ready_for_dispatch">Ready for Dispatch</TabsTrigger>
-          <TabsTrigger value="closed_won">Closed Won</TabsTrigger>
-          <TabsTrigger value="lost">Lost</TabsTrigger>
-        </TabsList>
+      {presalesQuery.isLoading ? <LoadingState label="Loading presales..." /> : null}
+      {presalesQuery.isError ? <ErrorState description="Presales records could not be loaded from the backend." /> : null}
 
-        <TabsContent value={activeTab} className="mt-4">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ref #</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Project</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead className="text-right">Amount (₹)</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Valid Till</TableHead>
-                    <TableHead>Sales Person</TableHead>
+      {!presalesQuery.isLoading && !presalesQuery.isError ? (
+        filteredPresales.length ? (
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16 text-center">S.No</TableHead>
+                  <TableHead>Order Code</TableHead>
+                  <TableHead>Project</TableHead>
+                  <TableHead>Stage</TableHead>
+                  <TableHead>Sale Contact</TableHead>
+                  <TableHead>Required Date</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPresales.map((record, index) => (
+                  <TableRow key={record.id}>
+                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                    <TableCell className="font-mono text-xs">{record.order_code}</TableCell>
+                    <TableCell>{record.project_name}</TableCell>
+                    <TableCell>{record.stage}</TableCell>
+                    <TableCell>{record.sale_contact}</TableCell>
+                    <TableCell>{formatDate(record.required_date)}</TableCell>
+                    <TableCell>{formatDate(record.updated_at)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="icon" onClick={() => openEditDialog(record)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" size="icon" onClick={() => setDeleteTarget(record)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((pi) => (
-                    <TableRow key={pi.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell className="font-mono text-xs">{pi.ref}</TableCell>
-                      <TableCell className="font-medium">{pi.customer}</TableCell>
-                      <TableCell className="text-sm">{pi.project}</TableCell>
-                      <TableCell>{pi.items}</TableCell>
-                      <TableCell className="text-right font-medium">₹{pi.amount.toLocaleString()}</TableCell>
-                      <TableCell><Badge variant="outline" className={`text-xs ${statusColors[pi.status]}`}>{statusLabels[pi.status]}</Badge></TableCell>
-                      <TableCell className="text-xs">{pi.date}</TableCell>
-                      <TableCell className="text-xs">{pi.validTill}</TableCell>
-                      <TableCell className="text-xs">{pi.salesPerson}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <EmptyState title="No presales records found" description="Create a record to begin managing presales flow." />
+        )
+      ) : null}
 
-      <ModuleFormFieldsReference moduleId="saledoc" />
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>{editingPresale ? "Edit presales record" : "Create presales record"}</DialogTitle>
+            <DialogDescription>The form includes the exact model fields exposed by the backend.</DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit((values) => editingPresale ? updateMutation.mutate(values) : createMutation.mutate(values))} className="max-h-[70vh] overflow-y-auto pr-2">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {fieldNames.map((fieldName) => (
+                  <FormField
+                    key={fieldName}
+                    control={form.control}
+                    name={fieldName}
+                    render={({ field }) => (
+                      <FormItem className={textAreaFields.has(fieldName) ? "xl:col-span-3 md:col-span-2" : undefined}>
+                        <FormLabel>{fieldName.replaceAll("_", " ")}</FormLabel>
+                        <FormControl>
+                          {textAreaFields.has(fieldName) ? (
+                            <Textarea {...field} rows={3} />
+                          ) : (
+                            <Input
+                              {...field}
+                              type={
+                                dateFields.has(fieldName)
+                                  ? "date"
+                                  : dateTimeFields.has(fieldName)
+                                    ? "datetime-local"
+                                    : timeFields.has(fieldName)
+                                      ? "time"
+                                      : numericFields.has(fieldName)
+                                        ? "number"
+                                        : "text"
+                              }
+                            />
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+              <div className="mt-6 flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                  {editingPresale ? "Save Changes" : "Create Record"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+          }
+        }}
+        title="Delete presales record"
+        description={`Delete ${deleteTarget?.order_code ?? "this record"}?`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate(deleteTarget.id);
+          }
+        }}
+      />
     </div>
   );
 };

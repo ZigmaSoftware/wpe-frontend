@@ -72,6 +72,7 @@ const WarehousePage = () => {
             <table className="w-full text-sm">
               <thead className="bg-secondary">
                 <tr>
+                  <th className="px-4 py-2 text-center text-secondary-foreground">S.No</th>
                   <th className="text-left px-4 py-2 text-secondary-foreground">ID</th>
                   <th className="text-left px-4 py-2 text-secondary-foreground">QR Code</th>
                   <th className="text-left px-4 py-2 text-secondary-foreground">Product</th>
@@ -81,8 +82,9 @@ const WarehousePage = () => {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((e) => (
+                {entries.map((e, index) => (
                   <tr key={e.id} className="border-t border-border">
+                    <td className="px-4 py-2 text-center font-medium text-muted-foreground">{index + 1}</td>
                     <td className="px-4 py-2 text-foreground">{e.id}</td>
                     <td className="px-4 py-2 font-mono text-xs text-foreground">{e.qrCode}</td>
                     <td className="px-4 py-2 text-foreground">{e.productName}</td>

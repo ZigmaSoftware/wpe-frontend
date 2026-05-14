@@ -29,6 +29,7 @@ const LiveWeightPage = () => {
             <table className="w-full text-sm">
               <thead className="bg-secondary">
                 <tr>
+                  <th className="px-4 py-2 text-center text-secondary-foreground">S.No</th>
                   <th className="text-left px-4 py-2 text-secondary-foreground">Device</th>
                   <th className="text-right px-4 py-2 text-secondary-foreground">Weight (kg)</th>
                   <th className="text-right px-4 py-2 text-secondary-foreground">Time</th>
@@ -37,6 +38,7 @@ const LiveWeightPage = () => {
               <tbody>
                 {captures.map((c, i) => (
                   <tr key={i} className="border-t border-border">
+                    <td className="px-4 py-2 text-center font-medium text-muted-foreground">{i + 1}</td>
                     <td className="px-4 py-2 text-foreground">{c.device}</td>
                     <td className="px-4 py-2 text-right font-mono text-foreground">{c.weight.toFixed(3)}</td>
                     <td className="px-4 py-2 text-right text-muted-foreground">{c.time.toLocaleTimeString()}</td>

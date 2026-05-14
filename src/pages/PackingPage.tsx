@@ -87,6 +87,7 @@ const PackingPage = () => {
             <table className="w-full text-sm">
               <thead className="bg-secondary">
                 <tr>
+                  <th className="px-4 py-2 text-center text-secondary-foreground">S.No</th>
                   <th className="text-left px-4 py-2 text-secondary-foreground">Code</th>
                   <th className="text-left px-4 py-2 text-secondary-foreground">Material</th>
                   <th className="text-right px-4 py-2 text-secondary-foreground">Required</th>
@@ -94,8 +95,9 @@ const PackingPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {PACKING_MATERIALS.map((m) => (
+                {PACKING_MATERIALS.map((m, index) => (
                   <tr key={m.code} className="border-t border-border">
+                    <td className="px-4 py-2 text-center font-medium text-muted-foreground">{index + 1}</td>
                     <td className="px-4 py-2 font-mono text-xs text-foreground">{m.code}</td>
                     <td className="px-4 py-2 text-foreground">{m.name}</td>
                     <td className="px-4 py-2 text-right text-muted-foreground">{m.requiredQty} {m.unit}</td>

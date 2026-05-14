@@ -31,6 +31,7 @@ const QRScannerPage = () => {
             <table className="w-full text-sm">
               <thead className="bg-secondary">
                 <tr>
+                  <th className="px-4 py-2 text-center text-secondary-foreground">S.No</th>
                   <th className="text-left px-4 py-2 text-secondary-foreground">Code</th>
                   <th className="text-left px-4 py-2 text-secondary-foreground">Type</th>
                   <th className="text-right px-4 py-2 text-secondary-foreground">Time</th>
@@ -39,6 +40,7 @@ const QRScannerPage = () => {
               <tbody>
                 {validatedScans.map((s, i) => (
                   <tr key={i} className="border-t border-border">
+                    <td className="px-4 py-2 text-center font-medium text-muted-foreground">{i + 1}</td>
                     <td className="px-4 py-2 font-mono text-foreground text-xs">{s.code}</td>
                     <td className="px-4 py-2 text-foreground">{s.type}</td>
                     <td className="px-4 py-2 text-right text-muted-foreground">{s.timestamp.toLocaleTimeString()}</td>

@@ -96,13 +96,15 @@ const SalesOutwardsPage = () => {
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
+                <TableHead className="w-16 text-center">S.No</TableHead>
                 <TableHead>Invoice #</TableHead><TableHead>Customer</TableHead><TableHead>Items</TableHead>
                 <TableHead className="text-right">Amount (₹)</TableHead><TableHead>DC No</TableHead>
                 <TableHead>Vehicle</TableHead><TableHead>Destination</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {filtered.map((o) => (
+                {filtered.map((o, index) => (
                   <TableRow key={o.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                     <TableCell className="font-mono text-xs">{o.invoiceNo}</TableCell>
                     <TableCell className="font-medium">{o.customer}</TableCell>
                     <TableCell>{o.items}</TableCell>
