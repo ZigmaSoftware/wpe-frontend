@@ -1,12 +1,23 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import AuthGuard from "@/components/AuthGuard";
 import AppLayout from "@/components/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import AdminRouteGuard from "@/features/admin-master/components/AdminRouteGuard";
+import LocationMasterPage from "@/features/wpe-masters/pages/LocationMasterPage";
+import BranchMasterPage from "@/features/wpe-masters/pages/BranchMasterPage";
+import PriceBookMasterPage from "@/features/wpe-masters/pages/PriceBookMasterPage";
+import WarehouseMasterPage from "@/features/wpe-masters/pages/WarehouseMasterPage";
+import ProductionTypeMasterPage from "@/features/wpe-masters/pages/ProductionTypeMasterPage";
+import SaleTypeMasterPage from "@/features/wpe-masters/pages/SaleTypeMasterPage";
+import PurchaseTypeMasterPage from "@/features/wpe-masters/pages/PurchaseTypeMasterPage";
+import RoleMasterPage from "@/features/wpe-masters/pages/RoleMasterPage";
+import DepartmentMasterPage from "@/features/wpe-masters/pages/DepartmentMasterPage";
+import WPEUserCreationPage from "@/features/wpe-masters/pages/WPEUserCreationPage";
+import RolePermissionsPage from "@/features/wpe-masters/pages/RolePermissionsPage";
+import UserScreenPermissionsPage from "@/features/wpe-masters/pages/UserScreenPermissionsPage";
 import MainScreensPage from "@/features/admin-master/pages/MainScreensPage";
 import ScreenSectionsPage from "@/features/admin-master/pages/ScreenSectionsPage";
 import StaffPage from "@/features/admin-master/pages/StaffPage";
@@ -82,27 +93,25 @@ const App = () => (
                   <Route path="/masters/suppliers/:id" element={<SupplierDetailPage />} />
                   <Route path="/masters/companies" element={<CompaniesPage />} />
                   <Route path="/masters/projects" element={<ProjectsPage />} />
-                  <Route element={<AdminRouteGuard screenCode="main-screen-master" />}>
-                    <Route path="/admin/main-screens" element={<MainScreensPage />} />
-                  </Route>
-                  <Route element={<AdminRouteGuard screenCode="screen-section-master" />}>
-                    <Route path="/admin/screen-sections" element={<ScreenSectionsPage />} />
-                  </Route>
-                  <Route element={<AdminRouteGuard screenCode="user-screen-master" />}>
-                    <Route path="/admin/user-screens" element={<UserScreensPage />} />
-                  </Route>
-                  <Route element={<AdminRouteGuard screenCode="staff-master" />}>
-                    <Route path="/admin/staff" element={<StaffPage />} />
-                  </Route>
-                  <Route element={<AdminRouteGuard screenCode="user-type-master" />}>
-                    <Route path="/admin/user-types" element={<UserTypesPage />} />
-                  </Route>
-                  <Route element={<AdminRouteGuard screenCode="user-account-master" />}>
-                    <Route path="/admin/user-accounts" element={<UserAccountsPage />} />
-                  </Route>
-                  <Route element={<AdminRouteGuard screenCode="user-permission-master" />}>
-                    <Route path="/admin/user-permissions" element={<UserPermissionsPage />} />
-                  </Route>
+                  <Route path="/admin/main-screens" element={<MainScreensPage />} />
+                  <Route path="/admin/screen-sections" element={<ScreenSectionsPage />} />
+                  <Route path="/admin/user-screens" element={<UserScreensPage />} />
+                  <Route path="/admin/staff" element={<StaffPage />} />
+                  <Route path="/admin/user-types" element={<UserTypesPage />} />
+                  <Route path="/admin/user-accounts" element={<UserAccountsPage />} />
+                  <Route path="/admin/user-permissions" element={<UserPermissionsPage />} />
+                  <Route path="/wpe-masters/locations" element={<LocationMasterPage />} />
+                  <Route path="/wpe-masters/branches" element={<BranchMasterPage />} />
+                  <Route path="/wpe-masters/price-books" element={<PriceBookMasterPage />} />
+                  <Route path="/wpe-masters/warehouses" element={<WarehouseMasterPage />} />
+                  <Route path="/wpe-masters/production-types" element={<ProductionTypeMasterPage />} />
+                  <Route path="/wpe-masters/sale-types" element={<SaleTypeMasterPage />} />
+                  <Route path="/wpe-masters/purchase-types" element={<PurchaseTypeMasterPage />} />
+                  <Route path="/wpe-masters/roles" element={<RoleMasterPage />} />
+                  <Route path="/wpe-masters/departments" element={<DepartmentMasterPage />} />
+                  <Route path="/wpe-masters/users" element={<WPEUserCreationPage />} />
+                  <Route path="/wpe-masters/role-permissions" element={<RolePermissionsPage />} />
+                  <Route path="/wpe-masters/user-screen-permissions" element={<UserScreenPermissionsPage />} />
                 </Route>
               </Route>
               <Route path="/login" element={<LoginPage />} />

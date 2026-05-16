@@ -16,7 +16,7 @@ import { adminMasterKeys } from "@/features/admin-master/api/queryKeys";
 import { ActionPermissionsField } from "@/features/admin-master/components/ActionPermissionsField";
 import { userPermissionSchema, type UserPermissionFormValues } from "@/features/admin-master/schemas";
 import type { PermissionAssignmentEntry, UserPermissionRecord } from "@/features/admin-master/types";
-import { useMainScreenOptions, useScreenSectionOptions, useStaffOptions, useUserScreenOptions, useUserTypeOptions } from "@/features/admin-master/hooks/useAdminLookups";
+import { useMainScreenOptions, useScreenSectionOptions, useUserScreenOptions, useUserTypeOptions } from "@/features/admin-master/hooks/useAdminLookups";
 import { useAdminMutation } from "@/features/admin-master/hooks/useAdminMutations";
 import { useAdminTableSearchParams } from "@/features/admin-master/hooks/useAdminTableSearchParams";
 import { resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
@@ -50,11 +50,15 @@ const UserPermissionsPage = () => {
   const [previewUserType, setPreviewUserType] = useState<number | null>(null);
   const [previewUserId, setPreviewUserId] = useState<number | null>(null);
   const form = useForm<UserPermissionFormValues>({ resolver: zodResolver(userPermissionSchema), defaultValues });
+  const selectedScopeType = useWatch({ control: form.control, name: "scope_type" });
   const selectedMainScreen = useWatch({ control: form.control, name: "main_screen" });
   const selectedSection = useWatch({ control: form.control, name: "screen_section" });
   const mainScreenOptions = useMainScreenOptions();
   const screenSectionOptions = useScreenSectionOptions(selectedMainScreen || undefined);
-  const userScreenOptions = useUserScreenOptions(selectedMainScreen || undefined, selectedSection || undefined);
+  const userScreenOptions = useUserScreenOptions(
+    selectedScopeType === "screen" ? (selectedMainScreen || undefined) : undefined,
+    selectedScopeType === "screen" ? (selectedSection || undefined) : undefined,
+  );
   const userTypeOptions = useUserTypeOptions();
   const userAccountOptions = useQuery({
     queryKey: adminMasterKeys.lookup("user-account-options"),
