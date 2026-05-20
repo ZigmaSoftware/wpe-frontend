@@ -1,21 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Power, PowerOff, Search } from "lucide-react";
-import { useState } from "react";
+import { Pencil, Power, PowerOff } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
+import AppPageShell from "@/components/erp/AppPageShell";
+import FormPanel from "@/components/erp/FormPanel";
+import SectionCard from "@/components/erp/SectionCard";
+import StatusBadge from "@/components/erp/StatusBadge";
+import Toolbar from "@/components/erp/Toolbar";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -79,26 +77,44 @@ const MachineFormDialog = ({
 
   const form = useForm<MachineFormValues>({
     resolver: zodResolver(machineSchema),
-    defaultValues: machine
-      ? {
-          machine_code: machine.machine_code,
-          name: machine.name,
-          machine_type: machine.machine_type,
-          applicable_stages: machine.applicable_stages,
-          location: machine.location ?? "",
-          notes: machine.notes ?? "",
-          is_active: machine.is_active,
-        }
-      : {
-          machine_code: "",
-          name: "",
-          machine_type: "HIGH_SPEED_MIX",
-          applicable_stages: "AD,BL",
-          location: "",
-          notes: "",
-          is_active: true,
-        },
+    defaultValues: {
+      machine_code: "",
+      name: "",
+      machine_type: "HIGH_SPEED_MIX",
+      applicable_stages: "AD,BL",
+      location: "",
+      notes: "",
+      is_active: true,
+    },
   });
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    form.reset(
+      machine
+        ? {
+            machine_code: machine.machine_code,
+            name: machine.name,
+            machine_type: machine.machine_type,
+            applicable_stages: machine.applicable_stages,
+            location: machine.location ?? "",
+            notes: machine.notes ?? "",
+            is_active: machine.is_active,
+          }
+        : {
+            machine_code: "",
+            name: "",
+            machine_type: "HIGH_SPEED_MIX",
+            applicable_stages: "AD,BL",
+            location: "",
+            notes: "",
+            is_active: true,
+          },
+    );
+  }, [form, machine, open]);
 
   const mutation = useMutation({
     mutationFn: (values: MachineFormValues) =>
@@ -115,14 +131,18 @@ const MachineFormDialog = ({
   });
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) form.reset(); onOpenChange(o); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Machine" : "New Machine"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? `Editing ${machine!.machine_code}` : "Register a new production machine."}
-          </DialogDescription>
-        </DialogHeader>
+    <FormPanel
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          form.reset();
+        }
+        onOpenChange(nextOpen);
+      }}
+      title={isEdit ? "Edit Machine" : "New Machine"}
+      description={isEdit ? `Editing ${machine!.machine_code}` : "Register a new production machine."}
+      size="lg"
+    >
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -201,8 +221,7 @@ const MachineFormDialog = ({
             </div>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+    </FormPanel>
   );
 };
 
@@ -271,55 +290,47 @@ const MachineMasterPage = () => {
     MACHINE_TYPES.find((t) => t.value === type)?.label ?? type;
 
   return (
-    <div className="space-y-6">
+    <AppPageShell>
       <PageHeader
         title="Machine Master"
         description="Manage production machines — HSM, Granulator, and other process machines."
-        actions={
-          <Button onClick={() => { setEditMachine(null); setFormOpen(true); }}>
-            <Plus className="mr-2 h-4 w-4" />New Machine
-          </Button>
+      />
+
+      <Toolbar
+        search={search}
+        onSearchChange={setSearch}
+        createLabel="New Machine"
+        onCreate={() => {
+          setEditMachine(null);
+          setFormOpen(true);
+        }}
+        searchPlaceholder="Search by code, name, or machine type..."
+        filters={
+          <label className="flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-muted-foreground">
+            <Switch checked={showAll} onCheckedChange={setShowAll} />
+            Show inactive
+          </label>
         }
       />
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by code, name, type..."
-            className="pl-9"
-          />
-        </div>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground select-none cursor-pointer">
-          <Switch checked={showAll} onCheckedChange={setShowAll} />
-          Show inactive
-        </label>
-      </div>
-
-      {/* Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
         {[
           { label: "Total Machines", value: (machinesQ.data ?? []).length },
           { label: "Active", value: (machinesQ.data ?? []).filter((m) => m.is_active).length },
           { label: "HSM Units", value: (machinesQ.data ?? []).filter((m) => m.machine_type === "HIGH_SPEED_MIX").length },
         ].map((s) => (
-          <div key={s.label} className="rounded-xl border bg-card p-4">
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-            <p className="text-2xl font-bold mt-1">{s.value}</p>
-          </div>
+          <SectionCard key={s.label} title={s.label}>
+            <p className="text-2xl font-bold">{s.value}</p>
+          </SectionCard>
         ))}
       </div>
 
-      {/* Table */}
       {machinesQ.isLoading && <LoadingState label="Loading machines..." />}
       {machinesQ.isError && <ErrorState description="Could not load machines." />}
 
       {!machinesQ.isLoading && !machinesQ.isError && (
         filtered.length > 0 ? (
-          <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <SectionCard title="Machine Registry" description="Production machines remain available for assignment until explicitly deactivated.">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -349,9 +360,7 @@ const MachineMasterPage = () => {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{machine.location || "—"}</TableCell>
                     <TableCell>
-                      <Badge className={machine.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}>
-                        {machine.is_active ? "Active" : "Inactive"}
-                      </Badge>
+                      <StatusBadge active={machine.is_active} />
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
@@ -384,7 +393,7 @@ const MachineMasterPage = () => {
                 ))}
               </TableBody>
             </Table>
-          </div>
+          </SectionCard>
         ) : (
           <EmptyState
             title="No machines found"
@@ -410,7 +419,7 @@ const MachineMasterPage = () => {
         confirmLabel="Deactivate"
         onConfirm={() => { if (deactivateTarget) deactivateMutation.mutate(deactivateTarget); }}
       />
-    </div>
+    </AppPageShell>
   );
 };
 

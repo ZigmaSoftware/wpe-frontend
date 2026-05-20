@@ -143,7 +143,7 @@ const ProjectsPage = () => {
         onPageSizeChange={table.setPageSize}
         onRetry={() => projectsQuery.refetch()}
       />
-      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title="Create Project" description="The project form is organized into compact ERP sections for faster keyboard-driven entry.">
+      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title="Create Project" description="The project form is organized into compact ERP sections for faster keyboard-driven entry." size="xl">
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-5">
             <PageSection title="Identity" description="Primary references and commercial identity.">

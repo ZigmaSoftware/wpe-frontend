@@ -255,6 +255,7 @@ const WPEUserCreationPage = () => {
         onOpenChange={setDialogOpen}
         title={editing ? "Edit User" : "Create User"}
         description="Fill in all user details and set authorizations."
+        size="xl"
       >
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">

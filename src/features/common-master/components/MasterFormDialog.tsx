@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import FormPanel from "@/components/erp/FormPanel";
+import type { PanelSize } from "@/components/erp/types";
 
 type MasterFormDialogProps = {
   open: boolean;
@@ -7,6 +8,7 @@ type MasterFormDialogProps = {
   title: string;
   description: string;
   children: ReactNode;
+  size?: PanelSize;
 };
 
 const MasterFormDialog = ({
@@ -15,16 +17,18 @@ const MasterFormDialog = ({
   title,
   description,
   children,
+  size = "md",
 }: MasterFormDialogProps) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-      <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
-      {children}
-    </DialogContent>
-  </Dialog>
+  <FormPanel
+    open={open}
+    onOpenChange={onOpenChange}
+    title={title}
+    description={description}
+    size={size}
+    bodyClassName="px-6 py-5"
+  >
+    {children}
+  </FormPanel>
 );
 
 export default MasterFormDialog;

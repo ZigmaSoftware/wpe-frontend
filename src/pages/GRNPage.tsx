@@ -6,13 +6,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
+import AppPageShell from "@/components/erp/AppPageShell";
+import FormPanel from "@/components/erp/FormPanel";
+import SectionCard from "@/components/erp/SectionCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1268,6 +1270,8 @@ const GRNPage = () => {
     const records = [...(activeQuery.data?.data ?? []), ...(movedQuery.data?.data ?? [])];
     return Array.from(new Set(records.map((record) => getGrnDepartment(record)))).sort((left, right) => left.localeCompare(right));
   }, [activeQuery.data?.data, movedQuery.data?.data]);
+  const createFormId = "grn-create-form";
+  const updateFormId = "grn-update-form";
 
   const activeRecords = useMemo(() => {
     const records = activeQuery.data?.data ?? [];
@@ -1279,17 +1283,13 @@ const GRNPage = () => {
     return departmentFilter === "all" ? records : records.filter((record) => getGrnDepartment(record) === departmentFilter);
   }, [movedQuery.data?.data, departmentFilter]);
 
-  const resolveScopedRecord = (scope: RecordScope, recordId: number) => {
-    const records = scope === "active" ? activeRecords : movedRecords;
-    return records.find((record) => record.id === recordId) ?? null;
-  };
-
   const detailRecord = useMemo(() => {
     if (!detailState) {
       return null;
     }
 
-    return resolveScopedRecord(detailState.scope, detailState.recordId);
+    const records = detailState.scope === "active" ? activeRecords : movedRecords;
+    return records.find((record) => record.id === detailState.recordId) ?? null;
   }, [activeRecords, detailState, movedRecords]);
 
   const updateRecord = useMemo(() => {
@@ -1297,7 +1297,8 @@ const GRNPage = () => {
       return null;
     }
 
-    return resolveScopedRecord(updateState.scope, updateState.recordId);
+    const records = updateState.scope === "active" ? activeRecords : movedRecords;
+    return records.find((record) => record.id === updateState.recordId) ?? null;
   }, [activeRecords, movedRecords, updateState]);
 
   useEffect(() => {
@@ -1701,7 +1702,7 @@ const GRNPage = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <AppPageShell>
       <PageHeader
         title="GRN Management"
         description="Active GRN with inline detail selection, guarded update controls, moved-to-QCR records, and Excel import against the GRN service."
@@ -1749,21 +1750,26 @@ const GRNPage = () => {
         <StatCard label="Editable Inward Fields" value="Guarded" hint="External feed values remain locked in update mode." />
       </div>
 
-      <div className="flex justify-end">
-        <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-          <SelectTrigger className="w-full sm:w-64">
-            <SelectValue placeholder="Filter by department" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {departmentOptions.map((department) => (
-              <SelectItem key={department} value={department}>
-                {department}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <SectionCard
+        title="Operational Filters"
+        description="Department filtering is applied without changing the GRN workflow payload or downstream movement rules."
+      >
+        <div className="flex justify-end">
+          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+            <SelectTrigger className="w-full sm:w-64">
+              <SelectValue placeholder="Filter by department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Departments</SelectItem>
+              {departmentOptions.map((department) => (
+                <SelectItem key={department} value={department}>
+                  {department}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </SectionCard>
 
       {activeQuery.isLoading || movedQuery.isLoading ? <LoadingState label="Loading GRN records..." /> : null}
       {activeQuery.isError || movedQuery.isError ? <ErrorState description="GRN records could not be loaded from the GRN service." /> : null}
@@ -1781,16 +1787,21 @@ const GRNPage = () => {
 
       {renderDetailSheet()}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-6xl">
-          <DialogHeader>
-            <DialogTitle>Create GRN</DialogTitle>
-            <DialogDescription>
-              The form preserves the exact nested payload keys: `document_details`, `document_requirement_details`, `supplier_details`, `items`, and `value_details`.
-            </DialogDescription>
-          </DialogHeader>
+      <FormPanel
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title="Create GRN"
+        description="The form preserves the exact nested payload keys: `document_details`, `document_requirement_details`, `supplier_details`, `items`, and `value_details`."
+        size="xl"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button type="submit" form={createFormId} disabled={createMutation.isPending}>Create GRN</Button>
+          </div>
+        }
+      >
           <Form {...form}>
-            <form onSubmit={form.handleSubmit((values) => createMutation.mutate(values))} className="max-h-[70vh] space-y-6 overflow-y-auto pr-2">
+            <form id={createFormId} onSubmit={form.handleSubmit((values) => createMutation.mutate(values))} className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {documentFieldNames.map((fieldName) => (
                   <FormField
@@ -1899,267 +1910,270 @@ const GRNPage = () => {
                 ))}
               </div>
 
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={createMutation.isPending}>Create GRN</Button>
-              </div>
             </form>
           </Form>
-        </DialogContent>
-      </Dialog>
+      </FormPanel>
 
-      <Dialog open={Boolean(updateState)} onOpenChange={(open) => !open && closeUpdateDialog()}>
-        <DialogContent className="max-w-7xl gap-0 overflow-hidden p-0">
-          {updateRecord && updateState ? (
-            <>
-              <DialogHeader className="border-b border-border/70 bg-gradient-to-r from-slate-50 via-white to-slate-100 px-6 py-5 text-left">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <DialogTitle className="text-2xl">
-                        {updateState.scope === "active" ? "Edit GRN" : "Update GRN"}
-                      </DialogTitle>
-                      <Badge variant="outline" className={cn("text-[10px] uppercase tracking-[0.14em]", updateState.scope === "active" ? "border-primary/30 bg-primary/10 text-primary" : "border-warning/30 bg-warning/10 text-warning")}>
-                        {updateState.scope === "active" ? "Inward Editable" : "Read Only"}
-                      </Badge>
-                    </div>
-                    <DialogDescription className="max-w-3xl">
-                      {updateState.scope === "active"
-                        ? "Enterprise edit mode for active GRN records. Safe inward-managed fields stay editable, while synced external values remain protected and continue to preserve raw payload integrity."
-                        : "Enterprise update review for processed GRN records. The workflow label stays Update, but every field is protected because the record has already progressed beyond active GRN processing."}
-                    </DialogDescription>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 bg-white px-4 py-3 shadow-sm">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Selected Record</div>
-                    <div className="mt-2 text-base font-semibold text-foreground">{updateRecord.grn_no}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">{updateRecord.supplier_details.trade_name || updateRecord.trade_name || "-"}</div>
-                  </div>
+      <FormPanel
+        open={Boolean(updateState)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeUpdateDialog();
+          }
+        }}
+        title={updateState?.scope === "active" ? "Edit GRN" : "Update GRN"}
+        description={
+          updateState?.scope === "active"
+            ? "Enterprise edit mode for active GRN records. Safe inward-managed fields stay editable, while synced external values remain protected and continue to preserve raw payload integrity."
+            : "Enterprise update review for processed GRN records. The workflow label stays Update, but every field is protected because the record has already progressed beyond active GRN processing."
+        }
+        size="xl"
+        footer={
+          updateState ? (
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-foreground">
+                  {updateState.scope === "active"
+                    ? updateForm.formState.isDirty
+                      ? "Unsaved changes are pending."
+                      : "No pending edits."
+                    : "Processed workflow records are locked for audit-safe review."}
                 </div>
-              </DialogHeader>
-              <Form {...updateForm}>
-                <form
-                  onSubmit={updateForm.handleSubmit((values) => {
-                    if (updateState.scope === "active" && updateRecord) {
-                      updateMutation.mutate({ id: updateRecord.id, values });
-                    }
-                  })}
-                  className="flex max-h-[88vh] flex-col"
-                >
-                  <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <DetailField label="GRN No" value={readValue(updateRecord.grn_no)} emphasized />
-                      <DetailField label="Process Status" value={readValue(updateRecord.process_status)} />
-                      <DetailField label="GRN Date" value={formatDate(updateRecord.grn_date)} />
-                      <DetailField label="Total After Tax" value={formatDecimal(updateRecord.value_details.total_after_tax ?? updateRecord.total_after_tax, 2)} emphasized />
-                    </div>
+                <div className="text-xs text-muted-foreground">
+                  {updateState.scope === "active"
+                    ? "Only inward-managed fields are submitted back to the guarded patch merge flow."
+                    : "The Update label is preserved for workflow consistency, but saving remains disabled after QCR progression."}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={closeUpdateDialog}>
+                  {updateState.scope === "active" ? "Cancel" : "Close"}
+                </Button>
+                {updateState.scope === "active" ? (
+                  <Button type="submit" form={updateFormId} disabled={updateMutation.isPending}>
+                    {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null
+        }
+      >
+        {updateRecord && updateState ? (
+          <>
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-border/70 bg-slate-50/80 px-5 py-4 shadow-sm">
+              <div className="space-y-2">
+                <Badge variant="outline" className={cn("text-[10px] uppercase tracking-[0.14em]", updateState.scope === "active" ? "border-primary/30 bg-primary/10 text-primary" : "border-warning/30 bg-warning/10 text-warning")}>
+                  {updateState.scope === "active" ? "Inward Editable" : "Read Only"}
+                </Badge>
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                  Selected record stays aligned with the original inbound GRN document while preserving workflow-safe edit guards.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/70 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Selected Record</div>
+                <div className="mt-2 text-base font-semibold text-foreground">{updateRecord.grn_no}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{updateRecord.supplier_details.trade_name || updateRecord.trade_name || "-"}</div>
+              </div>
+            </div>
+            <Form {...updateForm}>
+              <form
+                id={updateFormId}
+                onSubmit={updateForm.handleSubmit((values) => {
+                  if (updateState.scope === "active" && updateRecord) {
+                    updateMutation.mutate({ id: updateRecord.id, values });
+                  }
+                })}
+                className="space-y-6"
+              >
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <DetailField label="GRN No" value={readValue(updateRecord.grn_no)} emphasized />
+                  <DetailField label="Process Status" value={readValue(updateRecord.process_status)} />
+                  <DetailField label="GRN Date" value={formatDate(updateRecord.grn_date)} />
+                  <DetailField label="Total After Tax" value={formatDecimal(updateRecord.value_details.total_after_tax ?? updateRecord.total_after_tax, 2)} emphasized />
+                </div>
 
-                    <Accordion type="multiple" defaultValue={accordionDefaultValue} className="space-y-4">
-                      {enterpriseSections.map((section) => (
-                        <AccordionItem key={section.id} value={section.id} className="overflow-hidden rounded-2xl border border-border/70 bg-card px-5 shadow-sm">
-                          <AccordionTrigger className="hover:no-underline">
-                            <div className="space-y-1 text-left">
-                              <div className="text-base font-semibold text-foreground">{section.title}</div>
-                              <div className="text-sm font-normal text-muted-foreground">{section.description}</div>
-                            </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="space-y-5 pb-5">
-                            {section.groups.map((group) => (
-                              <div key={group.id} className="space-y-3">
-                                {group.title ? (
-                                  <div className="space-y-1">
-                                    <h4 className="text-sm font-semibold text-foreground">{group.title}</h4>
-                                    {group.description ? <p className="text-xs text-muted-foreground">{group.description}</p> : null}
-                                  </div>
-                                ) : null}
-                                <div className="grid gap-4 xl:grid-cols-2">
-                                  {group.fields.map((sectionField) => {
-                                    const fieldTone = getUpdateFieldTone(sectionField, updateState.scope);
-                                    const isEditableField =
-                                      updateState.scope === "active" &&
-                                      Boolean(sectionField.formPath) &&
-                                      updateEditableFieldPaths.has(sectionField.formPath);
-
-                                    if (!isEditableField) {
-                                      return (
-                                        <EnterpriseReadField
-                                          key={sectionField.id}
-                                          label={sectionField.label}
-                                          value={getMappedFieldValue(updateRecord, sectionField)}
-                                          tone={fieldTone}
-                                          helperText={sectionField.helperText}
-                                          type={sectionField.type}
-                                        />
-                                      );
-                                    }
-
-                                    return (
-                                      <FormField
-                                        key={sectionField.id}
-                                        control={updateForm.control}
-                                        name={sectionField.formPath as never}
-                                        render={({ field }) => (
-                                          <FormItem className="space-y-2 rounded-2xl border border-border/70 bg-slate-50/80 p-4">
-                                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                              <FormLabel className="text-sm font-medium text-foreground">{sectionField.label}</FormLabel>
-                                              <EnterpriseFieldBadge tone={fieldTone} />
-                                            </div>
-                                            <FormControl>
-                                              {sectionField.type === "textarea" ? (
-                                                <Textarea {...field} rows={3} className="resize-none bg-background" />
-                                              ) : (
-                                                <Input
-                                                  {...field}
-                                                  type={sectionField.type === "date" ? "date" : "text"}
-                                                  className="bg-background"
-                                                />
-                                              )}
-                                            </FormControl>
-                                            {sectionField.helperText ? <FormDescription className="text-xs">{sectionField.helperText}</FormDescription> : null}
-                                            <FormMessage />
-                                          </FormItem>
-                                        )}
-                                      />
-                                    );
-                                  })}
-                                </div>
+                <Accordion type="multiple" defaultValue={accordionDefaultValue} className="space-y-4">
+                  {enterpriseSections.map((section) => (
+                    <AccordionItem key={section.id} value={section.id} className="overflow-hidden rounded-2xl border border-border/70 bg-card px-5 shadow-sm">
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="space-y-1 text-left">
+                          <div className="text-base font-semibold text-foreground">{section.title}</div>
+                          <div className="text-sm font-normal text-muted-foreground">{section.description}</div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-5 pb-5">
+                        {section.groups.map((group) => (
+                          <div key={group.id} className="space-y-3">
+                            {group.title ? (
+                              <div className="space-y-1">
+                                <h4 className="text-sm font-semibold text-foreground">{group.title}</h4>
+                                {group.description ? <p className="text-xs text-muted-foreground">{group.description}</p> : null}
                               </div>
-                            ))}
-                          </AccordionContent>
-                        </AccordionItem>
-                      ))}
+                            ) : null}
+                            <div className="grid gap-4 xl:grid-cols-2">
+                              {group.fields.map((sectionField) => {
+                                const fieldTone = getUpdateFieldTone(sectionField, updateState.scope);
+                                const isEditableField =
+                                  updateState.scope === "active" &&
+                                  Boolean(sectionField.formPath) &&
+                                  updateEditableFieldPaths.has(sectionField.formPath);
 
-                      <AccordionItem value="items" className="overflow-hidden rounded-2xl border border-border/70 bg-card px-5 shadow-sm">
-                        <AccordionTrigger className="hover:no-underline">
-                          <div className="space-y-1 text-left">
-                            <div className="text-base font-semibold text-foreground">Items</div>
-                            <div className="text-sm font-normal text-muted-foreground">Imported product lines with guarded inward edit controls for serial and quantity adjustments.</div>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="space-y-4 pb-5">
-                          {updateItemsFieldArray.fields.map((field, index) => (
-                            <div key={field.id} className="rounded-2xl border border-border/70 bg-slate-50/80 p-4">
-                              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                                <div>
-                                  <h4 className="text-sm font-semibold text-foreground">
-                                    Line {index + 1}: {readValue(updateForm.getValues(`items.${index}.item_id`))}
-                                  </h4>
-                                  <p className="mt-1 text-xs text-muted-foreground">{readValue(updateForm.getValues(`items.${index}.product_description`))}</p>
-                                </div>
-                                <EnterpriseFieldBadge tone={updateState.scope === "active" ? "editable" : "protected"} />
-                              </div>
-                              <div className="grid gap-4 xl:grid-cols-3">
-                                {itemFieldNames.map((fieldName) => {
-                                  const isEditableItemField = updateState.scope === "active" && editableItemFields.has(fieldName);
-                                  const currentValue = updateForm.getValues(`items.${index}.${fieldName}`);
-
-                                  if (!isEditableItemField) {
-                                    return (
-                                      <EnterpriseReadField
-                                        key={`${field.id}-${fieldName}`}
-                                        label={toFieldLabel(fieldName)}
-                                        value={readValue(currentValue)}
-                                        tone={updateState.scope === "active" ? "synced" : "protected"}
-                                        type={fieldName === "product_description" ? "textarea" : "text"}
-                                      />
-                                    );
-                                  }
-
+                                if (!isEditableField) {
                                   return (
-                                    <FormField
-                                      key={`${field.id}-${fieldName}`}
-                                      control={updateForm.control}
-                                      name={`items.${index}.${fieldName}`}
-                                      render={({ field }) => (
-                                        <FormItem className={cn("space-y-2 rounded-2xl border border-border/70 bg-white p-4", fieldName === "product_description" ? "xl:col-span-3" : undefined)}>
-                                          <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <FormLabel className="text-sm font-medium text-foreground">{toFieldLabel(fieldName)}</FormLabel>
-                                            <EnterpriseFieldBadge tone={updateState.scope === "active" ? "editable" : "protected"} />
-                                          </div>
-                                          <FormControl>
-                                            {fieldName === "product_description" ? (
-                                              <Textarea {...field} rows={3} className="resize-none" />
-                                            ) : (
-                                              <Input {...field} />
-                                            )}
-                                          </FormControl>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
+                                    <EnterpriseReadField
+                                      key={sectionField.id}
+                                      label={sectionField.label}
+                                      value={getMappedFieldValue(updateRecord, sectionField)}
+                                      tone={fieldTone}
+                                      helperText={sectionField.helperText}
+                                      type={sectionField.type}
                                     />
                                   );
-                                })}
-                              </div>
+                                }
+
+                                return (
+                                  <FormField
+                                    key={sectionField.id}
+                                    control={updateForm.control}
+                                    name={sectionField.formPath as never}
+                                    render={({ field }) => (
+                                      <FormItem className="space-y-2 rounded-2xl border border-border/70 bg-slate-50/80 p-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <FormLabel className="text-sm font-medium text-foreground">{sectionField.label}</FormLabel>
+                                          <EnterpriseFieldBadge tone={fieldTone} />
+                                        </div>
+                                        <FormControl>
+                                          {sectionField.type === "textarea" ? (
+                                            <Textarea {...field} rows={3} className="resize-none bg-background" />
+                                          ) : (
+                                            <Input
+                                              {...field}
+                                              type={sectionField.type === "date" ? "date" : "text"}
+                                              className="bg-background"
+                                            />
+                                          )}
+                                        </FormControl>
+                                        {sectionField.helperText ? <FormDescription className="text-xs">{sectionField.helperText}</FormDescription> : null}
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                );
+                              })}
                             </div>
-                          ))}
-                        </AccordionContent>
-                      </AccordionItem>
-
-                      <AccordionItem value="commercial-totals" className="overflow-hidden rounded-2xl border border-border/70 bg-card px-5 shadow-sm">
-                        <AccordionTrigger className="hover:no-underline">
-                          <div className="space-y-1 text-left">
-                            <div className="text-base font-semibold text-foreground">Commercial Totals</div>
-                            <div className="text-sm font-normal text-muted-foreground">Readonly financial fields preserved exactly from the external GRN source.</div>
                           </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="pb-5">
-                          <div className="grid gap-4 xl:grid-cols-2">
-                            {valueFieldNames.map((fieldName) => (
-                              <EnterpriseReadField
-                                key={fieldName}
-                                label={toFieldLabel(fieldName)}
-                                value={readValue(updateForm.getValues(`value_details.${fieldName}`))}
-                                tone="protected"
-                              />
-                            ))}
+                        ))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+
+                  <AccordionItem value="items" className="overflow-hidden rounded-2xl border border-border/70 bg-card px-5 shadow-sm">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="space-y-1 text-left">
+                        <div className="text-base font-semibold text-foreground">Items</div>
+                        <div className="text-sm font-normal text-muted-foreground">Imported product lines with guarded inward edit controls for serial and quantity adjustments.</div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-4 pb-5">
+                      {updateItemsFieldArray.fields.map((field, index) => (
+                        <div key={field.id} className="rounded-2xl border border-border/70 bg-slate-50/80 p-4">
+                          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <h4 className="text-sm font-semibold text-foreground">
+                                Line {index + 1}: {readValue(updateForm.getValues(`items.${index}.item_id`))}
+                              </h4>
+                              <p className="mt-1 text-xs text-muted-foreground">{readValue(updateForm.getValues(`items.${index}.product_description`))}</p>
+                            </div>
+                            <EnterpriseFieldBadge tone={updateState.scope === "active" ? "editable" : "protected"} />
                           </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </div>
+                          <div className="grid gap-4 xl:grid-cols-3">
+                            {itemFieldNames.map((fieldName) => {
+                              const isEditableItemField = updateState.scope === "active" && editableItemFields.has(fieldName);
+                              const currentValue = updateForm.getValues(`items.${index}.${fieldName}`);
 
-                  <div className="sticky bottom-0 border-t border-border/70 bg-background/95 px-6 py-4 backdrop-blur">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="space-y-1">
-                        <div className="text-sm font-medium text-foreground">
-                          {updateState.scope === "active"
-                            ? updateForm.formState.isDirty
-                              ? "Unsaved changes are pending."
-                              : "No pending edits."
-                            : "Processed workflow records are locked for audit-safe review."}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {updateState.scope === "active"
-                            ? "Only inward-managed fields are submitted back to the guarded patch merge flow."
-                            : "The Update label is preserved for workflow consistency, but saving remains disabled after QCR progression."}
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={closeUpdateDialog}>
-                          {updateState.scope === "active" ? "Cancel" : "Close"}
-                        </Button>
-                        {updateState.scope === "active" ? (
-                          <Button type="submit" disabled={updateMutation.isPending}>
-                            {updateMutation.isPending ? "Saving..." : "Save Changes"}
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                </form>
-              </Form>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+                              if (!isEditableItemField) {
+                                return (
+                                  <EnterpriseReadField
+                                    key={`${field.id}-${fieldName}`}
+                                    label={toFieldLabel(fieldName)}
+                                    value={readValue(currentValue)}
+                                    tone={updateState.scope === "active" ? "synced" : "protected"}
+                                    type={fieldName === "product_description" ? "textarea" : "text"}
+                                  />
+                                );
+                              }
 
-      <Dialog open={Boolean(payloadRecord)} onOpenChange={(open) => !open && setPayloadRecord(null)}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>{payloadRecord?.grn_no} Payload</DialogTitle>
-            <DialogDescription>Preserved external GRN payload stored in `raw_payload`.</DialogDescription>
-          </DialogHeader>
+                              return (
+                                <FormField
+                                  key={`${field.id}-${fieldName}`}
+                                  control={updateForm.control}
+                                  name={`items.${index}.${fieldName}`}
+                                  render={({ field }) => (
+                                    <FormItem className={cn("space-y-2 rounded-2xl border border-border/70 bg-white p-4", fieldName === "product_description" ? "xl:col-span-3" : undefined)}>
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <FormLabel className="text-sm font-medium text-foreground">{toFieldLabel(fieldName)}</FormLabel>
+                                        <EnterpriseFieldBadge tone={updateState.scope === "active" ? "editable" : "protected"} />
+                                      </div>
+                                      <FormControl>
+                                        {fieldName === "product_description" ? (
+                                          <Textarea {...field} rows={3} className="resize-none" />
+                                        ) : (
+                                          <Input {...field} />
+                                        )}
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="commercial-totals" className="overflow-hidden rounded-2xl border border-border/70 bg-card px-5 shadow-sm">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="space-y-1 text-left">
+                        <div className="text-base font-semibold text-foreground">Commercial Totals</div>
+                        <div className="text-sm font-normal text-muted-foreground">Readonly financial fields preserved exactly from the external GRN source.</div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-5">
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        {valueFieldNames.map((fieldName) => (
+                          <EnterpriseReadField
+                            key={fieldName}
+                            label={toFieldLabel(fieldName)}
+                            value={readValue(updateForm.getValues(`value_details.${fieldName}`))}
+                            tone="protected"
+                          />
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </form>
+            </Form>
+          </>
+        ) : null}
+      </FormPanel>
+
+      <FormPanel
+        open={Boolean(payloadRecord)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPayloadRecord(null);
+          }
+        }}
+        title={payloadRecord ? `${payloadRecord.grn_no} Payload` : "GRN Payload"}
+        description="Preserved external GRN payload stored in `raw_payload`."
+        size="lg"
+      >
           {payloadRecord ? (
-            <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+            <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="GRN Date" value={formatDate(payloadRecord.grn_date)} />
                 <StatCard label="Supplier" value={payloadRecord.supplier_details.trade_name || payloadRecord.trade_name || "-"} />
@@ -2171,8 +2185,7 @@ const GRNPage = () => {
               </pre>
             </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
+      </FormPanel>
 
       <ConfirmDialog
         open={Boolean(moveTarget)}
@@ -2190,7 +2203,7 @@ const GRNPage = () => {
           }
         }}
       />
-    </div>
+    </AppPageShell>
   );
 };
 
