@@ -1,4 +1,5 @@
 import { coreApi } from "@/lib/api";
+import { normalizeListResponse, normalizePaginatedResponse, toQueryParams, unwrapMutationPayload } from "@/lib/api-helpers";
 import type {
   AdminMenuMain,
   AdminTableParams,
@@ -18,54 +19,26 @@ import type {
   UserTypeRecord,
 } from "@/features/admin-master/types";
 
-const toParams = ({ page, pageSize, search, ordering, filters }: AdminTableParams) => ({
-  page,
-  page_size: pageSize,
-  search: search || undefined,
-  ordering: ordering || undefined,
-  ...(filters ?? {}),
-});
-
-const normalizeList = <T>(payload: PaginatedResponse<T> | DataTableResponse<T> | T[]): PaginatedResult<T> => {
-  if (Array.isArray(payload)) {
-    return { items: payload, total: payload.length, filtered: payload.length };
-  }
-  if ("results" in payload) {
-    return {
-      items: payload.results,
-      total: payload.count,
-      filtered: payload.count,
-    };
-  }
-  return {
-    items: payload.data ?? [],
-    total: Number(payload.recordsTotal ?? payload.data?.length ?? 0),
-    filtered: Number(payload.recordsFiltered ?? payload.data?.length ?? 0),
-  };
-};
-
-const unwrap = <T>(payload: { data: T } | T): T => {
-  if (payload && typeof payload === "object" && "data" in payload) {
-    return (payload as { data: T }).data;
-  }
-  return payload as T;
-};
-
 const listEntity = async <T>(path: string, params: AdminTableParams) => {
   const response = await coreApi.get<PaginatedResponse<T> | DataTableResponse<T> | T[]>(path, {
-    params: toParams(params),
+    params: toQueryParams(params),
   });
-  return normalizeList(response.data);
+  const normalized = normalizePaginatedResponse<T>(response.data);
+  return {
+    items: normalized.items,
+    total: normalized.total,
+    filtered: normalized.filtered,
+  } satisfies PaginatedResult<T>;
 };
 
 const createEntity = async <T>(path: string, payload: unknown) => {
   const response = await coreApi.post<{ data: T } | T>(path, payload);
-  return unwrap(response.data);
+  return unwrapMutationPayload(response.data);
 };
 
 const updateEntity = async <T>(path: string, payload: unknown) => {
   const response = await coreApi.put<{ data: T } | T>(path, payload);
-  return unwrap(response.data);
+  return unwrapMutationPayload(response.data);
 };
 
 const deleteEntity = async (path: string) => {
@@ -101,7 +74,7 @@ export const adminMasterApi = {
   toggleMainScreen: (id: number) => toggleEntity(`/api/users/main-screens/${id}/toggle-status/`),
   listMainScreenLookup: async () => {
     const response = await coreApi.get<LookupOption[]>("/api/users/main-screens/list/");
-    return response.data;
+    return normalizeListResponse<LookupOption>(response.data);
   },
 
   listScreenSections: (params: AdminTableParams) => listEntity<ScreenSectionRecord>("/api/users/screen-sections/", params),
@@ -113,7 +86,7 @@ export const adminMasterApi = {
     const response = await coreApi.get<LookupOption[]>("/api/users/screen-sections/lookup/", {
       params: { main_screen: mainScreenId ?? undefined, main_screen_id: mainScreenId ?? undefined },
     });
-    return response.data;
+    return normalizeListResponse<LookupOption>(response.data);
   },
 
   listUserScreens: (params: AdminTableParams) => listEntity<UserScreenRecord>("/api/users/user-screens/", params),
@@ -130,7 +103,7 @@ export const adminMasterApi = {
         screen_section_id: params?.screenSectionId ?? undefined,
       },
     });
-    return response.data;
+    return normalizeListResponse<LookupOption>(response.data);
   },
 
   listStaff: (params: AdminTableParams) => listEntity<StaffRecord>("/api/users/staff/", params),
@@ -140,7 +113,7 @@ export const adminMasterApi = {
   toggleStaff: (id: number) => toggleEntity(`/api/users/staff/${id}/toggle-status/`),
   lookupStaff: async () => {
     const response = await coreApi.get<LookupOption[]>("/api/users/staff/lookup/");
-    return response.data;
+    return normalizeListResponse<LookupOption>(response.data);
   },
 
   listUserTypes: (params: AdminTableParams) => listEntity<UserTypeRecord>("/api/users/user-types/", params),
@@ -150,7 +123,7 @@ export const adminMasterApi = {
   toggleUserType: (id: number) => toggleEntity(`/api/users/user-types/${id}/toggle-status/`),
   lookupUserTypes: async () => {
     const response = await coreApi.get<LookupOption[]>("/api/users/user-types/lookup/");
-    return response.data;
+    return normalizeListResponse<LookupOption>(response.data);
   },
 
   listUserAccounts: (params: AdminTableParams) => listEntity<UserAccountRecord>("/api/users/users-creation/", params),
@@ -176,7 +149,7 @@ export const adminMasterApi = {
     const response = await coreApi.get("/api/masters/company/", {
       params: { page: 1, page_size: 200 },
     });
-    const normalized = normalizeList<{ id: number; name?: string; company_name?: string; code?: string }>(response.data);
+    const normalized = normalizePaginatedResponse<{ id: number; name?: string; company_name?: string; code?: string }>(response.data);
     return normalized.items.map((item) => ({
       id: item.id,
       name: item.name ?? item.company_name ?? `Company ${item.id}`,
@@ -184,6 +157,7 @@ export const adminMasterApi = {
     }));
   },
   lookupDepartments: async () => {
-    return [] as LookupOption[];
+    const response = await coreApi.get<LookupOption[]>("/api/users/departments/lookup/");
+    return normalizeListResponse<LookupOption>(response.data);
   },
 };

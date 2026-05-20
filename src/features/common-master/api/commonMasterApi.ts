@@ -1,4 +1,5 @@
 import { coreApi } from "@/lib/api";
+import { normalizeListResponse, normalizePaginatedResponse, toQueryParams, unwrapMutationPayload } from "@/lib/api-helpers";
 import type {
   ApiMutationResponse,
   CityListRow,
@@ -26,46 +27,6 @@ import type {
   TaxListRow,
   TaxRecord,
 } from "@/features/common-master/types";
-
-const toQueryParams = ({ page, pageSize, search, ordering, filters }: TableParams) => ({
-  page,
-  page_size: pageSize,
-  search: search || undefined,
-  ordering: ordering || undefined,
-  ...(filters ?? {}),
-});
-
-const normalizePaginated = <T>(payload: DRFPaginatedResponse<T> | DatatableResponse<T> | T[]): PaginatedResult<T> => {
-  if (Array.isArray(payload)) {
-    return { items: payload, total: payload.length, filtered: payload.length, next: null, previous: null };
-  }
-  if ("results" in payload) {
-    return {
-      items: payload.results,
-      total: payload.count,
-      filtered: payload.count,
-      next: payload.next,
-      previous: payload.previous,
-    };
-  }
-  return {
-    items: payload.data ?? [],
-    total: Number(payload.recordsTotal ?? payload.data?.length ?? 0),
-    filtered: Number(payload.recordsFiltered ?? payload.data?.length ?? 0),
-    next: null,
-    previous: null,
-  };
-};
-
-const normalizeListPayload = <T>(payload: DRFPaginatedResponse<T> | DatatableResponse<T> | T[]) =>
-  normalizePaginated(payload).items;
-
-const unwrapMutation = <T>(payload: ApiMutationResponse<T> | T): T => {
-  if (payload && typeof payload === "object" && "data" in payload) {
-    return payload.data;
-  }
-  return payload as T;
-};
 
 const withStatus = <T extends { is_active?: boolean; status?: boolean }>(record: T) => ({
   ...record,
@@ -104,21 +65,21 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<ContinentRecord> | DatatableResponse<ContinentRecord> | ContinentRecord[]>(
       "/api/masters/continents/",
     );
-    return normalizeListPayload(response.data).map(toContinentRecord);
+    return normalizeListResponse<ContinentRecord>(response.data).map(toContinentRecord);
   },
   createContinent: async (payload: Partial<ContinentRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<ContinentRecord>>("/api/masters/continents/create/", {
       ...payload,
       is_active: payload.status,
     });
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateContinent: async (id: number, payload: Partial<ContinentRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<ContinentRecord>>(`/api/masters/continents/${id}/`, {
       ...payload,
       is_active: payload.status,
     });
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleContinent: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/continents/${id}/toggle/`, {});
@@ -132,7 +93,7 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<CountryRecord> | DatatableResponse<CountryRecord>>("/api/masters/countries/", {
       params: toQueryParams(params),
     });
-    const normalized = normalizePaginated(response.data);
+    const normalized = normalizePaginatedResponse<CountryRecord>(response.data);
     return {
       ...normalized,
       items: normalized.items.map((record, index) => ({
@@ -155,14 +116,14 @@ export const commonMasterApi = {
       ...payload,
       is_active: payload.status,
     });
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateCountry: async (id: number, payload: Partial<CountryRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<CountryRecord>>(`/api/masters/countries/${id}/`, {
       ...payload,
       is_active: payload.status,
     });
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleCountry: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/countries/${id}/toggle/`, {});
@@ -175,14 +136,14 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<LookupOption> | DatatableResponse<LookupOption> | LookupOption[]>(
       "/api/masters/countries/dropdown/",
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<LookupOption>(response.data);
   },
 
   listStates: async (params?: TableParams) => {
     const response = await coreApi.get<DRFPaginatedResponse<StateRecord> | DatatableResponse<StateRecord> | StateRecord[]>("/api/masters/states/", {
       params: params ? toQueryParams(params) : undefined,
     });
-    const normalized = normalizePaginated(response.data);
+    const normalized = normalizePaginatedResponse<StateRecord>(response.data);
     return normalized.items.map((record, index) => ({
       id: record.id,
       sno: params ? (params.page - 1) * params.pageSize + index + 1 : index + 1,
@@ -197,11 +158,11 @@ export const commonMasterApi = {
   },
   createState: async (payload: Partial<StateRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<StateRecord>>("/api/masters/states/create/", payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateState: async (id: number, payload: Partial<StateRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<StateRecord>>(`/api/masters/states/${id}/`, payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleState: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/states/${id}/toggle/`, {});
@@ -214,20 +175,20 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<LookupOption> | DatatableResponse<LookupOption> | LookupOption[]>(
       "/api/masters/states/lookup/",
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<LookupOption>(response.data);
   },
   listStatesByCountry: async (countryId: number) => {
     const response = await coreApi.get<DRFPaginatedResponse<LookupOption> | DatatableResponse<LookupOption> | LookupOption[]>(
       `/api/masters/states/by-country/${countryId}/`,
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<LookupOption>(response.data);
   },
 
   listCities: async (params: TableParams) => {
     const response = await coreApi.get<DRFPaginatedResponse<CityRecord> | DatatableResponse<CityRecord>>("/api/masters/cities/list/", {
       params: toQueryParams(params),
     });
-    const normalized = normalizePaginated(response.data);
+    const normalized = normalizePaginatedResponse<CityRecord>(response.data);
     return {
       ...normalized,
       items: normalized.items.map((record, index) => ({
@@ -245,14 +206,14 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<CityRecord> | DatatableResponse<CityRecord>>("/api/masters/cities/", {
       params: toQueryParams(params),
     });
-    return normalizePaginated(response.data);
+    return normalizePaginatedResponse<CityRecord>(response.data);
   },
   listCityLookup: async (filters?: Record<string, string | number | boolean | null | undefined>) => {
     const response = await coreApi.get<DRFPaginatedResponse<LookupOption> | DatatableResponse<LookupOption> | LookupOption[]>(
       "/api/masters/cities/lookup/",
       { params: filters },
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<LookupOption>(response.data);
   },
   getCity: async (id: number) => {
     const response = await coreApi.get<CityRecord>(`/api/masters/cities/${id}/`);
@@ -260,11 +221,11 @@ export const commonMasterApi = {
   },
   createCity: async (payload: Partial<CityRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<CityRecord>>("/api/masters/cities/create/", payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateCity: async (id: number, payload: Partial<CityRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<CityRecord>>(`/api/masters/cities/${id}/`, payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleCity: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/cities/${id}/toggle/`, {});
@@ -277,14 +238,14 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<CityTypeOption> | DatatableResponse<CityTypeOption> | CityTypeOption[]>(
       "/api/masters/cities/types/",
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<CityTypeOption>(response.data);
   },
 
   listTaxes: async (params: TableParams) => {
     const response = await coreApi.get<DRFPaginatedResponse<TaxRecord> | DatatableResponse<TaxRecord>>("/api/masters/taxes/", {
       params: toQueryParams(params),
     });
-    const normalized = normalizePaginated(response.data);
+    const normalized = normalizePaginatedResponse<TaxRecord>(response.data);
     return {
       ...normalized,
       items: normalized.items.map((record, index) => ({
@@ -303,11 +264,11 @@ export const commonMasterApi = {
   },
   createTax: async (payload: Partial<TaxRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<TaxRecord>>("/api/masters/taxes/create/", payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateTax: async (id: number, payload: Partial<TaxRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<TaxRecord>>(`/api/masters/taxes/${id}/`, payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleTax: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/taxes/${id}/toggle/`, {});
@@ -321,7 +282,7 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<CurrencyRecord> | DatatableResponse<CurrencyRecord>>("/api/masters/currencies/", {
       params: toQueryParams(params),
     });
-    return normalizePaginated(response.data);
+    return normalizePaginatedResponse<CurrencyRecord>(response.data);
   },
   getCurrency: async (id: number) => {
     const response = await coreApi.get<CurrencyRecord>(`/api/masters/currencies/${id}/`);
@@ -329,11 +290,11 @@ export const commonMasterApi = {
   },
   createCurrency: async (payload: Partial<CurrencyRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<CurrencyRecord>>("/api/masters/currencies/create/", payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateCurrency: async (id: number, payload: Partial<CurrencyRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<CurrencyRecord>>(`/api/masters/currencies/${id}/`, payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleCurrency: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/currencies/${id}/toggle/`, {});
@@ -346,14 +307,14 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<LookupOption> | DatatableResponse<LookupOption> | LookupOption[]>(
       "/api/masters/currencies/lookup/",
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<LookupOption>(response.data);
   },
 
   listCustomers: async (params: TableParams) => {
     const response = await coreApi.get<DRFPaginatedResponse<CustomerRecord> | DatatableResponse<CustomerRecord>>("/api/masters/customers/", {
       params: toQueryParams(params),
     });
-    return normalizePaginated(response.data);
+    return normalizePaginatedResponse<CustomerRecord>(response.data);
   },
   getCustomer: async (id: number) => {
     const response = await coreApi.get<CustomerRecord>(`/api/masters/customers/${id}/`);
@@ -361,11 +322,11 @@ export const commonMasterApi = {
   },
   createCustomer: async (payload: Partial<CustomerRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<CustomerRecord>>("/api/masters/customers/create/", payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateCustomer: async (id: number, payload: Partial<CustomerRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<CustomerRecord>>(`/api/masters/customers/${id}/`, payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleCustomer: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/customers/${id}/toggle/`, {});
@@ -378,14 +339,14 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<LookupOption> | DatatableResponse<LookupOption> | LookupOption[]>(
       "/api/masters/customers/lookup/",
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<LookupOption>(response.data);
   },
   listCustomerDocuments: async (customerId: number) => {
     const response = await coreApi.get<DRFPaginatedResponse<DocumentRecord> | DatatableResponse<DocumentRecord> | DocumentRecord[]>(
       "/api/masters/customer-documents/",
       { params: { customer: customerId, page_size: 200 } },
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<DocumentRecord>(response.data);
   },
   createCustomerDocument: async (payload: Record<string, unknown>) => {
     const response = await coreApi.post<ApiMutationResponse<DocumentRecord>>(
@@ -393,7 +354,7 @@ export const commonMasterApi = {
       buildFormData(payload),
       { headers: { "Content-Type": "multipart/form-data" } },
     );
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateCustomerDocument: async (id: number, payload: Record<string, unknown>) => {
     const response = await coreApi.put<ApiMutationResponse<DocumentRecord>>(
@@ -401,7 +362,7 @@ export const commonMasterApi = {
       buildFormData(payload),
       { headers: { "Content-Type": "multipart/form-data" } },
     );
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleCustomerDocument: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/customer-documents/${id}/toggle/`, {});
@@ -415,7 +376,7 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<SupplierRecord> | DatatableResponse<SupplierRecord>>("/api/masters/suppliers/", {
       params: toQueryParams(params),
     });
-    return normalizePaginated(response.data);
+    return normalizePaginatedResponse<SupplierRecord>(response.data);
   },
   getSupplier: async (id: number) => {
     const response = await coreApi.get<SupplierRecord>(`/api/masters/suppliers/${id}/`);
@@ -423,11 +384,11 @@ export const commonMasterApi = {
   },
   createSupplier: async (payload: Partial<SupplierRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<SupplierRecord>>("/api/masters/suppliers/create/", payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateSupplier: async (id: number, payload: Partial<SupplierRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<SupplierRecord>>(`/api/masters/suppliers/${id}/`, payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleSupplier: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/suppliers/${id}/toggle/`, {});
@@ -440,14 +401,14 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<LookupOption> | DatatableResponse<LookupOption> | LookupOption[]>(
       "/api/masters/suppliers/lookup/",
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<LookupOption>(response.data);
   },
   listSupplierDocuments: async (supplierId: number) => {
     const response = await coreApi.get<DRFPaginatedResponse<DocumentRecord> | DatatableResponse<DocumentRecord> | DocumentRecord[]>(
       "/api/masters/supplier-documents/",
       { params: { supplier: supplierId, page_size: 200 } },
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<DocumentRecord>(response.data);
   },
   createSupplierDocument: async (payload: Record<string, unknown>) => {
     const response = await coreApi.post<ApiMutationResponse<DocumentRecord>>(
@@ -455,7 +416,7 @@ export const commonMasterApi = {
       buildFormData(payload),
       { headers: { "Content-Type": "multipart/form-data" } },
     );
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateSupplierDocument: async (id: number, payload: Record<string, unknown>) => {
     const response = await coreApi.put<ApiMutationResponse<DocumentRecord>>(
@@ -463,7 +424,7 @@ export const commonMasterApi = {
       buildFormData(payload),
       { headers: { "Content-Type": "multipart/form-data" } },
     );
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleSupplierDocument: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/supplier-documents/${id}/toggle/`, {});
@@ -477,7 +438,7 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<CompanyRecord> | DatatableResponse<CompanyRecord>>("/api/masters/company/", {
       params: toQueryParams(params),
     });
-    const normalized = normalizePaginated(response.data);
+    const normalized = normalizePaginatedResponse<CompanyRecord>(response.data);
     return {
       ...normalized,
       items: normalized.items.map((record, index) => ({
@@ -506,7 +467,7 @@ export const commonMasterApi = {
       payload instanceof FormData ? payload : buildFormData(payload),
       { headers: { "Content-Type": "multipart/form-data" } },
     );
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateCompany: async (id: number, payload: FormData | Record<string, unknown>) => {
     const response = await coreApi.put<ApiMutationResponse<CompanyRecord>>(
@@ -514,7 +475,7 @@ export const commonMasterApi = {
       payload instanceof FormData ? payload : buildFormData(payload),
       { headers: { "Content-Type": "multipart/form-data" } },
     );
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleCompany: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/company/${id}/toggle/`, {});
@@ -527,14 +488,14 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<CompanyLookup> | DatatableResponse<CompanyLookup> | CompanyLookup[]>(
       "/api/masters/companies/lookup/",
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<CompanyLookup>(response.data);
   },
 
   listProjects: async (params: TableParams) => {
     const response = await coreApi.get<DRFPaginatedResponse<ProjectRecord> | DatatableResponse<ProjectRecord>>("/api/masters/projects/", {
       params: toQueryParams(params),
     });
-    const normalized = normalizePaginated(response.data);
+    const normalized = normalizePaginatedResponse<ProjectRecord>(response.data);
     return {
       ...normalized,
       items: normalized.items.map((record, index) => ({
@@ -560,11 +521,11 @@ export const commonMasterApi = {
   },
   createProject: async (payload: Partial<ProjectRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<ProjectRecord>>("/api/masters/projects/create/", payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   updateProject: async (id: number, payload: Partial<ProjectRecord>) => {
     const response = await coreApi.put<ApiMutationResponse<ProjectRecord>>(`/api/masters/projects/${id}/`, payload);
-    return unwrapMutation(response.data);
+    return unwrapMutationPayload(response.data);
   },
   toggleProject: async (id: number) => {
     const response = await coreApi.patch(`/api/masters/projects/${id}/toggle/`, {});
@@ -577,6 +538,6 @@ export const commonMasterApi = {
     const response = await coreApi.get<DRFPaginatedResponse<LookupOption> | DatatableResponse<LookupOption> | LookupOption[]>(
       "/api/masters/projects/application-types/",
     );
-    return normalizeListPayload(response.data);
+    return normalizeListResponse<LookupOption>(response.data);
   },
 };

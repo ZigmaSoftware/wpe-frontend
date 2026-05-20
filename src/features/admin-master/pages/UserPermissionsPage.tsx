@@ -320,7 +320,7 @@ const UserPermissionsPage = () => {
         </TabsContent>
       </Tabs>
 
-      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editing ? "Edit Permission" : "Create Permission"} description="Row-based CRUD is useful for exact overrides and targeted updates.">
+      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editing ? "Edit Permission" : "Create Permission"} description="Row-based CRUD is useful for exact overrides and targeted updates." size="lg">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(async (values) => {
             try {

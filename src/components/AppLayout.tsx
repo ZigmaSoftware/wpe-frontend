@@ -4,34 +4,26 @@ import {
   Archive,
   Blend,
   Box,
-  Building2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   FileText,
-  Globe2,
   LayoutDashboard,
-  Landmark,
   Layers,
   Layout,
   LogOut,
-  MapPin,
   Menu,
-  Map,
   Monitor,
-  MapPinned,
   PackageSearch,
-  ReceiptText,
   Route,
   Shield,
-  ShoppingCart,
   Tag,
   Truck,
   UserCog,
   Users,
-  Warehouse,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -41,8 +33,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
-import { adminRouteRegistry, getAdminRouteTitle, resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
+import { adminRouteMetas, adminRouteRegistry, getAdminRouteTitle, resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
 import type { AdminMenuMain } from "@/features/admin-master/types";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/AuthProvider";
@@ -50,59 +41,37 @@ import { useAuth } from "@/providers/AuthProvider";
 /* ─── colour palette per section ──────────────────────────────────── */
 const sectionMeta: Record<string, { accent: string; iconBg: string }> = {
   Workspace:        { accent: "from-blue-500 to-indigo-600",   iconBg: "bg-blue-500/15 text-blue-400" },
-  "Common Masters": { accent: "from-violet-500 to-purple-600", iconBg: "bg-violet-500/15 text-violet-400" },
-  "WPE Masters":    { accent: "from-emerald-500 to-teal-600",  iconBg: "bg-emerald-500/15 text-emerald-400" },
-  "WPE Users":      { accent: "from-rose-500 to-pink-600",     iconBg: "bg-rose-500/15 text-rose-400" },
   "OIMS Masters":   { accent: "from-amber-500 to-orange-600",  iconBg: "bg-amber-500/15 text-amber-400" },
+  "Admin Master":   { accent: "from-cyan-500 to-sky-600",      iconBg: "bg-cyan-500/15 text-cyan-400" },
   default:          { accent: "from-slate-500 to-slate-600",   iconBg: "bg-slate-500/15 text-slate-400" },
 };
 
-const wpeMastersSections = [
-  {
-    label: "WPE Masters",
-    items: [
-      { to: "/wpe-masters/locations",       icon: MapPin,       label: "Locations" },
-      { to: "/wpe-masters/branches",        icon: Building2,    label: "Branches" },
-      { to: "/wpe-masters/price-books",     icon: Tag,          label: "Price Books" },
-      { to: "/wpe-masters/warehouses",      icon: Warehouse,    label: "Warehouses" },
-      { to: "/wpe-masters/production-types",icon: Box,          label: "Production Types" },
-      { to: "/wpe-masters/sale-types",      icon: Truck,        label: "Sale Types" },
-      { to: "/wpe-masters/purchase-types",  icon: ShoppingCart, label: "Purchase Types" },
-      { to: "/wpe-masters/roles",           icon: Shield,       label: "Roles" },
-      { to: "/wpe-masters/departments",     icon: Globe2,       label: "Departments" },
-    ],
-  },
-  {
-    label: "WPE Users",
-    items: [
-      { to: "/wpe-masters/users", icon: UserCog, label: "User Creation" },
-      { to: "/wpe-masters/role-permissions", icon: Shield, label: "Role Permissions" },
-      { to: "/wpe-masters/user-screen-permissions", icon: Monitor, label: "Screen Permissions" },
-    ],
-  },
-];
+type NavItem = { to: string; icon: LucideIcon; label: string };
+type NavSectionConfig = { label: string; items: NavItem[] };
 
-const adminMasterSections = [
-  {
-    label: "Admin Master",
-    items: [
-      { to: "/admin/main-screens",    icon: Monitor,         label: "Main Screen"       },
-      { to: "/admin/screen-sections", icon: Layers,          label: "Screen Sections"   },
-      { to: "/admin/user-screens",    icon: Layout,          label: "User Screens"      },
-      { to: "/admin/user-types",      icon: Tag,             label: "User Types"        },
-      { to: "/admin/user-accounts",   icon: Users,           label: "User Accounts"     },
-      { to: "/admin/user-permissions",icon: Shield,          label: "User Permissions"  },
-    ],
-  },
-  {
-    label: "HR Master",
-    items: [
-      { to: "/admin/staff", icon: UserCog, label: "Staff" },
-    ],
-  },
-];
+const hiddenSectionLabels = new Set([
+  "common masters",
+  "masters",
+  "wpe masters",
+  "wpe users",
+]);
 
-const navSections = [
+const normalizeSectionLabel = (label: string) =>
+  label.trim().toLowerCase() === "hr master" ? "Admin Master" : label;
+
+const isHiddenSectionLabel = (label: string) => hiddenSectionLabels.has(label.trim().toLowerCase());
+
+const adminIconByScreenCode: Record<string, LucideIcon> = {
+  "main-screen-master": Monitor,
+  "screen-section-master": Layers,
+  "user-screen-master": Layout,
+  "staff-master": UserCog,
+  "user-type-master": Tag,
+  "user-account-master": Users,
+  "user-permission-master": Shield,
+};
+
+const navSections: NavSectionConfig[] = [
   {
     label: "Workspace",
     items: [
@@ -125,27 +94,12 @@ const navSections = [
       { to: "/oims/bom-variants",  icon: PackageSearch,   label: "BOM Variants" },
     ],
   },
-  {
-    label: "Common Masters",
-    items: [
-      { to: "/masters/continents",  icon: Globe2,        label: "Continents" },
-      { to: "/masters/countries",   icon: Map,           label: "Countries" },
-      { to: "/masters/states",      icon: MapPinned,     label: "States" },
-      { to: "/masters/cities",      icon: Landmark,      label: "Cities" },
-      { to: "/masters/taxes",       icon: ReceiptText,   label: "Taxes" },
-      { to: "/masters/currencies",  icon: ReceiptText,   label: "Currencies" },
-      { to: "/masters/customers",   icon: Users,         label: "Customers" },
-      { to: "/masters/suppliers",   icon: PackageSearch, label: "Suppliers" },
-      { to: "/masters/companies",   icon: Users,         label: "Companies" },
-      { to: "/masters/projects",    icon: Route,         label: "Projects" },
-    ],
-  },
 ];
 
 /* ─── collapsible nav section ─────────────────────────────────────── */
 interface NavSectionProps {
   label: string;
-  items: { to: string; icon: React.ElementType; label: string }[];
+  items: NavItem[];
   collapsed: boolean;
   onMobileClose: () => void;
   defaultOpen?: boolean;
@@ -219,10 +173,33 @@ const AppLayout = () => {
   const location = useLocation();
   const { user, signOut, adminMenu } = useAuth();
 
+  const staticAdminSections = useMemo(() => {
+    const grouped = new Map<string, NavItem[]>();
+
+    for (const meta of adminRouteMetas) {
+      const sectionLabel = normalizeSectionLabel(meta.section ?? "Admin Master");
+      if (isHiddenSectionLabel(sectionLabel)) {
+        continue;
+      }
+      const currentItems = grouped.get(sectionLabel) ?? [];
+      currentItems.push({
+        to: meta.path,
+        icon: meta.screenCode ? (adminIconByScreenCode[meta.screenCode] ?? Shield) : Shield,
+        label: meta.navLabel ?? meta.title,
+      });
+      grouped.set(sectionLabel, currentItems);
+    }
+
+    return Array.from(grouped.entries()).map(([label, items]) => ({
+      label,
+      items,
+    }));
+  }, []);
+
   const adminNavSections = useMemo(
     () =>
       adminMenu.map((main: AdminMenuMain) => ({
-        label: main.name,
+        label: normalizeSectionLabel(main.name),
         items: main.sections.flatMap((section) =>
           section.screens.map((screen) => ({
             to: resolveAdminRoutePath(screen.code, screen.route_path),
@@ -230,11 +207,32 @@ const AppLayout = () => {
             label: getAdminRouteTitle(screen.code, screen.screen_name),
           })),
         ),
-      })),
+      })).filter((section) => !isHiddenSectionLabel(section.label)),
     [adminMenu],
   );
 
-  const allSections = [...navSections, ...wpeMastersSections, ...adminMasterSections, ...adminNavSections];
+  const allSections = useMemo(() => {
+    const sectionMap = new Map<string, NavItem[]>();
+
+    for (const section of [...navSections, ...staticAdminSections, ...adminNavSections]) {
+      if (isHiddenSectionLabel(section.label)) {
+        continue;
+      }
+      const existingItems = sectionMap.get(section.label) ?? [];
+      const seenPaths = new Set(existingItems.map((item) => item.to));
+
+      for (const item of section.items) {
+        if (!seenPaths.has(item.to)) {
+          existingItems.push(item);
+          seenPaths.add(item.to);
+        }
+      }
+
+      sectionMap.set(section.label, existingItems);
+    }
+
+    return Array.from(sectionMap.entries()).map(([label, items]) => ({ label, items }));
+  }, [adminNavSections, staticAdminSections]);
 
   const breadcrumbItems = useMemo(() => {
     const path = location.pathname;
@@ -323,7 +321,7 @@ const AppLayout = () => {
               items={section.items}
               collapsed={collapsed}
               onMobileClose={() => setMobileOpen(false)}
-              defaultOpen={section.label === "Workspace" || section.label === "WPE Masters" || section.label === "WPE Users"}
+              defaultOpen={section.label === "Workspace" || section.label === "Admin Master"}
             />
           ))}
         </nav>

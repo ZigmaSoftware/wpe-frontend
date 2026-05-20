@@ -99,7 +99,7 @@ const UserAccountsPage = () => {
         onPageSizeChange={table.setPageSize}
         onRetry={() => query.refetch()}
       />
-      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editing ? "Edit User Account" : "Create User Account"} description="Passwords are only required when creating a new account or intentionally changing credentials.">
+      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editing ? "Edit User Account" : "Create User Account"} description="Passwords are only required when creating a new account or intentionally changing credentials." size="lg">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(async (values) => {
             try {

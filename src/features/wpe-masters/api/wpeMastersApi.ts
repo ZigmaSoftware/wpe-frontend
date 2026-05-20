@@ -1,4 +1,5 @@
 import { coreApi } from "@/lib/api";
+import { normalizeListResponse, normalizePaginatedResponse, toQueryParams, unwrapMutationPayload } from "@/lib/api-helpers";
 import type {
   LookupItem,
   MasterRecord,
@@ -13,35 +14,28 @@ import type {
 
 const BASE = "/api/wpe-masters";
 
-const toParams = ({ page, pageSize, search, ordering }: TableParams) => ({
-  page,
-  page_size: pageSize,
-  search: search || undefined,
-  ordering: ordering || undefined,
-});
-
 async function listMaster(path: string, params: TableParams) {
-  const res = await coreApi.get<PaginatedResponse<MasterRecord>>(path, { params: toParams(params) });
-  const data = res.data;
+  const res = await coreApi.get<PaginatedResponse<MasterRecord>>(path, { params: toQueryParams(params) });
+  const data = normalizePaginatedResponse<MasterRecord>(res.data);
   return {
-    items: Array.isArray(data) ? data : data.results ?? [],
-    total: Array.isArray(data) ? data.length : data.count ?? 0,
+    items: data.items,
+    total: data.total,
   };
 }
 
 async function lookupMaster(path: string): Promise<LookupItem[]> {
   const res = await coreApi.get<LookupItem[]>(path);
-  return res.data;
+  return normalizeListResponse<LookupItem>(res.data);
 }
 
 async function createMaster(path: string, payload: MasterWritePayload) {
   const res = await coreApi.post<MasterRecord>(path, payload);
-  return res.data;
+  return unwrapMutationPayload(res.data);
 }
 
 async function updateMaster(path: string, payload: Partial<MasterWritePayload>) {
   const res = await coreApi.put<MasterRecord>(path, payload);
-  return res.data;
+  return unwrapMutationPayload(res.data);
 }
 
 async function deleteMaster(path: string) {
@@ -50,7 +44,7 @@ async function deleteMaster(path: string) {
 
 async function toggleMaster(path: string) {
   const res = await coreApi.patch<MasterRecord>(path, {});
-  return res.data;
+  return unwrapMutationPayload(res.data);
 }
 
 const master = (resource: string) => ({
@@ -75,27 +69,27 @@ export const wpeMastersApi = {
 
   users: {
     list: async (params: TableParams) => {
-      const res = await coreApi.get<PaginatedResponse<WPEUserRecord>>(`${BASE}/users/`, { params: toParams(params) });
-      const data = res.data;
+      const res = await coreApi.get<PaginatedResponse<WPEUserRecord>>(`${BASE}/users/`, { params: toQueryParams(params) });
+      const data = normalizePaginatedResponse<WPEUserRecord>(res.data);
       return {
-        items: Array.isArray(data) ? data : data.results ?? [],
-        total: Array.isArray(data) ? data.length : data.count ?? 0,
+        items: data.items,
+        total: data.total,
       };
     },
     create: async (payload: WPEUserWritePayload) => {
       const res = await coreApi.post<WPEUserRecord>(`${BASE}/users/`, payload);
-      return res.data;
+      return unwrapMutationPayload(res.data);
     },
     update: async (id: number, payload: Partial<WPEUserWritePayload>) => {
       const res = await coreApi.put<WPEUserRecord>(`${BASE}/users/${id}/`, payload);
-      return res.data;
+      return unwrapMutationPayload(res.data);
     },
     delete: async (id: number) => {
       await coreApi.delete(`${BASE}/users/${id}/`);
     },
     toggle: async (id: number) => {
       const res = await coreApi.patch<WPEUserRecord>(`${BASE}/users/${id}/toggle/`, {});
-      return res.data;
+      return unwrapMutationPayload(res.data);
     },
   },
 
@@ -104,13 +98,13 @@ export const wpeMastersApi = {
       const res = await coreApi.get<{ id: number; name: string; code: string; order_no: number }[]>(
         `${BASE}/role-permissions/screens/`,
       );
-      return res.data;
+      return normalizeListResponse(res.data);
     },
     getMatrix: async (mainScreenId: number): Promise<PermissionRow[]> => {
       const res = await coreApi.get<PermissionRow[]>(`${BASE}/role-permissions/matrix/`, {
         params: { main_screen_id: mainScreenId },
       });
-      return res.data;
+      return normalizeListResponse<PermissionRow>(res.data);
     },
     bulkSave: async (mainScreenId: number, permissions: PermissionRow[]): Promise<void> => {
       await coreApi.post(`${BASE}/role-permissions/bulk-save/`, {
@@ -125,13 +119,13 @@ export const wpeMastersApi = {
       const res = await coreApi.get<{ id: number; name: string; code: string; order_no: number }[]>(
         `${BASE}/user-screen-permissions/screens/`,
       );
-      return res.data;
+      return normalizeListResponse(res.data);
     },
     getMatrix: async (mainScreenId: number): Promise<UserScreenPermRow[]> => {
       const res = await coreApi.get<UserScreenPermRow[]>(`${BASE}/user-screen-permissions/matrix/`, {
         params: { main_screen_id: mainScreenId },
       });
-      return res.data;
+      return normalizeListResponse<UserScreenPermRow>(res.data);
     },
     bulkSave: async (mainScreenId: number, permissions: UserScreenPermRow[]): Promise<void> => {
       await coreApi.post(`${BASE}/user-screen-permissions/bulk-save/`, {

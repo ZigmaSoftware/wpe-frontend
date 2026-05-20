@@ -1,6 +1,24 @@
 import axios from "axios";
 import type { ApiSuccessEnvelope, GrnListResponse, ImportResponse } from "@/lib/types";
 
+type QueryParamValue = string | number | boolean | null | undefined;
+
+type QueryParamSource = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  ordering?: string;
+  filters?: Record<string, QueryParamValue>;
+};
+
+type NormalizedPaginatedResult<T> = {
+  items: T[];
+  total: number;
+  filtered: number;
+  next: string | null;
+  previous: string | null;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
 const readFirstErrorValue = (value: unknown): string | null => {
@@ -54,30 +72,92 @@ export const unwrapSuccessEnvelope = <T>(payload: ApiSuccessEnvelope<T> | T): T 
   return payload as T;
 };
 
-export const normalizeListResponse = <T>(payload: unknown): T[] => {
+export const toQueryParams = ({ page, pageSize, search, ordering, filters }: QueryParamSource = {}) => ({
+  page: page ?? undefined,
+  page_size: pageSize ?? undefined,
+  search: search || undefined,
+  ordering: ordering || undefined,
+  ...(filters ?? {}),
+});
+
+export const normalizePaginatedResponse = <T>(payload: unknown): NormalizedPaginatedResult<T> => {
   const unwrappedPayload = unwrapSuccessEnvelope(payload as ApiSuccessEnvelope<unknown> | unknown);
 
   if (Array.isArray(unwrappedPayload)) {
-    return unwrappedPayload as T[];
+    return {
+      items: unwrappedPayload as T[],
+      total: unwrappedPayload.length,
+      filtered: unwrappedPayload.length,
+      next: null,
+      previous: null,
+    };
   }
 
   if (!isRecord(unwrappedPayload)) {
-    return [];
+    return {
+      items: [],
+      total: 0,
+      filtered: 0,
+      next: null,
+      previous: null,
+    };
   }
 
   if (Array.isArray(unwrappedPayload.results)) {
-    return unwrappedPayload.results as T[];
+    const count = Number(unwrappedPayload.count ?? unwrappedPayload.results.length ?? 0);
+
+    return {
+      items: unwrappedPayload.results as T[],
+      total: count,
+      filtered: count,
+      next: typeof unwrappedPayload.next === "string" ? unwrappedPayload.next : null,
+      previous: typeof unwrappedPayload.previous === "string" ? unwrappedPayload.previous : null,
+    };
   }
 
   if (Array.isArray(unwrappedPayload.data)) {
-    return unwrappedPayload.data as T[];
+    const items = unwrappedPayload.data as T[];
+
+    return {
+      items,
+      total: Number(unwrappedPayload.recordsTotal ?? items.length ?? 0),
+      filtered: Number(unwrappedPayload.recordsFiltered ?? items.length ?? 0),
+      next: null,
+      previous: null,
+    };
   }
 
   if (isRecord(unwrappedPayload.data) && Array.isArray(unwrappedPayload.data.results)) {
-    return unwrappedPayload.data.results as T[];
+    const nestedData = unwrappedPayload.data;
+    const count = Number(nestedData.count ?? nestedData.results.length ?? 0);
+
+    return {
+      items: nestedData.results as T[],
+      total: count,
+      filtered: count,
+      next: typeof nestedData.next === "string" ? nestedData.next : null,
+      previous: typeof nestedData.previous === "string" ? nestedData.previous : null,
+    };
   }
 
-  return [];
+  return {
+    items: [],
+    total: 0,
+    filtered: 0,
+    next: null,
+    previous: null,
+  };
+};
+
+export const normalizeListResponse = <T>(payload: unknown): T[] =>
+  normalizePaginatedResponse<T>(payload).items;
+
+export const unwrapMutationPayload = <T>(payload: { data: T } | ApiSuccessEnvelope<T> | T): T => {
+  if (isRecord(payload) && "data" in payload) {
+    return (payload as { data: T }).data;
+  }
+
+  return payload as T;
 };
 
 export const normalizeGrnResponse = (payload: GrnListResponse | unknown) => {

@@ -145,7 +145,7 @@ const CompaniesPage = () => {
         onPageSizeChange={table.setPageSize}
         onRetry={() => companiesQuery.refetch()}
       />
-      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title="Create Company" description="Company creation uses multipart form submission for logo and supporting documents.">
+      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title="Create Company" description="Company creation uses multipart form submission for logo and supporting documents." size="xl">
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-5">
             <PageSection title="Identity" description="Core legal and location details.">

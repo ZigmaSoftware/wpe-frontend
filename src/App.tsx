@@ -32,6 +32,8 @@ import ContactsPage from "@/pages/ContactsPage";
 import DashboardPage from "@/pages/DashboardPage";
 import MachineMasterPage from "@/pages/MachineMasterPage";
 import RegrindPage from "@/pages/RegrindPage";
+import AdminRouteGuard from "@/features/admin-master/components/AdminRouteGuard";
+import { adminRouteRegistry, buildAdminRouteElement } from "@/features/admin-master/utils/routes";
 import CompaniesPage from "@/features/common-master/pages/CompaniesPage";
 import ContinentsPage from "@/features/common-master/pages/ContinentsPage";
 import CountriesPage from "@/features/common-master/pages/CountriesPage";
@@ -61,6 +63,16 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+const adminRoutes = [
+  buildAdminRouteElement(adminRouteRegistry["main-screen-master"], <MainScreensPage />),
+  buildAdminRouteElement(adminRouteRegistry["screen-section-master"], <ScreenSectionsPage />),
+  buildAdminRouteElement(adminRouteRegistry["user-screen-master"], <UserScreensPage />),
+  buildAdminRouteElement(adminRouteRegistry["staff-master"], <StaffPage />),
+  buildAdminRouteElement(adminRouteRegistry["user-type-master"], <UserTypesPage />),
+  buildAdminRouteElement(adminRouteRegistry["user-account-master"], <UserAccountsPage />),
+  buildAdminRouteElement(adminRouteRegistry["user-permission-master"], <UserPermissionsPage />),
+];
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -101,13 +113,21 @@ const App = () => (
                   <Route path="/masters/suppliers/:id" element={<SupplierDetailPage />} />
                   <Route path="/masters/companies" element={<CompaniesPage />} />
                   <Route path="/masters/projects" element={<ProjectsPage />} />
-                  <Route path="/admin/main-screens" element={<MainScreensPage />} />
-                  <Route path="/admin/screen-sections" element={<ScreenSectionsPage />} />
-                  <Route path="/admin/user-screens" element={<UserScreensPage />} />
-                  <Route path="/admin/staff" element={<StaffPage />} />
-                  <Route path="/admin/user-types" element={<UserTypesPage />} />
-                  <Route path="/admin/user-accounts" element={<UserAccountsPage />} />
-                  <Route path="/admin/user-permissions" element={<UserPermissionsPage />} />
+                  {adminRoutes.map(({ meta, element }) => (
+                    <Route
+                      key={meta.path}
+                      path={meta.path}
+                      element={
+                        meta.screenCode ? (
+                          <AdminRouteGuard screenCode={meta.screenCode} action={meta.guardAction}>
+                            {element}
+                          </AdminRouteGuard>
+                        ) : (
+                          element
+                        )
+                      }
+                    />
+                  ))}
                   <Route path="/wpe-masters/locations" element={<LocationMasterPage />} />
                   <Route path="/wpe-masters/branches" element={<BranchMasterPage />} />
                   <Route path="/wpe-masters/price-books" element={<PriceBookMasterPage />} />
