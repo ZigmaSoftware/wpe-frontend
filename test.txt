@@ -1,0 +1,215 @@
+Requirement Details:
+
+Step 1: Presales Module – Create New Record
+- In the Presales module, the user should create a new record.
+- User selects Category from Store/Purchase section.
+- User enters the following fields:
+  • Date
+  • Request Person
+  • Request Department
+  • Required Reason
+- Under Customer Information:
+  • Add Additive MO
+- Under Item Details:
+  • Add Item: Wood Powder / KR Agro
+- User saves the record.
+
+Step 2: Production Module – BOM Variant & Recipe Process
+- User clears buffer and opens BOM Variants section.
+- BOM Variant contains recipe details for production.
+- To view recipe details, user must enter password: 9512.
+- After successful password validation, system displays recipe details.
+
+Recipe-Based Weight Validation:
+- Production process uses weighing scale integration.
+- Weight entered should be validated based on recipe limits.
+- Allowed weight range:
+  • Minimum Weight: 195 grams
+  • Maximum Weight: 9.205 kg
+- If entered weight exceeds limits, system should show validation error message.
+- Machine-wise production data should be maintained monthly.
+
+Machine Details:
+1. HSM 500 – High Speed Mix
+   • Used for blending/mixing
+   • Working Condition: Active
+   • Quantity: 2 Nos
+
+2. Granulator WPE Blend
+   • Used for granulation process
+   • Quantity: 1 No
+
+Regrind Material Process:
+- During production, user can add regrind materials:
+  • LDPE
+  • HDPE
+- Materials should be selected from Items module.
+- Entire process should be maintained order-wise based on selected production order.
+
+Additive Process Categories:
+- 0AD → Old Additive
+- 1AD → New Additive
+
+Production Flow:
+AD → BL → GL
+
+Definitions:
+- AD = Raw Materials / Additives
+- BL = Blending / Mixing Process
+- GL = Granulated Output
+
+
+use this and give me prompt to create the regrind materials, presales modules, production modules
+
+
+
+Act as a Senior ERP Functional Consultant and Full Stack ERP Developer.
+
+Create detailed ERP module requirements, database structure suggestions, API flow, UI workflow, validations, and process logic for the following OIMS modules:
+
+1. Presales Module
+2. Production Module
+3. Regrind Material Management Module
+
+System Name:
+OIMS – Additive Production & Recipe-Based Weighing Management System
+
+========================================
+MODULE 1: PRESALES MODULE
+========================================
+
+Requirement:
+- User should create a new Presales request record.
+- Category should be selectable from Store/Purchase section.
+- User should enter:
+  • Date
+  • Request Person
+  • Request Department
+  • Required Reason
+
+Customer Information:
+- Add Additive MO.
+
+Item Details:
+- Add item:
+  • Wood Powder / KR Agro
+
+Process:
+- Save Presales request.
+- Generate unique request number automatically.
+- Maintain request status:
+  Draft → Approved → Sent to Production
+
+Need:
+- UI screen flow
+- Form field validations
+- Database tables
+- API endpoints
+- Approval workflow
+- Role-based access
+- Stock impact flow
+
+========================================
+MODULE 2: PRODUCTION MODULE
+========================================
+
+Requirement:
+- User clears buffer and opens BOM Variant section.
+- BOM Variant contains recipe details.
+- Recipe view should be password protected.
+- Password: 9512
+- After validation, display recipe details.
+
+Recipe-Based Production Process:
+- User selects production order.
+- User selects machine.
+- System loads recipe automatically.
+- System integrates with weighing scale.
+- Entered weight should validate against recipe limits.
+
+Weight Validation:
+- Minimum Weight: 195 grams
+- Maximum Weight: 9.205 kg
+
+Validation Rules:
+- If weight below minimum → show error.
+- If weight exceeds maximum → show error.
+- Allow save only within allowed range.
+
+Machine Details:
+1. HSM 500
+   • Type: High Speed Mix
+   • Purpose: Blending/Mixing
+   • Quantity: 2
+
+2. Granulator WPE Blend
+   • Purpose: Granulation
+   • Quantity: 1
+
+Production Flow:
+AD → BL → GL
+
+Definitions:
+- AD = Raw Materials / Additives
+- BL = Blending Process
+- GL = Granulated Output
+
+Need:
+- Production workflow
+- Recipe management logic
+- Weighing scale integration flow
+- Machine-wise monthly tracking
+- Production order management
+- Batch tracking
+- Validation rules
+- Error handling
+- Stock movement logic
+- Database design
+- API structure
+- Dashboard suggestions
+
+========================================
+MODULE 3: REGRIND MATERIAL MODULE
+========================================
+
+Requirement:
+- During production, user can add regrind materials.
+- Materials:
+  • LDPE
+  • HDPE
+
+Process:
+- Materials selected from Items module.
+- Regrind should be linked with production order.
+- Maintain order-wise consumption history.
+- Track quantity added during blending/granulation.
+
+Need:
+- Regrind material workflow
+- Item selection process
+- Consumption tracking
+- Stock deduction flow
+- Batch mapping
+- Database schema
+- API endpoints
+- Validation logic
+- Reporting structure
+
+========================================
+ADDITIONAL REQUIREMENTS
+========================================
+
+Generate:
+1. ERP-ready Functional Requirement Document (FRD)
+2. UI screen suggestions
+3. Workflow diagrams in text format
+4. Database table structures
+5. REST API suggestions
+6. Role-wise permissions
+7. Validation and error messages
+8. Stock movement flow
+9. Machine-wise production report structure
+10. Monthly production tracking logic
+11. Weighing scale integration logic
+12. Production and regrind reporting flow
+13. End-to-end process explanation for developers and management
