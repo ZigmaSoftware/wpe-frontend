@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -41,20 +41,22 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { adminRouteRegistry, getAdminRouteTitle, resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
 import type { AdminMenuMain } from "@/features/admin-master/types";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/AuthProvider";
 
 /* ─── colour palette per section ──────────────────────────────────── */
-const sectionMeta: Record<string, { accent: string; iconBg: string }> = {
-  Workspace:        { accent: "from-blue-500 to-indigo-600",   iconBg: "bg-blue-500/15 text-blue-400" },
-  "Common Masters": { accent: "from-violet-500 to-purple-600", iconBg: "bg-violet-500/15 text-violet-400" },
-  "WPE Masters":    { accent: "from-emerald-500 to-teal-600",  iconBg: "bg-emerald-500/15 text-emerald-400" },
-  "WPE Users":      { accent: "from-rose-500 to-pink-600",     iconBg: "bg-rose-500/15 text-rose-400" },
-  "OIMS Masters":   { accent: "from-amber-500 to-orange-600",  iconBg: "bg-amber-500/15 text-amber-400" },
-  default:          { accent: "from-slate-500 to-slate-600",   iconBg: "bg-slate-500/15 text-slate-400" },
+const sectionMeta: Record<string, { accent: string; marker: string; glow: string }> = {
+  Workspace: { accent: "from-emerald-400 to-cyan-400", marker: "bg-emerald-400", glow: "shadow-emerald-500/20" },
+  "Common Masters": { accent: "from-sky-400 to-indigo-400", marker: "bg-sky-400", glow: "shadow-sky-500/20" },
+  "WPE Masters": { accent: "from-lime-400 to-emerald-400", marker: "bg-lime-400", glow: "shadow-lime-500/20" },
+  "WPE Users": { accent: "from-fuchsia-400 to-rose-400", marker: "bg-fuchsia-400", glow: "shadow-fuchsia-500/20" },
+  "OIMS Masters": { accent: "from-amber-300 to-orange-400", marker: "bg-amber-300", glow: "shadow-amber-500/20" },
+  "Admin Master": { accent: "from-violet-400 to-sky-400", marker: "bg-violet-400", glow: "shadow-violet-500/20" },
+  "HR Master": { accent: "from-rose-300 to-orange-300", marker: "bg-rose-300", glow: "shadow-rose-500/20" },
+  default: { accent: "from-stone-300 to-zinc-100", marker: "bg-zinc-300", glow: "shadow-white/10" },
 };
 
 const wpeMastersSections = [
@@ -152,59 +154,95 @@ interface NavSectionProps {
 }
 
 const NavSection = ({ label, items, collapsed, onMobileClose, defaultOpen = true }: NavSectionProps) => {
-  const [open, setOpen] = useState(defaultOpen);
-  const { accent, iconBg } = sectionMeta[label] ?? sectionMeta.default;
+  const { accent, marker, glow } = sectionMeta[label] ?? sectionMeta.default;
   const location = useLocation();
   const hasActive = items.some((i) => location.pathname === i.to || location.pathname.startsWith(i.to + "/"));
+  const [open, setOpen] = useState(defaultOpen || hasActive);
+
+  useEffect(() => {
+    if (hasActive) {
+      setOpen(true);
+    }
+  }, [hasActive]);
 
   return (
-    <div className="space-y-0.5">
+    <div className={collapsed ? "space-y-1" : "space-y-1.5"}>
       {!collapsed && (
         <button
           onClick={() => setOpen((o) => !o)}
-          className="group flex w-full items-center justify-between px-3 py-1.5 text-left"
+          className={[
+            "group flex h-8 w-full items-center justify-between rounded-md px-3 text-left transition-colors",
+            hasActive ? "bg-white/[0.07]" : "hover:bg-white/[0.05]",
+          ].join(" ")}
         >
-          <span className={`text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
-            hasActive ? "text-white/70" : "text-white/30 group-hover:text-white/50"
-          }`}>
-            {label}
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={`h-1.5 w-1.5 rounded-full ${marker}`} />
+            <span className={`truncate text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
+              hasActive ? "text-white/80" : "text-white/40 group-hover:text-white/70"
+            }`}>
+              {label}
+            </span>
           </span>
-          <ChevronDown className={`h-3 w-3 text-white/30 transition-transform duration-200 group-hover:text-white/50 ${open ? "" : "-rotate-90"}`} />
+          <span className="flex items-center gap-1.5">
+            <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white/50">
+              {items.length}
+            </span>
+            <ChevronDown className={`h-3 w-3 text-white/40 transition-transform duration-200 group-hover:text-white/60 ${open ? "" : "-rotate-90"}`} />
+          </span>
         </button>
       )}
 
-      <div className={`space-y-0.5 overflow-hidden transition-all duration-200 ${open || collapsed ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"}`}>
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/app" || item.to === "/dashboard"}
-            onClick={onMobileClose}
-            className={({ isActive }) => [
-              "group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150",
-              collapsed ? "justify-center" : "",
-              isActive
-                ? "bg-white/10 text-white shadow-sm"
-                : "text-white/50 hover:bg-white/6 hover:text-white/80",
-            ].join(" ")}
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && (
-                  <span className={`absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-gradient-to-b ${accent}`} />
-                )}
-                <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md transition-all duration-150 ${
-                  isActive ? `${iconBg} scale-105` : "text-white/40 group-hover:text-white/70"
-                }`}>
-                  <item.icon className="h-3.5 w-3.5" />
-                </span>
-                {!collapsed && (
-                  <span className="truncate leading-none">{item.label}</span>
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
+      <div className={`space-y-1 overflow-hidden transition-all duration-200 ${open || collapsed ? "max-h-[2200px] opacity-100" : "max-h-0 opacity-0"}`}>
+        {items.map((item) => {
+          const link = (
+            <NavLink
+              to={item.to}
+              end={item.to === "/app" || item.to === "/dashboard"}
+              onClick={onMobileClose}
+              className={({ isActive }) => [
+                "group relative flex h-10 items-center gap-3 overflow-hidden rounded-md px-2.5 text-[13px] font-medium transition-all duration-150",
+                collapsed ? "mx-auto w-10 justify-center px-0" : "",
+                isActive
+                  ? `bg-white/[0.12] text-white shadow-lg ${glow} ring-1 ring-white/[0.10]`
+                  : "text-white/60 hover:bg-white/[0.07] hover:text-white",
+              ].join(" ")}
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <>
+                      <span className={`absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b ${accent}`} />
+                      <span className={`absolute inset-y-1 right-1 w-10 rounded-full bg-gradient-to-l ${accent} opacity-10 blur-md`} />
+                    </>
+                  )}
+                  <span className={`relative flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md transition-all duration-150 ${
+                    isActive
+                      ? `bg-gradient-to-br ${accent} text-zinc-950 shadow-sm`
+                      : "bg-white/[0.06] text-white/60 group-hover:bg-white/[0.10] group-hover:text-white"
+                  }`}>
+                    <item.icon className="h-3.5 w-3.5" />
+                  </span>
+                  {!collapsed && (
+                    <span className="relative min-w-0 flex-1 truncate leading-none">{item.label}</span>
+                  )}
+                </>
+              )}
+            </NavLink>
+          );
+
+          if (!collapsed) {
+            return <div key={item.to}>{link}</div>;
+          }
+
+          return (
+            <Tooltip key={item.to} delayDuration={150}>
+              <TooltipTrigger asChild>{link}</TooltipTrigger>
+              <TooltipContent side="right" className="border-zinc-800 bg-zinc-950 text-white">
+                {item.label}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
       </div>
     </div>
   );
@@ -221,20 +259,27 @@ const AppLayout = () => {
 
   const adminNavSections = useMemo(
     () =>
-      adminMenu.map((main: AdminMenuMain) => ({
-        label: main.name,
-        items: main.sections.flatMap((section) =>
-          section.screens.map((screen) => ({
-            to: resolveAdminRoutePath(screen.code, screen.route_path),
-            icon: Shield,
-            label: getAdminRouteTitle(screen.code, screen.screen_name),
-          })),
-        ),
-      })),
+      adminMenu
+        .map((main: AdminMenuMain) => ({
+          label: main.name,
+          items: main.sections.flatMap((section) =>
+            section.screens
+              .map((screen) => ({
+                to: resolveAdminRoutePath(screen.code, screen.route_path),
+                icon: Shield,
+                label: getAdminRouteTitle(screen.code, screen.screen_name),
+              }))
+              .filter((item) => item.to !== "/dashboard"),
+          ),
+        }))
+        .filter((section) => section.items.length > 0),
     [adminMenu],
   );
 
-  const allSections = [...navSections, ...wpeMastersSections, ...adminMasterSections, ...adminNavSections];
+  const allSections = useMemo(
+    () => [...navSections, ...wpeMastersSections, ...(adminNavSections.length > 0 ? adminNavSections : adminMasterSections)],
+    [adminNavSections],
+  );
 
   const breadcrumbItems = useMemo(() => {
     const path = location.pathname;
@@ -275,47 +320,66 @@ const AppLayout = () => {
 
       {/* ── Sidebar ─────────────────────────────────────── */}
       <aside
-        className={`fixed z-50 flex h-full flex-col transition-all duration-300 lg:static ${
-          collapsed ? "w-[60px]" : "w-[240px]"
+        className={`fixed z-50 flex h-full flex-col border-r border-black/20 shadow-2xl shadow-black/20 transition-all duration-300 lg:static ${
+          collapsed ? "w-[72px]" : "w-[278px]"
         } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
-        style={{ background: "linear-gradient(160deg, #0f172a 0%, #1a2744 60%, #162035 100%)" }}
+        style={{ background: "linear-gradient(180deg, #1e3f7a 0%, #1a3570 44%, #152b5e 100%)" }}
       >
         {/* ── Brand header ─── */}
-        <div className={`flex items-center border-b border-white/8 ${collapsed ? "justify-center px-0 py-4" : "gap-3 px-4 py-4"}`}>
+        <div className={`border-b border-white/[0.08] ${collapsed ? "px-3 py-4" : "px-4 py-4"}`}>
+          <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white text-zinc-950 shadow-lg shadow-sky-500/20 ring-1 ring-sky-300/30">
+              {!collapsed ? (
+                <img src="/logo.png" alt="WPE" className="h-8 w-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              ) : (
+                <span className="text-[12px] font-black">WPE</span>
+              )}
+            </div>
+
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <div className="truncate text-[14px] font-bold text-white">WPE ERP</div>
+                  <span className="rounded-full border border-sky-300/30 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold leading-none text-sky-200">
+                    Live
+                  </span>
+                </div>
+                <div className="truncate text-[11px] font-medium text-white/50">Plant operations suite</div>
+              </div>
+            )}
+
+            <button
+              onClick={() => { setCollapsed((c) => !c); setMobileOpen(false); }}
+              className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white lg:flex"
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+
+            <button onClick={() => setMobileOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-md text-white/50 hover:bg-white/[0.08] hover:text-white lg:hidden">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
           {!collapsed && (
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/25">
-              <img src="/logo.png" alt="WPE" className="h-5 w-5 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-              <span className="hidden text-[11px] font-black text-white [img+&]:hidden">W</span>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-md border border-white/[0.08] bg-white/[0.06] px-3 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Modules</div>
+                <div className="mt-1 text-sm font-bold text-white">{allSections.length}</div>
+              </div>
+              <div className="rounded-md border border-white/[0.08] bg-white/[0.06] px-3 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Session</div>
+                <div className="mt-1 flex items-center gap-1.5 text-sm font-bold text-sky-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
+                  Online
+                </div>
+              </div>
             </div>
           )}
-
-          {collapsed && (
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/25">
-              <span className="text-[11px] font-black text-white">W</span>
-            </div>
-          )}
-
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-bold text-white">WPE Admin</div>
-              <div className="truncate text-[10px] text-white/40">Operations Control</div>
-            </div>
-          )}
-
-          <button
-            onClick={() => { setCollapsed((c) => !c); setMobileOpen(false); }}
-            className="hidden h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-white/30 transition-colors hover:bg-white/8 hover:text-white/70 lg:flex"
-          >
-            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-          </button>
-
-          <button onClick={() => setMobileOpen(false)} className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 hover:text-white/70 lg:hidden">
-            <X className="h-4 w-4" />
-          </button>
         </div>
 
         {/* ── Nav ─── */}
-        <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className={`flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${collapsed ? "space-y-3 px-2 py-3" : "space-y-4 px-3 py-4"}`}>
           {allSections.map((section) => (
             <NavSection
               key={section.label}
@@ -329,34 +393,40 @@ const AppLayout = () => {
         </nav>
 
         {/* ── User footer ─── */}
-        <div className={`border-t border-white/8 ${collapsed ? "px-2 py-3" : "px-3 py-3"}`}>
+        <div className={`border-t border-white/[0.08] bg-black/[0.12] ${collapsed ? "px-3 py-3" : "px-3 py-3"}`}>
           {!collapsed ? (
-            <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
-              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-[11px] font-bold text-white shadow">
-                {initials}
+            <div className="flex items-center gap-2.5 rounded-md border border-white/[0.08] bg-white/[0.06] p-2">
+              <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-amber-300 to-emerald-300 text-[11px] font-black text-zinc-950 shadow">
+                <span>{initials}</span>
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#1e3f7a] bg-sky-300" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] font-semibold text-white/80">{user?.username ?? "User"}</div>
-                <div className="truncate text-[10px] text-white/35">{user?.email || "Authenticated"}</div>
+                <div className="truncate text-[13px] font-semibold text-white">{user?.username ?? "User"}</div>
+                <div className="truncate text-[10px] font-medium text-white/40">{user?.email || "Authenticated"}</div>
               </div>
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
                 title="Logout"
-                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-white/30 transition-colors hover:bg-red-500/15 hover:text-red-400 disabled:opacity-50"
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-red-500/15 hover:text-red-300 disabled:opacity-50"
               >
                 <LogOut className="h-3.5 w-3.5" />
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              title="Logout"
-              className="flex h-9 w-full items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-red-500/15 hover:text-red-400"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <div className="space-y-2">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-amber-300 to-emerald-300 text-[11px] font-black text-zinc-950">
+                {initials}
+              </div>
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                title="Logout"
+                className="flex h-10 w-full items-center justify-center rounded-md text-white/50 transition-colors hover:bg-red-500/15 hover:text-red-300"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </div>
       </aside>
