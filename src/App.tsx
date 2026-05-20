@@ -27,8 +27,11 @@ import UserScreensPage from "@/features/admin-master/pages/UserScreensPage";
 import UserTypesPage from "@/features/admin-master/pages/UserTypesPage";
 import { AuthProvider } from "@/providers/AuthProvider";
 import BlendingPage from "@/pages/BlendingPage";
+import BOMVariantPage from "@/pages/BOMVariantPage";
 import ContactsPage from "@/pages/ContactsPage";
 import DashboardPage from "@/pages/DashboardPage";
+import MachineMasterPage from "@/pages/MachineMasterPage";
+import RegrindPage from "@/pages/RegrindPage";
 import CompaniesPage from "@/features/common-master/pages/CompaniesPage";
 import ContinentsPage from "@/features/common-master/pages/ContinentsPage";
 import CountriesPage from "@/features/common-master/pages/CountriesPage";
@@ -78,7 +81,10 @@ const App = () => (
                   <Route path="/app/blending" element={<BlendingPage />} />
                   <Route path="/app/presales" element={<PresalesPage />} />
                   <Route path="/app/production" element={<ProductionPage />} />
+                  <Route path="/app/regrind" element={<RegrindPage />} />
                   <Route path="/app/store" element={<StorePage />} />
+                  <Route path="/oims/machines" element={<MachineMasterPage />} />
+                  <Route path="/oims/bom-variants" element={<BOMVariantPage />} />
                   <Route path="/app/grn" element={<GRNPage />} />
                   <Route path="/app/qcr" element={<QCRPage />} />
                   <Route path="/masters/continents" element={<ContinentsPage />} />
