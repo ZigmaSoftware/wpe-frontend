@@ -49,11 +49,12 @@ import { useAuth } from "@/providers/AuthProvider";
 
 /* ─── colour palette per section ──────────────────────────────────── */
 const sectionMeta: Record<string, { accent: string; iconBg: string }> = {
-  Workspace:      { accent: "from-blue-500 to-indigo-600",   iconBg: "bg-blue-500/15 text-blue-400" },
+  Workspace:        { accent: "from-blue-500 to-indigo-600",   iconBg: "bg-blue-500/15 text-blue-400" },
   "Common Masters": { accent: "from-violet-500 to-purple-600", iconBg: "bg-violet-500/15 text-violet-400" },
-  "WPE Masters":  { accent: "from-emerald-500 to-teal-600",  iconBg: "bg-emerald-500/15 text-emerald-400" },
-  "WPE Users":    { accent: "from-rose-500 to-pink-600",     iconBg: "bg-rose-500/15 text-rose-400" },
-  default:        { accent: "from-slate-500 to-slate-600",   iconBg: "bg-slate-500/15 text-slate-400" },
+  "WPE Masters":    { accent: "from-emerald-500 to-teal-600",  iconBg: "bg-emerald-500/15 text-emerald-400" },
+  "WPE Users":      { accent: "from-rose-500 to-pink-600",     iconBg: "bg-rose-500/15 text-rose-400" },
+  "OIMS Masters":   { accent: "from-amber-500 to-orange-600",  iconBg: "bg-amber-500/15 text-amber-400" },
+  default:          { accent: "from-slate-500 to-slate-600",   iconBg: "bg-slate-500/15 text-slate-400" },
 };
 
 const wpeMastersSections = [
@@ -105,14 +106,23 @@ const navSections = [
   {
     label: "Workspace",
     items: [
-      { to: "/app",           icon: LayoutDashboard, label: "Dashboard" },
-      { to: "/app/contacts",  icon: Users,           label: "Contacts" },
-      { to: "/app/items",     icon: Box,             label: "Inventory" },
-      { to: "/app/blending",  icon: Blend,           label: "Blending" },
-      { to: "/app/presales",  icon: FileText,        label: "Presales" },
-      { to: "/app/store",     icon: Archive,         label: "Store" },
-      { to: "/app/grn",       icon: Truck,           label: "GRN" },
-      { to: "/app/qcr",       icon: ClipboardCheck,  label: "QCR" },
+      { to: "/app",                icon: LayoutDashboard, label: "Dashboard" },
+      { to: "/app/contacts",       icon: Users,           label: "Contacts" },
+      { to: "/app/items",          icon: Box,             label: "Inventory" },
+      { to: "/app/blending",       icon: Blend,           label: "Blending" },
+      { to: "/app/presales",       icon: FileText,        label: "Presales" },
+      { to: "/app/production",     icon: Layers,          label: "Production" },
+      { to: "/app/regrind",        icon: Route,           label: "Regrind" },
+      { to: "/app/store",          icon: Archive,         label: "Store" },
+      { to: "/app/grn",            icon: Truck,           label: "GRN" },
+      { to: "/app/qcr",            icon: ClipboardCheck,  label: "QCR" },
+    ],
+  },
+  {
+    label: "OIMS Masters",
+    items: [
+      { to: "/oims/machines",      icon: Monitor,         label: "Machines" },
+      { to: "/oims/bom-variants",  icon: PackageSearch,   label: "BOM Variants" },
     ],
   },
   {
