@@ -5,5 +5,5 @@ export const CORE_API_URL = trimTrailingSlash(
 );
 
 export const GRN_API_URL = trimTrailingSlash(
-  import.meta.env.VITE_GRN_API_URL ?? "http://127.0.0.1:8000",
+  import.meta.env.VITE_GRN_API_URL ?? CORE_API_URL,
 );
