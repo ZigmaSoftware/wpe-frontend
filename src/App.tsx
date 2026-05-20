@@ -46,6 +46,7 @@ import ItemsPage from "@/pages/ItemsPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import PresalesPage from "@/pages/PresalesPage";
+import ProductionPage from "@/pages/ProductionPage";
 import QCRPage from "@/pages/QCRPage";
 import StorePage from "@/pages/StorePage";
 
@@ -60,7 +61,7 @@ const queryClient = new QueryClient({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
@@ -76,6 +77,7 @@ const App = () => (
                   <Route path="/app/items" element={<ItemsPage />} />
                   <Route path="/app/blending" element={<BlendingPage />} />
                   <Route path="/app/presales" element={<PresalesPage />} />
+                  <Route path="/app/production" element={<ProductionPage />} />
                   <Route path="/app/store" element={<StorePage />} />
                   <Route path="/app/grn" element={<GRNPage />} />
                   <Route path="/app/qcr" element={<QCRPage />} />

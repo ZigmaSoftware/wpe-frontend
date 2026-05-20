@@ -294,8 +294,186 @@ export type QcrRecord = {
   grn_reference_no: string;
   snapshot: Record<string, unknown>;
   status: string;
+  remarks: string | null;
   moved_to_qcr_at: string;
   moved_to_qcr_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// ── Presales ────────────────────────────────────────────────────────────────
+
+export type PresalesRequestItem = {
+  id: number;
+  item: number;
+  item_code: string;
+  item_name: string;
+  category: string;
+  quantity: string;
+  unit: string;
+  unit_display: string;
+  remarks: string;
+  created_at: string;
+};
+
+export type PresalesRequest = {
+  id: number;
+  request_no: string;
+  request_date: string;
+  category: "STORE" | "PURCHASE";
+  request_person: string;
+  department: string;
+  required_reason: string;
+  customer_type: string;
+  customer_name: string;
+  remarks: string;
+  status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "SENT_TO_PRODUCTION";
+  items: PresalesRequestItem[];
+  submitted_by: number | null;
+  submitted_by_username: string | null;
+  submitted_at: string | null;
+  approved_by: number | null;
+  approved_by_username: string | null;
+  approved_at: string | null;
+  approval_remarks: string;
+  sent_to_prod_at: string | null;
+  created_by: number | null;
+  created_by_username: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PresalesAuditLog = {
+  id: number;
+  action: string;
+  performed_by: number | null;
+  performed_by_username: string | null;
+  notes: string;
+  created_at: string;
+};
+
+// ── Production ───────────────────────────────────────────────────────────────
+
+export type ProductionMachine = {
+  id: number;
+  machine_code: string;
+  name: string;
+  machine_type: "HIGH_SPEED_MIX" | "GRANULATOR";
+  applicable_stages: string;
+  is_active: boolean;
+  location: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BOMVariantComponent = {
+  id: number;
+  item: number;
+  item_code: string;
+  item_name: string;
+  category: string;
+  target_weight_grams: string;
+  min_weight_grams: string;
+  max_weight_grams: string;
+  sequence: number;
+  is_regrind: boolean;
+  unit: string;
+};
+
+export type BOMVariant = {
+  id: number;
+  variant_code: string;
+  name: string;
+  product_item: number | null;
+  product_item_name: string | null;
+  revision: string;
+  is_active: boolean;
+  notes: string;
+  component_count?: number;
+  components?: BOMVariantComponent[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type BatchWeightEntry = {
+  id: number;
+  batch: number;
+  bom_component: number;
+  item: number;
+  item_code: string;
+  item_name: string;
+  target_weight_grams: string;
+  min_weight_grams: string;
+  max_weight_grams: string;
+  entered_weight_grams: string | null;
+  is_valid: boolean | null;
+  validation_notes: string;
+  source: string;
+  entered_by: number | null;
+  entered_by_username: string | null;
+  entered_at: string;
+};
+
+export type RegrindEntry = {
+  id: number;
+  production_order: number;
+  batch: number;
+  stage: string;
+  item: number;
+  item_code: string;
+  item_name: string;
+  quantity_grams: string;
+  source_lot_no: string;
+  is_valid: boolean;
+  validation_notes: string;
+  notes: string;
+  added_by: number | null;
+  added_by_username: string | null;
+  added_at: string;
+};
+
+export type ProductionBatch = {
+  id: number;
+  batch_no: string;
+  production_order: number;
+  bom_variant: number | null;
+  bom_variant_name: string | null;
+  stage: "AD" | "BL" | "GL";
+  machine: number | null;
+  machine_name: string | null;
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+  started_at: string | null;
+  completed_at: string | null;
+  operator: number | null;
+  operator_username: string | null;
+  notes: string;
+  weight_entries: BatchWeightEntry[];
+  regrind_entries: RegrindEntry[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductionOrder = {
+  id: number;
+  production_id: string;
+  production_type: string;
+  status: "PLANNED" | "IN_PROGRESS" | "PLAN_COMPLETED" | "CLOSED";
+  batch_number: string | null;
+  batch_date: string | null;
+  production_date: string;
+  shift: string;
+  planned_quantity: string;
+  planned_weight: string;
+  line_number: string | null;
+  line_name: string | null;
+  total_quantity: string;
+  total_cost: string;
+  material_cost: string;
+  other_cost: string;
+  start_date_time: string;
+  end_date_time: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 };
