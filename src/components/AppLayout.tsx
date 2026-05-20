@@ -33,17 +33,45 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { adminRouteMetas, adminRouteRegistry, getAdminRouteTitle, resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
 import type { AdminMenuMain } from "@/features/admin-master/types";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/AuthProvider";
 
 /* ─── colour palette per section ──────────────────────────────────── */
-const sectionMeta: Record<string, { accent: string; iconBg: string }> = {
-  Workspace:        { accent: "from-blue-500 to-indigo-600",   iconBg: "bg-blue-500/15 text-blue-400" },
-  "OIMS Masters":   { accent: "from-amber-500 to-orange-600",  iconBg: "bg-amber-500/15 text-amber-400" },
-  "Admin Master":   { accent: "from-cyan-500 to-sky-600",      iconBg: "bg-cyan-500/15 text-cyan-400" },
-  default:          { accent: "from-slate-500 to-slate-600",   iconBg: "bg-slate-500/15 text-slate-400" },
+type SectionMeta = {
+  accent: string;
+  iconBg: string;
+  marker: string;
+  glow: string;
+};
+
+const sectionMeta: Record<string, SectionMeta> = {
+  Workspace: {
+    accent: "from-blue-500 to-indigo-600",
+    iconBg: "bg-blue-500/15 text-blue-400",
+    marker: "bg-blue-300",
+    glow: "shadow-black/20",
+  },
+  "OIMS Masters": {
+    accent: "from-amber-500 to-orange-600",
+    iconBg: "bg-amber-500/15 text-amber-400",
+    marker: "bg-amber-300",
+    glow: "shadow-black/20",
+  },
+  "Admin Master": {
+    accent: "from-cyan-500 to-sky-600",
+    iconBg: "bg-cyan-500/15 text-cyan-400",
+    marker: "bg-cyan-300",
+    glow: "shadow-black/20",
+  },
+  default: {
+    accent: "from-slate-500 to-slate-600",
+    iconBg: "bg-slate-500/15 text-slate-400",
+    marker: "bg-slate-300",
+    glow: "shadow-black/20",
+  },
 };
 
 type NavItem = { to: string; icon: LucideIcon; label: string };

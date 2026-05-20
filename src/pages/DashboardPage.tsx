@@ -14,11 +14,41 @@ import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
 import { LoadingState } from "@/components/QueryState";
 
+type DashboardOverviewData = {
+  contacts: Contact[];
+  storeStockCount: number;
+  blendingStockCount: number;
+  presales: Presale[];
+  grn: GrnListResponse["data"];
+  qcr: QcrRecord[];
+  failedSources: string[];
+};
+
+const defaultOverviewData: DashboardOverviewData = {
+  contacts: [],
+  storeStockCount: 0,
+  blendingStockCount: 0,
+  presales: [],
+  grn: [],
+  qcr: [],
+  failedSources: [],
+};
+
+const toSettledValue = <T,>(result: PromiseSettledResult<T>, failedSources: string[], label: string): T | null => {
+  if (result.status === "fulfilled") {
+    return result.value;
+  }
+
+  failedSources.push(label);
+  return null;
+};
+
 const DashboardPage = () => {
   const overviewQuery = useQuery({
     queryKey: ["dashboard-overview"],
     queryFn: async () => {
-      const [contacts, storeStock, blendingStock, presales, grnActive, qcrActive] = await Promise.all([
+      const failedSources: string[] = [];
+      const [contacts, storeStock, blendingStock, presales, grnActive, qcrActive] = await Promise.allSettled([
         coreApi.get<Contact[] | { data: Contact[] }>("/api/contacts/contacts/"),
         coreApi.get<ApiSuccessEnvelope<ApiPaginatedResult<StoreStockRecord>>>("/api/store/stock/", {
           params: { page_size: 1 },
@@ -31,27 +61,46 @@ const DashboardPage = () => {
         grnApi.get<QcrRecord[]>("/api/qcr/"),
       ]);
 
-      const storeStockPayload = unwrapSuccessEnvelope(storeStock.data);
-      const blendingStockPayload = unwrapSuccessEnvelope(blendingStock.data);
+      const contactsResponse = toSettledValue(contacts, failedSources, "Contacts");
+      const storeStockResponse = toSettledValue(storeStock, failedSources, "Store");
+      const blendingStockResponse = toSettledValue(blendingStock, failedSources, "Blending");
+      const presalesResponse = toSettledValue(presales, failedSources, "Presales");
+      const grnResponse = toSettledValue(grnActive, failedSources, "GRN");
+      const qcrResponse = toSettledValue(qcrActive, failedSources, "QCR");
+
+      const storeStockPayload = storeStockResponse ? unwrapSuccessEnvelope(storeStockResponse.data) : null;
+      const blendingStockPayload = blendingStockResponse ? unwrapSuccessEnvelope(blendingStockResponse.data) : null;
 
       return {
-        contacts: normalizeListResponse<Contact>(contacts.data),
-        storeStockCount: storeStockPayload.count ?? 0,
-        blendingStockCount: blendingStockPayload.count ?? 0,
-        presales: normalizeListResponse<Presale>(presales.data),
-        grn: normalizeGrnResponse(grnActive.data).data,
-        qcr: qcrActive.data,
+        contacts: contactsResponse ? normalizeListResponse<Contact>(contactsResponse.data) : [],
+        storeStockCount: storeStockPayload?.count ?? 0,
+        blendingStockCount: blendingStockPayload?.count ?? 0,
+        presales: presalesResponse ? normalizeListResponse<Presale>(presalesResponse.data) : [],
+        grn: grnResponse ? normalizeGrnResponse(grnResponse.data).data : [],
+        qcr: qcrResponse?.data ?? [],
+        failedSources,
       };
     },
+    staleTime: 30_000,
   });
 
   if (overviewQuery.isLoading) {
     return <LoadingState label="Loading dashboard..." />;
   }
 
-  const isOffline = overviewQuery.isError;
-  const { contacts = [], storeStockCount = 0, blendingStockCount = 0, presales = [], grn = [], qcr = [] } =
-    overviewQuery.data ?? {};
+  const {
+    contacts,
+    storeStockCount,
+    blendingStockCount,
+    presales,
+    grn,
+    qcr,
+    failedSources,
+  } = overviewQuery.data ?? defaultOverviewData;
+  const hasFailures = failedSources.length > 0;
+  const failureLabel = failedSources.length > 2
+    ? `${failedSources.slice(0, 2).join(", ")} and ${failedSources.length - 2} more`
+    : failedSources.join(", ");
 
   return (
     <div className="space-y-6">
@@ -60,9 +109,9 @@ const DashboardPage = () => {
         description="Live counts from the Core and GRN backends."
       />
 
-      {isOffline && (
+      {hasFailures && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          Backend is currently unreachable — showing last known or placeholder values.
+          Some dashboard sources are currently unavailable: {failureLabel}. Showing the data that could be loaded.
         </div>
       )}
 
