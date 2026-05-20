@@ -1,6 +1,19 @@
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, EllipsisVertical, FileSpreadsheet, PackageOpen, Plus, RefreshCw, Search } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle,
+  Clock,
+  Edit3,
+  EllipsisVertical,
+  FileSpreadsheet,
+  PackageOpen,
+  Plus,
+  RefreshCw,
+  Search,
+  XCircle,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,15 +24,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/sonner";
 import ModuleFormFieldsReference from "@/components/ModuleFormFieldsReference";
@@ -120,6 +138,32 @@ interface GRNRecord {
   process_status: string;
   moved_to_qcr_at: string | null;
   moved_to_qcr_by: string | null;
+  // New GRN fields
+  qc_status: string | null;
+  purchase_bill_no: string | null;
+  purchase_bill_date: string | null;
+  dc_numbers: string | null;
+  delivery_days_gap: string | number | null;
+  delivery_note_no: string | null;
+  delivery_note_date: string | null;
+  order_rating: string | number | null;
+  grn_warehouse: string | null;
+  source_warehouse: string | null;
+  accepted_warehouse: string | null;
+  rejected_warehouse: string | null;
+  invoice_details: {
+    purchase_bill_no: string | null;
+    purchase_bill_date: string | null;
+    dc_numbers: string | null;
+    delivery_days_gap: number | null;
+    delivery_note_no: string | null;
+    delivery_note_date: string | null;
+    order_rating: number | null;
+    grn_warehouse: string | null;
+    source_warehouse: string | null;
+    accepted_warehouse: string | null;
+    rejected_warehouse: string | null;
+  } | null;
 }
 
 interface NestedGrnRecord extends Partial<GRNRecord> {
@@ -164,6 +208,29 @@ interface SummaryStat {
   value: string;
 }
 
+// GRN Edit Sheet form state
+interface GrnEditFormState {
+  // Invoice/Order Details (editable)
+  dc_numbers: string;
+  delivery_days_gap: string;
+  supplier_invoice_no: string;
+  supplier_invoice_date: string;
+  order_rating: string;
+  gateentry_bookno: string;
+  gateentry_bookdate: string;
+  grn_warehouse: string;
+  source_warehouse: string;
+  accepted_warehouse: string;
+  rejected_warehouse: string;
+  delivery_note_no: string;
+  delivery_note_date: string;
+  // Requirement (editable)
+  req_date: string;
+  req_person_name: string;
+  req_department: string;
+  req_reason: string;
+}
+
 const GRN_API_URL = import.meta.env.VITE_GRN_API_URL ?? "/api/grn/";
 const GRN_MOVED_API_URL = import.meta.env.VITE_GRN_MOVED_API_URL ?? "/api/grn/moved/";
 const GRN_IMPORT_API_URL = import.meta.env.VITE_GRN_IMPORT_API_URL ?? "/api/grn/import/";
@@ -171,6 +238,31 @@ const QCR_API_URL = import.meta.env.VITE_QCR_API_URL ?? "/api/qcr/";
 const GRN_MOVE_TO_QCR_API_URL = import.meta.env.VITE_GRN_MOVE_TO_QCR_API_URL ?? "/api/grn";
 const QCR_STATUS_API_URL = import.meta.env.VITE_QCR_STATUS_API_URL ?? "/api/qcr";
 const QCR_CANCELLED_API_URL = import.meta.env.VITE_QCR_CANCELLED_API_URL ?? "/api/qcr/cancelled/";
+const GRN_DETAIL_API_URL = import.meta.env.VITE_GRN_DETAIL_API_URL ?? "/api/grn";
+
+const MOVE_TO_QCR_MANDATORY_FIELDS: Array<keyof GRNRecord> = [
+  "supplier_id",
+  "supplier_invoice_no",
+  "supplier_invoice_date",
+  "delivery_note_no",
+  "delivery_note_date",
+  "gateentry_bookno",
+  "grn_warehouse",
+  "accepted_warehouse",
+  "rejected_warehouse",
+];
+
+const MOVE_TO_QCR_FIELD_LABELS: Record<string, string> = {
+  supplier_id: "Supplier ID",
+  supplier_invoice_no: "Supplier Invoice No",
+  supplier_invoice_date: "Supplier Invoice Date",
+  delivery_note_no: "Delivery Note No",
+  delivery_note_date: "Delivery Note Date",
+  gateentry_bookno: "Gate Entry Book No",
+  grn_warehouse: "GRN Warehouse",
+  accepted_warehouse: "Accepted Warehouse",
+  rejected_warehouse: "Rejected Warehouse",
+};
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -197,12 +289,43 @@ const toNumber = (value: string | number | null | undefined) => {
 
 const toDisplayDate = (value: string | null | undefined) => value ?? "-";
 
+const getGrnStatusBadgeClass = (processStatus: string): string => {
+  if (processStatus === "GRN Process") {
+    return "border-blue-200 bg-blue-500/10 text-blue-700";
+  }
+  if (processStatus === "Moved to QCR") {
+    return "border-amber-200 bg-amber-500/10 text-amber-700";
+  }
+  if (processStatus === "GRN Approved" || processStatus === "Moved to GRN") {
+    return "border-emerald-200 bg-emerald-500/10 text-emerald-700";
+  }
+  if (processStatus === "Rejected") {
+    return "border-rose-200 bg-rose-500/10 text-rose-700";
+  }
+  return "bg-success/10 text-success";
+};
+
+const getGrnStatusDisplayLabel = (processStatus: string): string => {
+  if (processStatus === "Moved to QCR") return "QCR Pending";
+  if (processStatus === "GRN Approved" || processStatus === "Moved to GRN") return "Accepted";
+  return processStatus;
+};
+
+const getGrnStatusIcon = (processStatus: string) => {
+  if (processStatus === "GRN Process") return <Clock className="h-3 w-3" />;
+  if (processStatus === "Moved to QCR") return <ArrowRight className="h-3 w-3" />;
+  if (processStatus === "GRN Approved" || processStatus === "Moved to GRN") return <CheckCircle className="h-3 w-3" />;
+  if (processStatus === "Rejected") return <XCircle className="h-3 w-3" />;
+  return null;
+};
+
 const normalizeGrnRecord = (record: NestedGrnRecord): GRNRecord => {
   const documentDetails = record.document_details ?? {};
   const requirementDetails = record.document_requirement_details ?? {};
   const supplierDetails = record.supplier_details ?? {};
   const firstItem = record.items?.[0] ?? {};
   const valueDetails = record.value_details ?? {};
+  const invoiceDetails = (record as Record<string, unknown>).invoice_details as Record<string, unknown> | null ?? {};
 
   return {
     id: record.id ?? 0,
@@ -270,8 +393,42 @@ const normalizeGrnRecord = (record: NestedGrnRecord): GRNRecord => {
     process_status: record.process_status ?? (record.status === false ? "Moved to QCR" : "GRN Process"),
     moved_to_qcr_at: record.moved_to_qcr_at ?? null,
     moved_to_qcr_by: record.moved_to_qcr_by ?? null,
+    // New GRN fields
+    qc_status: record.qc_status ?? null,
+    purchase_bill_no: (record.purchase_bill_no ?? invoiceDetails.purchase_bill_no ?? null) as string | null,
+    purchase_bill_date: (record.purchase_bill_date ?? invoiceDetails.purchase_bill_date ?? null) as string | null,
+    dc_numbers: (record.dc_numbers ?? invoiceDetails.dc_numbers ?? null) as string | null,
+    delivery_days_gap: (record.delivery_days_gap ?? invoiceDetails.delivery_days_gap ?? null) as number | null,
+    delivery_note_no: (record.delivery_note_no ?? invoiceDetails.delivery_note_no ?? null) as string | null,
+    delivery_note_date: (record.delivery_note_date ?? invoiceDetails.delivery_note_date ?? null) as string | null,
+    order_rating: (record.order_rating ?? invoiceDetails.order_rating ?? null) as number | null,
+    grn_warehouse: (record.grn_warehouse ?? invoiceDetails.grn_warehouse ?? null) as string | null,
+    source_warehouse: (record.source_warehouse ?? invoiceDetails.source_warehouse ?? null) as string | null,
+    accepted_warehouse: (record.accepted_warehouse ?? invoiceDetails.accepted_warehouse ?? null) as string | null,
+    rejected_warehouse: (record.rejected_warehouse ?? invoiceDetails.rejected_warehouse ?? null) as string | null,
+    invoice_details: null,
   };
 };
+
+const buildEditFormFromRecord = (record: GRNRecord): GrnEditFormState => ({
+  dc_numbers: record.dc_numbers ?? "",
+  delivery_days_gap: record.delivery_days_gap !== null ? String(record.delivery_days_gap) : "",
+  supplier_invoice_no: record.supplier_invoice_no ?? "",
+  supplier_invoice_date: record.supplier_invoice_date ?? "",
+  order_rating: record.order_rating !== null ? String(record.order_rating) : "",
+  gateentry_bookno: record.gateentry_bookno ?? "",
+  gateentry_bookdate: record.gateentry_bookdate ?? "",
+  grn_warehouse: record.grn_warehouse ?? "",
+  source_warehouse: record.source_warehouse ?? "",
+  accepted_warehouse: record.accepted_warehouse ?? "",
+  rejected_warehouse: record.rejected_warehouse ?? "",
+  delivery_note_no: record.delivery_note_no ?? "",
+  delivery_note_date: record.delivery_note_date ?? "",
+  req_date: record.req_date ?? "",
+  req_person_name: record.req_person_name ?? "",
+  req_department: record.req_department ?? "",
+  req_reason: record.req_reason ?? "",
+});
 
 const fetchGrnRecords = async (scope: "process" | "moved" = "process"): Promise<GRNRecord[]> => {
   const url = scope === "moved" ? GRN_MOVED_API_URL : GRN_API_URL;
@@ -560,6 +717,13 @@ const PurchasesInwardsPage = () => {
   const [isUpdatingQcrStatus, setIsUpdatingQcrStatus] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // GRN Edit Sheet state
+  const [isGrnEditSheetOpen, setIsGrnEditSheetOpen] = useState(false);
+  const [editingGrnRecord, setEditingGrnRecord] = useState<GRNRecord | null>(null);
+  const [grnEditForm, setGrnEditForm] = useState<GrnEditFormState | null>(null);
+  const [isSavingGrn, setIsSavingGrn] = useState(false);
+  const [isMovingToQcrFromSheet, setIsMovingToQcrFromSheet] = useState(false);
+
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const selectedTab = activeProcess in statusFilterMap ? activeProcess : "all";
   const isBackendTab = selectedTab === "grn" || selectedTab === "grn_process" || selectedTab === "qcr" || selectedTab === "cancelled";
@@ -745,6 +909,169 @@ const PurchasesInwardsPage = () => {
     }
   };
 
+  // GRN Edit Sheet handlers
+  const openGrnEditSheet = (record: GRNRecord) => {
+    setEditingGrnRecord(record);
+    setGrnEditForm(buildEditFormFromRecord(record));
+    setIsGrnEditSheetOpen(true);
+  };
+
+  const closeGrnEditSheet = () => {
+    if (isSavingGrn || isMovingToQcrFromSheet) return;
+    setIsGrnEditSheetOpen(false);
+    setEditingGrnRecord(null);
+    setGrnEditForm(null);
+  };
+
+  const updateGrnEditField = (field: keyof GrnEditFormState, value: string) => {
+    setGrnEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const buildGrnPatchPayload = (form: GrnEditFormState) => ({
+    document_details: {
+      gateentry_bookno: form.gateentry_bookno || null,
+      gateentry_bookdate: form.gateentry_bookdate || null,
+      supplier_invoice_no: form.supplier_invoice_no || null,
+      supplier_invoice_date: form.supplier_invoice_date || null,
+    },
+    invoice_details: {
+      dc_numbers: form.dc_numbers || null,
+      delivery_days_gap: form.delivery_days_gap !== "" ? Number(form.delivery_days_gap) : null,
+      delivery_note_no: form.delivery_note_no || null,
+      delivery_note_date: form.delivery_note_date || null,
+      order_rating: form.order_rating !== "" ? Number(form.order_rating) : null,
+      grn_warehouse: form.grn_warehouse || null,
+      source_warehouse: form.source_warehouse || null,
+      accepted_warehouse: form.accepted_warehouse || null,
+      rejected_warehouse: form.rejected_warehouse || null,
+    },
+    document_requirement_details: {
+      req_date: form.req_date || null,
+      req_person_name: form.req_person_name || null,
+      req_department: form.req_department || null,
+      req_reason: form.req_reason || null,
+    },
+  });
+
+  const validateMoveToQcrFields = (record: GRNRecord, form: GrnEditFormState): string[] => {
+    const merged: Record<string, string | null> = {
+      supplier_id: record.supplier_id,
+      supplier_invoice_no: form.supplier_invoice_no || null,
+      supplier_invoice_date: form.supplier_invoice_date || null,
+      delivery_note_no: form.delivery_note_no || null,
+      delivery_note_date: form.delivery_note_date || null,
+      gateentry_bookno: form.gateentry_bookno || null,
+      grn_warehouse: form.grn_warehouse || null,
+      accepted_warehouse: form.accepted_warehouse || null,
+      rejected_warehouse: form.rejected_warehouse || null,
+    };
+
+    return MOVE_TO_QCR_MANDATORY_FIELDS
+      .filter((field) => !merged[field as string])
+      .map((field) => MOVE_TO_QCR_FIELD_LABELS[field] ?? field);
+  };
+
+  const handleSaveGrnDetails = async (): Promise<boolean> => {
+    if (!editingGrnRecord || !grnEditForm) return false;
+
+    setIsSavingGrn(true);
+    try {
+      const response = await fetch(`${GRN_DETAIL_API_URL}/${editingGrnRecord.id}/`, {
+        method: "PATCH",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(buildGrnPatchPayload(grnEditForm)),
+      });
+
+      const responseText = await response.text();
+      let payload: { message?: string } = {};
+
+      if (responseText.length > 0) {
+        try {
+          payload = JSON.parse(responseText) as { message?: string };
+        } catch {
+          payload = { message: responseText };
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? "The GRN details could not be saved.");
+      }
+
+      await refetchGrn();
+      toast.success(payload.message ?? "GRN details saved successfully.");
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The GRN details could not be saved.");
+      return false;
+    } finally {
+      setIsSavingGrn(false);
+    }
+  };
+
+  const handleMoveToQcrFromSheet = async () => {
+    if (!editingGrnRecord || !grnEditForm) return;
+
+    // Validate mandatory fields
+    const missingFields = validateMoveToQcrFields(editingGrnRecord, grnEditForm);
+    if (missingFields.length > 0) {
+      toast.error(`Please fill in the following required fields before moving to QCR: ${missingFields.join(", ")}.`);
+      return;
+    }
+
+    setIsMovingToQcrFromSheet(true);
+    try {
+      // First save the details
+      const saveResponse = await fetch(`${GRN_DETAIL_API_URL}/${editingGrnRecord.id}/`, {
+        method: "PATCH",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(buildGrnPatchPayload(grnEditForm)),
+      });
+
+      if (!saveResponse.ok) {
+        const saveText = await saveResponse.text();
+        let savePayload: { message?: string } = {};
+        try { savePayload = JSON.parse(saveText) as { message?: string }; } catch { /* empty */ }
+        throw new Error(savePayload.message ?? "The GRN details could not be saved before moving to QCR.");
+      }
+
+      // Then move to QCR
+      const moveResponse = await fetch(`${GRN_MOVE_TO_QCR_API_URL}/${editingGrnRecord.id}/move-to-qcr/`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      const moveText = await moveResponse.text();
+      let movePayload: { message?: string } = {};
+      if (moveText.length > 0) {
+        try { movePayload = JSON.parse(moveText) as { message?: string }; } catch { movePayload = { message: moveText }; }
+      }
+
+      if (!moveResponse.ok) {
+        throw new Error(movePayload.message ?? "The GRN record could not be moved to QCR.");
+      }
+
+      await Promise.all([refetchGrn(), refetchQcr()]);
+      toast.success(movePayload.message ?? "GRN record moved to QCR successfully.");
+      setIsGrnEditSheetOpen(false);
+      setEditingGrnRecord(null);
+      setGrnEditForm(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The operation could not be completed.");
+    } finally {
+      setIsMovingToQcrFromSheet(false);
+    }
+  };
+
   const legacyFilteredRows = useMemo(() => {
     const statuses = statusFilterMap[selectedTab] ?? statusFilterMap.all;
     const normalized = deferredSearch;
@@ -872,6 +1199,8 @@ const PurchasesInwardsPage = () => {
   const hasBackendError = isQcrDataTab ? isQcrError : isGrnError;
 
   const warehouseOptions = Array.from(new Set(LEGACY_INWARDS.map((record) => record.warehouse))).sort((left, right) => left.localeCompare(right));
+
+  const isGrnFieldsLocked = editingGrnRecord?.process_status !== "GRN Process";
 
   return (
     <div className="space-y-6">
@@ -1039,19 +1368,23 @@ const PurchasesInwardsPage = () => {
                         <TableHead>Total Value</TableHead>
                         <TableHead className="w-32">Date</TableHead>
                         <TableHead>Status</TableHead>
-                        {selectedTab === "grn_process" ? <TableHead className="w-20 text-right">Action</TableHead> : null}
+                        <TableHead className="w-20 text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {grnFilteredRows.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={selectedTab === "grn_process" ? 10 : 9} className="h-24 text-center text-muted-foreground">
+                          <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                             No GRN records match the current search or filter.
                           </TableCell>
                         </TableRow>
                       ) : (
                         grnFilteredRows.map((record, index) => (
-                          <TableRow key={record.id} className="hover:bg-muted/50">
+                          <TableRow
+                            key={record.id}
+                            className={cn("hover:bg-muted/50", selectedTab === "grn_process" ? "cursor-pointer" : "")}
+                            onClick={selectedTab === "grn_process" ? () => openGrnEditSheet(record) : undefined}
+                          >
                             <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                             <TableCell className="font-mono text-xs font-medium">{record.grn_no}</TableCell>
                             <TableCell>
@@ -1072,31 +1405,42 @@ const PurchasesInwardsPage = () => {
                             <TableCell>
                               <Badge
                                 variant="outline"
-                                className={record.process_status === "Moved to QCR" ? "border-emerald-200 bg-emerald-500/10 text-emerald-700" : "bg-success/10 text-success"}
+                                className={cn("gap-1", getGrnStatusBadgeClass(record.process_status))}
                               >
-                                {record.process_status}
+                                {getGrnStatusIcon(record.process_status)}
+                                {getGrnStatusDisplayLabel(record.process_status)}
                               </Badge>
                             </TableCell>
-                            {selectedTab === "grn_process" ? (
-                              <TableCell className="text-right">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <EllipsisVertical className="h-4 w-4" />
-                                      <span className="sr-only">Open row actions</span>
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      onClick={() => openMoveDialog(record)}
-                                      disabled={record.process_status !== "GRN Process"}
-                                    >
-                                      Move to QCR
+                            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <EllipsisVertical className="h-4 w-4" />
+                                    <span className="sr-only">Open row actions</span>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {selectedTab === "grn_process" ? (
+                                    <>
+                                      <DropdownMenuItem onClick={() => openGrnEditSheet(record)}>
+                                        <Edit3 className="mr-2 h-4 w-4" />
+                                        Edit GRN Details
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => openMoveDialog(record)}
+                                        disabled={record.process_status !== "GRN Process"}
+                                      >
+                                        Move to QCR
+                                      </DropdownMenuItem>
+                                    </>
+                                  ) : (
+                                    <DropdownMenuItem disabled>
+                                      No actions available
                                     </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </TableCell>
-                            ) : null}
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
                           </TableRow>
                         ))
                       )}
@@ -1152,12 +1496,12 @@ const PurchasesInwardsPage = () => {
                                   className={
                                     record.status === "Rejected"
                                       ? "border-rose-200 bg-rose-500/10 text-rose-700"
-                                      : record.status === "Moved to GRN"
-                                        ? "border-blue-200 bg-blue-500/10 text-blue-700"
+                                      : record.status === "Moved to GRN" || record.status === "GRN Approved"
+                                        ? "border-emerald-200 bg-emerald-500/10 text-emerald-700"
                                         : "border-emerald-200 bg-emerald-500/10 text-emerald-700"
                                   }
                                 >
-                                  {record.status}
+                                  {record.status === "Moved to GRN" || record.status === "GRN Approved" ? "Accepted" : record.status}
                                 </Badge>
                               </TableCell>
                               {isCancelledTab ? null : (
@@ -1174,7 +1518,7 @@ const PurchasesInwardsPage = () => {
                                         onClick={() => openQcrActionDialog(record, "move_to_grn")}
                                         disabled={record.status !== "Active"}
                                       >
-                                        Move to GRN
+                                        Accept
                                       </DropdownMenuItem>
                                       <DropdownMenuItem
                                         onClick={() => openQcrActionDialog(record, "reject")}
@@ -1251,6 +1595,415 @@ const PurchasesInwardsPage = () => {
         </TabsContent>
       </Tabs>
 
+      {/* GRN Process Edit Sheet */}
+      <Sheet open={isGrnEditSheetOpen} onOpenChange={(open) => { if (!open) closeGrnEditSheet(); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl" side="right">
+          <SheetHeader className="pb-2">
+            <SheetTitle className="flex items-center gap-2">
+              <Edit3 className="h-5 w-5 text-primary" />
+              GRN Details
+              {editingGrnRecord ? (
+                <span className="font-mono text-sm font-normal text-muted-foreground">
+                  {editingGrnRecord.grn_no}
+                </span>
+              ) : null}
+            </SheetTitle>
+            <SheetDescription>
+              {isGrnFieldsLocked
+                ? "This record has already been moved. All fields are locked."
+                : "Edit the GRN process details and save or move to QCR."}
+            </SheetDescription>
+            {editingGrnRecord ? (
+              <div className="mt-1">
+                <Badge
+                  variant="outline"
+                  className={cn("gap-1", getGrnStatusBadgeClass(editingGrnRecord.process_status))}
+                >
+                  {getGrnStatusIcon(editingGrnRecord.process_status)}
+                  {getGrnStatusDisplayLabel(editingGrnRecord.process_status)}
+                </Badge>
+              </div>
+            ) : null}
+          </SheetHeader>
+
+          <Separator className="my-3" />
+
+          {editingGrnRecord && grnEditForm ? (
+            <Accordion type="multiple" defaultValue={["supplier", "bills", "invoice", "requirement"]} className="space-y-1">
+
+              {/* Section 1: Supplier Details (read-only) */}
+              <AccordionItem value="supplier" className="rounded-lg border px-3">
+                <AccordionTrigger className="py-3 text-sm font-semibold hover:no-underline">
+                  Supplier Details
+                </AccordionTrigger>
+                <AccordionContent className="pb-3">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Supplier ID</p>
+                      <p className="font-medium">{editingGrnRecord.supplier_id ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Trade Name</p>
+                      <p className="font-medium">{editingGrnRecord.trade_name ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Contact Name</p>
+                      <p className="font-medium">{editingGrnRecord.contact_name ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">GSTIN</p>
+                      <p className="font-medium font-mono text-xs">{editingGrnRecord.gstin ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Phone</p>
+                      <p className="font-medium">{editingGrnRecord.phone_number ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Email</p>
+                      <p className="font-medium text-xs break-all">{editingGrnRecord.email ?? "-"}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-xs text-muted-foreground">Address</p>
+                      <p className="font-medium">
+                        {[editingGrnRecord.address1, editingGrnRecord.address2, editingGrnRecord.location, editingGrnRecord.state_name, editingGrnRecord.pincode]
+                          .filter(Boolean)
+                          .join(", ") || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Category</p>
+                      <p className="font-medium">{editingGrnRecord.category ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Currency</p>
+                      <p className="font-medium">{editingGrnRecord.currency ?? "-"}</p>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Section 2: Bills (read-only) */}
+              <AccordionItem value="bills" className="rounded-lg border px-3">
+                <AccordionTrigger className="py-3 text-sm font-semibold hover:no-underline">
+                  Bills
+                </AccordionTrigger>
+                <AccordionContent className="pb-3">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">GRN No</p>
+                      <p className="font-medium font-mono text-xs">{editingGrnRecord.grn_no}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">GRN Date</p>
+                      <p className="font-medium">{toDisplayDate(editingGrnRecord.grn_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">PO No</p>
+                      <p className="font-medium font-mono text-xs">{editingGrnRecord.po_no ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">PO Date</p>
+                      <p className="font-medium">{toDisplayDate(editingGrnRecord.po_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Purchase Bill No</p>
+                      <p className="font-medium">{editingGrnRecord.purchase_bill_no ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Purchase Bill Date</p>
+                      <p className="font-medium">{toDisplayDate(editingGrnRecord.purchase_bill_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Before Tax</p>
+                      <p className="font-medium">{formatCurrency(toNumber(editingGrnRecord.total_before_tax))}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Tax</p>
+                      <p className="font-medium">{formatCurrency(toNumber(editingGrnRecord.total_tax_amount))}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total After Tax</p>
+                      <p className="font-medium text-primary">{formatCurrency(toNumber(editingGrnRecord.total_after_tax))}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Tolerance</p>
+                      <p className="font-medium">{editingGrnRecord.tolerance ?? "-"}</p>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Section 3: Invoice / Order Details (editable) */}
+              <AccordionItem value="invoice" className="rounded-lg border px-3">
+                <AccordionTrigger className="py-3 text-sm font-semibold hover:no-underline">
+                  Invoice / Order Details
+                </AccordionTrigger>
+                <AccordionContent className="pb-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="supplier_invoice_no" className="text-xs">
+                        Supplier Invoice No <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="supplier_invoice_no"
+                        value={grnEditForm.supplier_invoice_no}
+                        onChange={(e) => updateGrnEditField("supplier_invoice_no", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. INV-2024-001"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="supplier_invoice_date" className="text-xs">
+                        Supplier Invoice Date <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="supplier_invoice_date"
+                        type="date"
+                        value={grnEditForm.supplier_invoice_date}
+                        onChange={(e) => updateGrnEditField("supplier_invoice_date", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="delivery_note_no" className="text-xs">
+                        Delivery Note No <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="delivery_note_no"
+                        value={grnEditForm.delivery_note_no}
+                        onChange={(e) => updateGrnEditField("delivery_note_no", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. DN-0001"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="delivery_note_date" className="text-xs">
+                        Delivery Note Date <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="delivery_note_date"
+                        type="date"
+                        value={grnEditForm.delivery_note_date}
+                        onChange={(e) => updateGrnEditField("delivery_note_date", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="gateentry_bookno" className="text-xs">
+                        Gate Entry Book No <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="gateentry_bookno"
+                        value={grnEditForm.gateentry_bookno}
+                        onChange={(e) => updateGrnEditField("gateentry_bookno", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. GE-4501"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="gateentry_bookdate" className="text-xs">
+                        Gate Entry Book Date
+                      </Label>
+                      <Input
+                        id="gateentry_bookdate"
+                        type="date"
+                        value={grnEditForm.gateentry_bookdate}
+                        onChange={(e) => updateGrnEditField("gateentry_bookdate", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="grn_warehouse" className="text-xs">
+                        GRN Warehouse <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="grn_warehouse"
+                        value={grnEditForm.grn_warehouse}
+                        onChange={(e) => updateGrnEditField("grn_warehouse", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. Main Store"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="source_warehouse" className="text-xs">
+                        Source Warehouse
+                      </Label>
+                      <Input
+                        id="source_warehouse"
+                        value={grnEditForm.source_warehouse}
+                        onChange={(e) => updateGrnEditField("source_warehouse", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. Dispatch Bay"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="accepted_warehouse" className="text-xs">
+                        Accepted Warehouse <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="accepted_warehouse"
+                        value={grnEditForm.accepted_warehouse}
+                        onChange={(e) => updateGrnEditField("accepted_warehouse", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. Quality Store"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="rejected_warehouse" className="text-xs">
+                        Rejected Warehouse <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="rejected_warehouse"
+                        value={grnEditForm.rejected_warehouse}
+                        onChange={(e) => updateGrnEditField("rejected_warehouse", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. Rejection Bay"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="dc_numbers" className="text-xs">DC Numbers</Label>
+                      <Input
+                        id="dc_numbers"
+                        value={grnEditForm.dc_numbers}
+                        onChange={(e) => updateGrnEditField("dc_numbers", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. DC-001, DC-002"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="delivery_days_gap" className="text-xs">Delivery Days Gap</Label>
+                      <Input
+                        id="delivery_days_gap"
+                        type="number"
+                        value={grnEditForm.delivery_days_gap}
+                        onChange={(e) => updateGrnEditField("delivery_days_gap", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. 3"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="order_rating" className="text-xs">Order Rating</Label>
+                      <Input
+                        id="order_rating"
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={grnEditForm.order_rating}
+                        onChange={(e) => updateGrnEditField("order_rating", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="1–10"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Section 4: Requirement (editable) */}
+              <AccordionItem value="requirement" className="rounded-lg border px-3">
+                <AccordionTrigger className="py-3 text-sm font-semibold hover:no-underline">
+                  Requirement
+                </AccordionTrigger>
+                <AccordionContent className="pb-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="req_date" className="text-xs">Requirement Date</Label>
+                      <Input
+                        id="req_date"
+                        type="date"
+                        value={grnEditForm.req_date}
+                        onChange={(e) => updateGrnEditField("req_date", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="req_person_name" className="text-xs">Requested By</Label>
+                      <Input
+                        id="req_person_name"
+                        value={grnEditForm.req_person_name}
+                        onChange={(e) => updateGrnEditField("req_person_name", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="Person name"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="req_department" className="text-xs">Department</Label>
+                      <Input
+                        id="req_department"
+                        value={grnEditForm.req_department}
+                        onChange={(e) => updateGrnEditField("req_department", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="e.g. Production"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <Label htmlFor="req_reason" className="text-xs">Reason / Notes</Label>
+                      <Textarea
+                        id="req_reason"
+                        value={grnEditForm.req_reason}
+                        onChange={(e) => updateGrnEditField("req_reason", e.target.value)}
+                        disabled={isGrnFieldsLocked}
+                        placeholder="Reason for requirement..."
+                        rows={3}
+                        className="text-sm resize-none"
+                      />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+            </Accordion>
+          ) : null}
+
+          <SheetFooter className="mt-4 flex-col gap-2 sm:flex-col">
+            {isGrnFieldsLocked ? (
+              <p className="text-center text-xs text-muted-foreground">
+                Fields are locked because this record is no longer in GRN Process status.
+              </p>
+            ) : (
+              <>
+                <Button
+                  className="w-full gap-2"
+                  variant="outline"
+                  onClick={() => void handleSaveGrnDetails()}
+                  disabled={isSavingGrn || isMovingToQcrFromSheet}
+                >
+                  {isSavingGrn ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+                  {isSavingGrn ? "Saving..." : "Save Details"}
+                </Button>
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => void handleMoveToQcrFromSheet()}
+                  disabled={isSavingGrn || isMovingToQcrFromSheet}
+                >
+                  {isMovingToQcrFromSheet ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4" />
+                  )}
+                  {isMovingToQcrFromSheet ? "Processing..." : "Move to QCR"}
+                </Button>
+              </>
+            )}
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
       <AlertDialog
         open={isMoveDialogOpen}
         onOpenChange={(open) => {
@@ -1302,7 +2055,7 @@ const PurchasesInwardsPage = () => {
             <AlertDialogTitle>QCR Process Status Update</AlertDialogTitle>
             <AlertDialogDescription>
               {selectedQcrAction === "move_to_grn"
-                ? "Do you want to move this QCR record to GRN?"
+                ? "Do you want to accept this QCR record and move it to GRN?"
                 : "Do you want to reject this QCR record?"}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1332,7 +2085,7 @@ const PurchasesInwardsPage = () => {
               {isUpdatingQcrStatus
                 ? "Updating..."
                 : selectedQcrAction === "move_to_grn"
-                  ? "Move to GRN"
+                  ? "Accept"
                   : "Reject"}
             </AlertDialogAction>
           </AlertDialogFooter>

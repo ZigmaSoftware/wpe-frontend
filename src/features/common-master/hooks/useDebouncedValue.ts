@@ -8,5 +8,7 @@ export const useDebouncedValue = <T,>(value: T, delay = 400) => {
     return () => window.clearTimeout(timer);
   }, [delay, value]);
 
+  console.log("debounced", debounced);
+
   return debounced;
 };

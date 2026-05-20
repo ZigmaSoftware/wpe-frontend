@@ -228,15 +228,6 @@ const BlendingPage = () => {
     },
   });
 
-  const storeStockQuery = useQuery({
-    queryKey: ["store-intake-options"],
-    queryFn: async () => {
-      const response = await coreApi.get<StoreStockRecord[] | { data?: { results?: StoreStockRecord[] } }>(
-        "/api/blending/request-stock/",
-      );
-      return unwrapResults(response.data);
-    },
-  });
 
   const requestsQuery = useQuery({
     queryKey: ["store-requests"],
@@ -358,12 +349,10 @@ const BlendingPage = () => {
         </Button>
       </div>
 
-      {blendingQuery.isLoading || storeStockQuery.isLoading || requestsQuery.isLoading ? <LoadingState label="Loading additive workspace..." /> : null}
-      {blendingQuery.isError || storeStockQuery.isError || requestsQuery.isError ? (
-        <ErrorState description="Additive request data could not be loaded from the backend." />
-      ) : null}
+      {blendingQuery.isLoading ? <LoadingState label="Loading blending workspace..." /> : null}
+      {blendingQuery.isError ? <ErrorState description="Blending stock could not be loaded from the backend." /> : null}
 
-      {!blendingQuery.isLoading && !storeStockQuery.isLoading && !requestsQuery.isLoading && !blendingQuery.isError && !storeStockQuery.isError && !requestsQuery.isError ? (
+      {!blendingQuery.isLoading && !blendingQuery.isError ? (
         <Tabs defaultValue="stock" className="space-y-4">
           <TabsList>
             <TabsTrigger value="stock">Blending Stock</TabsTrigger>
@@ -407,7 +396,9 @@ const BlendingPage = () => {
           </TabsContent>
 
           <TabsContent value="requests">
-            {additiveRequests.length ? (
+            {requestsQuery.isLoading ? <LoadingState label="Loading store requests..." /> : null}
+            {requestsQuery.isError ? <ErrorState description="Store requests could not be loaded." /> : null}
+            {!requestsQuery.isLoading && !requestsQuery.isError && additiveRequests.length ? (
               <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                 <Table>
                   <TableHeader>

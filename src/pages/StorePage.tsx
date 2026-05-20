@@ -343,8 +343,8 @@ const StorePage = () => {
     );
   };
 
-  const isLoading = intakeQuery.isLoading || transactionsQuery.isLoading || requestsQuery.isLoading;
-  const isError = intakeQuery.isError || transactionsQuery.isError || requestsQuery.isError;
+  const isIntakeLoading = intakeQuery.isLoading;
+  const isIntakeError = intakeQuery.isError;
 
   return (
     <div className="space-y-6">
@@ -375,12 +375,12 @@ const StorePage = () => {
         </Select>
       </div>
 
-      {isLoading ? <LoadingState label="Loading store workspace..." /> : null}
-      {isError ? (
-        <ErrorState description="Store data could not be loaded from the GRN and core services." />
+      {isIntakeLoading ? <LoadingState label="Loading store intake..." /> : null}
+      {isIntakeError ? (
+        <ErrorState description="Store intake data could not be loaded from the GRN service." />
       ) : null}
 
-      {!isLoading && !isError ? (
+      {!isIntakeLoading && !isIntakeError ? (
         <Tabs defaultValue="intake" className="space-y-4">
           <TabsList>
             <TabsTrigger value="intake">Store Intake</TabsTrigger>
@@ -388,8 +388,16 @@ const StorePage = () => {
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
           </TabsList>
           <TabsContent value="intake">{renderIntakeTable(filteredIntakeRecords)}</TabsContent>
-          <TabsContent value="requests">{renderRequestsTable(additiveBlendingRequests)}</TabsContent>
-          <TabsContent value="transactions">{renderTransactionsTable(transactionsQuery.data ?? [])}</TabsContent>
+          <TabsContent value="requests">
+            {requestsQuery.isLoading ? <LoadingState label="Loading store requests..." /> : null}
+            {requestsQuery.isError ? <ErrorState description="Store requests could not be loaded." /> : null}
+            {!requestsQuery.isLoading && !requestsQuery.isError ? renderRequestsTable(additiveBlendingRequests) : null}
+          </TabsContent>
+          <TabsContent value="transactions">
+            {transactionsQuery.isLoading ? <LoadingState label="Loading transactions..." /> : null}
+            {transactionsQuery.isError ? <ErrorState description="Store transactions could not be loaded." /> : null}
+            {!transactionsQuery.isLoading && !transactionsQuery.isError ? renderTransactionsTable(transactionsQuery.data ?? []) : null}
+          </TabsContent>
         </Tabs>
       ) : null}
 
