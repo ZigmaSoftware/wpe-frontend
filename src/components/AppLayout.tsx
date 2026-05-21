@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { adminRouteRegistry, getAdminRouteTitle, resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
+import { WPE_PRODUCT_TYPES_ROUTE } from "@/features/wpe-masters/constants";
 import type { AdminMenuMain } from "@/features/admin-master/types";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/AuthProvider";
@@ -67,6 +68,7 @@ const wpeMastersSections = [
       { to: "/wpe-masters/branches",        icon: Building2,    label: "Branches" },
       { to: "/wpe-masters/price-books",     icon: Tag,          label: "Price Books" },
       { to: "/wpe-masters/warehouses",      icon: Warehouse,    label: "Warehouses" },
+      { to: WPE_PRODUCT_TYPES_ROUTE,        icon: Layers,       label: "Product Types" },
       { to: "/wpe-masters/production-types",icon: Box,          label: "Production Types" },
       { to: "/wpe-masters/sale-types",      icon: Truck,        label: "Sale Types" },
       { to: "/wpe-masters/purchase-types",  icon: ShoppingCart, label: "Purchase Types" },
@@ -287,7 +289,7 @@ const AppLayout = () => {
     const adminMatch = Object.values(adminRouteRegistry).find((e) => e.path === path);
     if (adminMatch) return ["Admin Master", adminMatch.title];
     for (const section of allSections) {
-      const match = section.items.find((i) => i.to === path);
+      const match = section.items.find((i) => path === i.to || path.startsWith(i.to + "/"));
       if (match) return [section.label, match.label];
     }
     return [];

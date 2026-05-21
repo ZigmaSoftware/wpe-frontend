@@ -11,6 +11,7 @@ import BranchMasterPage from "@/features/wpe-masters/pages/BranchMasterPage";
 import PriceBookMasterPage from "@/features/wpe-masters/pages/PriceBookMasterPage";
 import WarehouseMasterPage from "@/features/wpe-masters/pages/WarehouseMasterPage";
 import ProductionTypeMasterPage from "@/features/wpe-masters/pages/ProductionTypeMasterPage";
+import ProductTypesPage from "@/features/wpe-masters/pages/ProductTypesPage";
 import SaleTypeMasterPage from "@/features/wpe-masters/pages/SaleTypeMasterPage";
 import PurchaseTypeMasterPage from "@/features/wpe-masters/pages/PurchaseTypeMasterPage";
 import RoleMasterPage from "@/features/wpe-masters/pages/RoleMasterPage";
@@ -18,6 +19,7 @@ import DepartmentMasterPage from "@/features/wpe-masters/pages/DepartmentMasterP
 import WPEUserCreationPage from "@/features/wpe-masters/pages/WPEUserCreationPage";
 import RolePermissionsPage from "@/features/wpe-masters/pages/RolePermissionsPage";
 import UserScreenPermissionsPage from "@/features/wpe-masters/pages/UserScreenPermissionsPage";
+import { WPE_PRODUCT_TYPES_ROUTE } from "@/features/wpe-masters/constants";
 import MainScreensPage from "@/features/admin-master/pages/MainScreensPage";
 import ScreenSectionsPage from "@/features/admin-master/pages/ScreenSectionsPage";
 import StaffPage from "@/features/admin-master/pages/StaffPage";
@@ -112,6 +114,7 @@ const App = () => (
                   <Route path="/wpe-masters/branches" element={<BranchMasterPage />} />
                   <Route path="/wpe-masters/price-books" element={<PriceBookMasterPage />} />
                   <Route path="/wpe-masters/warehouses" element={<WarehouseMasterPage />} />
+                  <Route path={`${WPE_PRODUCT_TYPES_ROUTE}/*`} element={<ProductTypesPage />} />
                   <Route path="/wpe-masters/production-types" element={<ProductionTypeMasterPage />} />
                   <Route path="/wpe-masters/sale-types" element={<SaleTypeMasterPage />} />
                   <Route path="/wpe-masters/purchase-types" element={<PurchaseTypeMasterPage />} />
