@@ -46,6 +46,15 @@ export interface ProductTypeSubtypeRecord {
   updated_at: string;
 }
 
+export interface ProductTypeSubtypeLookupItem {
+  id: number;
+  name: string;
+  code: string;
+  category: number;
+  category_name: string;
+  sort_order: number;
+}
+
 export interface ProductTypeSubtypeWritePayload {
   category: number;
   name: string;

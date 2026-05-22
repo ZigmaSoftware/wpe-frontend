@@ -7,6 +7,7 @@ import type {
   PermissionRow,
   ProductTypeCategoryRecord,
   ProductTypeCategoryWritePayload,
+  ProductTypeSubtypeLookupItem,
   ProductTypeSubtypeRecord,
   ProductTypeSubtypeWritePayload,
   ProductTypeTreeCategoryRecord,
@@ -99,8 +100,8 @@ export const wpeMastersApi = {
   },
   productTypeSubtypes: {
     list: (params: TableParams) => listResource<ProductTypeSubtypeRecord>(`${BASE}/product-type-subtypes/`, params),
-    lookup: (params?: { category?: number | null; category_id?: number | null }) =>
-      lookupMaster(`${BASE}/product-type-subtypes/lookup/`, params ?? undefined),
+    lookup: (params?: { category?: number | null; category_id?: number | null; search?: string }) =>
+      lookupMaster(`${BASE}/product-type-subtypes/lookup/`, params ?? undefined) as Promise<ProductTypeSubtypeLookupItem[]>,
     create: (payload: ProductTypeSubtypeWritePayload) => coreApi
       .post<ProductTypeSubtypeRecord>(`${BASE}/product-type-subtypes/`, payload)
       .then((res) => res.data),
