@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ClipboardCheck,
   FileText,
   Globe2,
   LayoutDashboard,
@@ -119,7 +118,6 @@ const navSections = [
       { to: "/app/regrind",        icon: Route,           label: "Regrind" },
       { to: "/app/store",          icon: Archive,         label: "Store" },
       { to: "/app/grn",            icon: Truck,           label: "GRN" },
-      { to: "/app/qcr",            icon: ClipboardCheck,  label: "QCR" },
     ],
   },
   {

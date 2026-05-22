@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import AuthGuard from "@/components/AuthGuard";
 import AppLayout from "@/components/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -52,7 +52,6 @@ import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import PresalesPage from "@/pages/PresalesPage";
 import ProductionPage from "@/pages/ProductionPage";
-import QCRPage from "@/pages/QCRPage";
 import StorePage from "@/pages/StorePage";
 
 const queryClient = new QueryClient({
@@ -88,7 +87,7 @@ const App = () => (
                   <Route path="/oims/machines" element={<MachineMasterPage />} />
                   <Route path="/oims/bom-variants" element={<BOMVariantPage />} />
                   <Route path="/app/grn" element={<GRNPage />} />
-                  <Route path="/app/qcr" element={<QCRPage />} />
+                  <Route path="/app/qcr" element={<Navigate to="/app/grn" replace />} />
                   <Route path="/masters/continents" element={<ContinentsPage />} />
                   <Route path="/masters/countries" element={<CountriesPage />} />
                   <Route path="/masters/states" element={<StatesPage />} />

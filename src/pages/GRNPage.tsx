@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, MoveRight, Plus, RefreshCw } from "lucide-react";
+import { CheckCircle2, Eye, FileSpreadsheet, MoveRight, Plus, RefreshCw, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -12,9 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { grnApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeGrnResponse, summarizeImportResponse } from "@/lib/api-helpers";
-import type { GrnListResponse, GrnRecord, ImportResponse } from "@/lib/types";
+import type { GrnListResponse, GrnRecord, ImportResponse, QcrRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const grnItemSchema = z.object({
@@ -309,6 +310,22 @@ const readValue = (value: string | number | null | undefined) => {
     return "-";
   }
   return String(value);
+};
+
+const readText = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return "-";
+  return String(value);
+};
+
+const getQcrField = (record: QcrRecord, key: string) => {
+  const sourceValue = record.source_grn_data?.[key];
+  if (sourceValue !== null && sourceValue !== undefined && sourceValue !== "") return sourceValue;
+  return record.snapshot?.[key];
+};
+
+const getQcrDepartment = (record: QcrRecord) => {
+  const value = getQcrField(record, "req_department");
+  return value === null || value === undefined || value === "" ? "Unassigned" : String(value).trim();
 };
 
 const toFieldLabel = (value: string) =>
@@ -1202,6 +1219,30 @@ const GRNPage = () => {
     },
   });
 
+  const qcrActiveQuery = useQuery({
+    queryKey: ["qcr", "active"],
+    queryFn: async () => {
+      const response = await grnApi.get<QcrRecord[]>("/api/qcr/");
+      return response.data;
+    },
+  });
+
+  const qcrMovedQuery = useQuery({
+    queryKey: ["qcr", "grn"],
+    queryFn: async () => {
+      const response = await grnApi.get<QcrRecord[]>("/api/qcr/grn/");
+      return response.data;
+    },
+  });
+
+  const qcrRejectedQuery = useQuery({
+    queryKey: ["qcr", "cancelled"],
+    queryFn: async () => {
+      const response = await grnApi.get<QcrRecord[]>("/api/qcr/cancelled/");
+      return response.data;
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: async (values: GrnFormValues) => {
       const response = await grnApi.post("/api/grn/", values);
@@ -1264,10 +1305,60 @@ const GRNPage = () => {
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to import GRN file.")),
   });
 
+  const [qcrDetailRecord, setQcrDetailRecord] = useState<QcrRecord | null>(null);
+  const [qcrRejectTarget, setQcrRejectTarget] = useState<QcrRecord | null>(null);
+  const [qcrRejectRemarks, setQcrRejectRemarks] = useState("");
+  const [qcrRemarksError, setQcrRemarksError] = useState("");
+
+  const qcrStatusMutation = useMutation({
+    mutationFn: async ({ id, action, remarks }: { id: number; action: "move_to_grn" | "reject"; remarks?: string }) => {
+      const response = await grnApi.post(`/api/qcr/${id}/status/`, { action, remarks });
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      toast.success(variables.action === "move_to_grn" ? "GRN approved and moved to store." : "QCR cancelled with remarks.");
+      queryClient.invalidateQueries({ queryKey: ["qcr"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-active"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Unable to update QCR status."));
+    },
+  });
+
+  const openQcrRejectDialog = (record: QcrRecord) => {
+    setQcrRejectTarget(record);
+    setQcrRejectRemarks("");
+    setQcrRemarksError("");
+  };
+
+  const closeQcrRejectDialog = () => {
+    if (qcrStatusMutation.isPending) return;
+    setQcrRejectTarget(null);
+    setQcrRejectRemarks("");
+    setQcrRemarksError("");
+  };
+
+  const submitQcrReject = () => {
+    const trimmed = qcrRejectRemarks.trim();
+    if (!trimmed) {
+      setQcrRemarksError("Remarks are required when rejecting a QCR.");
+      return;
+    }
+    if (!qcrRejectTarget) return;
+    qcrStatusMutation.mutate(
+      { id: qcrRejectTarget.id, action: "reject", remarks: trimmed },
+      { onSuccess: () => closeQcrRejectDialog() },
+    );
+  };
+
   const departmentOptions = useMemo(() => {
-    const records = [...(activeQuery.data?.data ?? []), ...(movedQuery.data?.data ?? [])];
-    return Array.from(new Set(records.map((record) => getGrnDepartment(record)))).sort((left, right) => left.localeCompare(right));
-  }, [activeQuery.data?.data, movedQuery.data?.data]);
+    const grnRecords = [...(activeQuery.data?.data ?? []), ...(movedQuery.data?.data ?? [])];
+    const qcrRecords = [...(qcrActiveQuery.data ?? []), ...(qcrMovedQuery.data ?? []), ...(qcrRejectedQuery.data ?? [])];
+    const grnDepts = grnRecords.map((r) => getGrnDepartment(r));
+    const qcrDepts = qcrRecords.map((r) => getQcrDepartment(r));
+    return Array.from(new Set([...grnDepts, ...qcrDepts])).sort((a, b) => a.localeCompare(b));
+  }, [activeQuery.data?.data, movedQuery.data?.data, qcrActiveQuery.data, qcrMovedQuery.data, qcrRejectedQuery.data]);
 
   const activeRecords = useMemo(() => {
     const records = activeQuery.data?.data ?? [];
@@ -1278,6 +1369,21 @@ const GRNPage = () => {
     const records = movedQuery.data?.data ?? [];
     return departmentFilter === "all" ? records : records.filter((record) => getGrnDepartment(record) === departmentFilter);
   }, [movedQuery.data?.data, departmentFilter]);
+
+  const qcrActiveRecords = useMemo(() => {
+    const records = qcrActiveQuery.data ?? [];
+    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
+  }, [qcrActiveQuery.data, departmentFilter]);
+
+  const qcrMovedRecords = useMemo(() => {
+    const records = qcrMovedQuery.data ?? [];
+    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
+  }, [qcrMovedQuery.data, departmentFilter]);
+
+  const qcrRejectedRecords = useMemo(() => {
+    const records = qcrRejectedQuery.data ?? [];
+    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
+  }, [qcrRejectedQuery.data, departmentFilter]);
 
   const resolveScopedRecord = (scope: RecordScope, recordId: number) => {
     const records = scope === "active" ? activeRecords : movedRecords;
@@ -1627,6 +1733,86 @@ const GRNPage = () => {
     );
   };
 
+  const renderQcrTable = (records: QcrRecord[], showActions: boolean) => {
+    if (!records.length) {
+      return <EmptyState title="No records found" description="This stage currently has no records." />;
+    }
+    return (
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16 text-center">S.No</TableHead>
+                <TableHead>GRN Reference</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead>Item</TableHead>
+                <TableHead>Quantity</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Moved To QCR</TableHead>
+                <TableHead>Moved By</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {records.map((record, index) => (
+                <TableRow key={record.id}>
+                  <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                  <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
+                  <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
+                  <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
+                  <TableCell>{readText(getQcrField(record, "quantity"))}</TableCell>
+                  <TableCell>{readText(getQcrField(record, "req_department"))}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        record.status === "Active"
+                          ? "border-warning/20 bg-warning/10 text-warning"
+                          : record.status === "Cancelled"
+                            ? "border-destructive/20 bg-destructive/10 text-destructive"
+                            : "border-success/20 bg-success/10 text-success"
+                      }
+                    >
+                      {record.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
+                  <TableCell>{record.moved_to_qcr_by || "-"}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="icon" onClick={() => setQcrDetailRecord(record)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {showActions ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={qcrStatusMutation.isPending}
+                            onClick={() => qcrStatusMutation.mutate({ id: record.id, action: "move_to_grn" })}
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Approve
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => openQcrRejectDialog(record)}>
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Not Approve
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const renderActiveTable = () => {
     if (!activeRecords.length) {
       return <EmptyState title="No active GRN records" description="Create a GRN or import an Excel workbook to populate the active queue." />;
@@ -1729,6 +1915,9 @@ const GRNPage = () => {
               onClick={() => {
                 activeQuery.refetch();
                 movedQuery.refetch();
+                qcrActiveQuery.refetch();
+                qcrMovedQuery.refetch();
+                qcrRejectedQuery.refetch();
               }}
             >
               <RefreshCw className="mr-2 h-4 w-4" />
@@ -1744,9 +1933,9 @@ const GRNPage = () => {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active GRN" value={activeQuery.data?.count ?? 0} />
-        <StatCard label="Moved to QCR" value={movedQuery.data?.count ?? 0} />
-        <StatCard label="Import" value={importMutation.isPending ? "Running" : "Ready"} />
-        <StatCard label="Editable Inward Fields" value="Guarded" hint="External feed values remain locked in update mode." />
+        <StatCard label="Moved to QCR" value={qcrActiveQuery.data?.length ?? 0} />
+        <StatCard label="Completed GRN" value={qcrMovedQuery.data?.length ?? 0} />
+        <StatCard label="Rejected" value={qcrRejectedQuery.data?.length ?? 0} />
       </div>
 
       <div className="flex justify-end">
@@ -1765,17 +1954,26 @@ const GRNPage = () => {
         </Select>
       </div>
 
-      {activeQuery.isLoading || movedQuery.isLoading ? <LoadingState label="Loading GRN records..." /> : null}
-      {activeQuery.isError || movedQuery.isError ? <ErrorState description="GRN records could not be loaded from the GRN service." /> : null}
+      {activeQuery.isLoading || qcrActiveQuery.isLoading || qcrMovedQuery.isLoading || qcrRejectedQuery.isLoading ? (
+        <LoadingState label="Loading GRN records..." />
+      ) : null}
+      {activeQuery.isError || qcrActiveQuery.isError || qcrMovedQuery.isError || qcrRejectedQuery.isError ? (
+        <ErrorState description="GRN records could not be loaded from the GRN service." />
+      ) : null}
 
-      {!activeQuery.isLoading && !movedQuery.isLoading && !activeQuery.isError && !movedQuery.isError ? (
+      {!activeQuery.isLoading && !qcrActiveQuery.isLoading && !qcrMovedQuery.isLoading && !qcrRejectedQuery.isLoading &&
+       !activeQuery.isError && !qcrActiveQuery.isError && !qcrMovedQuery.isError && !qcrRejectedQuery.isError ? (
         <Tabs defaultValue="active" className="space-y-4">
           <TabsList>
             <TabsTrigger value="active">Active GRN</TabsTrigger>
-            <TabsTrigger value="moved">Moved to QCR</TabsTrigger>
+            <TabsTrigger value="moved-to-qcr">Moved to QCR</TabsTrigger>
+            <TabsTrigger value="next-grn">Completed GRN</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected</TabsTrigger>
           </TabsList>
           <TabsContent value="active">{renderActiveTable()}</TabsContent>
-          <TabsContent value="moved">{renderMovedTable()}</TabsContent>
+          <TabsContent value="moved-to-qcr">{renderQcrTable(qcrActiveRecords, true)}</TabsContent>
+          <TabsContent value="next-grn">{renderQcrTable(qcrMovedRecords, false)}</TabsContent>
+          <TabsContent value="rejected">{renderQcrTable(qcrRejectedRecords, false)}</TabsContent>
         </Tabs>
       ) : null}
 
@@ -2190,6 +2388,83 @@ const GRNPage = () => {
           }
         }}
       />
+
+      {/* QCR Detail Dialog */}
+      <Dialog open={Boolean(qcrDetailRecord)} onOpenChange={(open) => !open && setQcrDetailRecord(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{qcrDetailRecord?.grn_reference_no}</DialogTitle>
+            <DialogDescription>QCR record details, source GRN data, and snapshot.</DialogDescription>
+          </DialogHeader>
+          {qcrDetailRecord ? (
+            <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard label="Status" value={qcrDetailRecord.status} />
+                <StatCard label="Unique Id" value={qcrDetailRecord.unique_id} />
+                <StatCard label="Moved To QCR" value={formatDateTime(qcrDetailRecord.moved_to_qcr_at)} />
+                <StatCard label="Moved By" value={qcrDetailRecord.moved_to_qcr_by || "-"} />
+              </div>
+              {qcrDetailRecord.remarks ? (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-destructive">Rejection Remarks</p>
+                  <p className="text-sm text-foreground">{qcrDetailRecord.remarks}</p>
+                </div>
+              ) : null}
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-foreground">Source GRN Data</h3>
+                  <pre className="overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">
+                    {JSON.stringify(qcrDetailRecord.source_grn_data, null, 2)}
+                  </pre>
+                </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-foreground">Snapshot</h3>
+                  <pre className="overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">
+                    {JSON.stringify(qcrDetailRecord.snapshot, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* QCR Reject Dialog */}
+      <Dialog open={Boolean(qcrRejectTarget)} onOpenChange={(open) => !open && closeQcrRejectDialog()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Not Approve QCR</DialogTitle>
+            <DialogDescription>
+              GRN <span className="font-semibold">{qcrRejectTarget?.grn_reference_no}</span> will be marked as not approved. Stock will not be moved to store. Remarks are mandatory.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="qcr-reject-remarks">
+              Rejection Remarks <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="qcr-reject-remarks"
+              rows={4}
+              placeholder="Enter reason for not approving this QCR..."
+              value={qcrRejectRemarks}
+              onChange={(e) => {
+                setQcrRejectRemarks(e.target.value);
+                if (e.target.value.trim()) setQcrRemarksError("");
+              }}
+              className={qcrRemarksError ? "border-destructive" : ""}
+            />
+            {qcrRemarksError ? <p className="text-xs text-destructive">{qcrRemarksError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeQcrRejectDialog} disabled={qcrStatusMutation.isPending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={submitQcrReject} disabled={qcrStatusMutation.isPending}>
+              {qcrStatusMutation.isPending ? "Saving..." : "Confirm Not Approve"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
