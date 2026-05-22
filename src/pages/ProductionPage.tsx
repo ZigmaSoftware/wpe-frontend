@@ -3,12 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Lock, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
-import ProductionOrderDialog from "@/features/production/components/order-dialog/ProductionOrderDialog";
-import type { CreateProductionOrderPayload } from "@/features/production/components/order-dialog/productionOrderForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -138,12 +137,12 @@ const ItemSearch = ({ onSelect }: { onSelect: (item: ItemOption) => void }) => {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 const ProductionPage = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
   const [batchesOpen, setBatchesOpen] = useState(false);
 
@@ -217,17 +216,6 @@ const ProductionPage = () => {
   });
 
   // ── Mutations ────────────────────────────────────────────────────────────────
-
-  const createOrderMutation = useMutation({
-    mutationFn: (values: CreateProductionOrderPayload) => coreApi.post("/api/production/production/", values),
-    onSuccess: () => {
-      toast.success("Production order created.");
-      setCreateOrderOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
-    },
-    onError: (e) => toast.error(getApiErrorMessage(e, "Failed to create order.")),
-  });
 
   const createBatchMutation = useMutation({
     mutationFn: (values: BatchFormValues) =>
@@ -354,7 +342,7 @@ const ProductionPage = () => {
       <PageHeader
         title="Production"
         description="Manage production orders, batches, and weighment entries."
-        actions={<Button onClick={() => setCreateOrderOpen(true)}><Plus className="mr-2 h-4 w-4" />New Order</Button>}
+        actions={<Button onClick={() => navigate("/app/production/neworder")}><Plus className="mr-2 h-4 w-4" />New Order</Button>}
       />
 
       {/* Dashboard */}
@@ -452,15 +440,6 @@ const ProductionPage = () => {
           <EmptyState title="No production orders" description="Create a new order to begin tracking production batches." />
         )
       )}
-
-      <ProductionOrderDialog
-        open={createOrderOpen}
-        onOpenChange={setCreateOrderOpen}
-        onSubmit={(values) => createOrderMutation.mutate(values)}
-        isSubmitting={createOrderMutation.isPending}
-        machines={machinesQ.data ?? []}
-        machinesLoading={machinesQ.isLoading}
-      />
 
       {/* ── Batch management dialog ── */}
       <Dialog open={batchesOpen} onOpenChange={(open) => { if (!open) setBatchesOpen(false); }}>
