@@ -112,7 +112,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       refreshAdminPermissions: async () => {
         await hydrateAdminPermissions();
       },
-      can: (screenCode: string, action: AdminAction) => canAccessAction(findScreenPermissions(adminMenu, screenCode) ?? undefined, action),
+      can: (screenCode: string, action: AdminAction) => {
+        if (user?.is_staff) {
+          return true;
+        }
+
+        return canAccessAction(findScreenPermissions(adminMenu, screenCode) ?? undefined, action);
+      },
     }),
     [adminMenu, isBootstrapping, resolvedPermissions, user],
   );

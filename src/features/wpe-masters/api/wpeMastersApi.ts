@@ -5,6 +5,12 @@ import type {
   MasterWritePayload,
   PaginatedResponse,
   PermissionRow,
+  ProductTypeCategoryRecord,
+  ProductTypeCategoryWritePayload,
+  ProductTypeSubtypeLookupItem,
+  ProductTypeSubtypeRecord,
+  ProductTypeSubtypeWritePayload,
+  ProductTypeTreeCategoryRecord,
   TableParams,
   UserScreenPermRow,
   WPEUserRecord,
@@ -13,11 +19,12 @@ import type {
 
 const BASE = "/api/wpe-masters";
 
-const toParams = ({ page, pageSize, search, ordering }: TableParams) => ({
+const toParams = ({ page, pageSize, search, ordering, ...rest }: TableParams) => ({
   page,
   page_size: pageSize,
   search: search || undefined,
   ordering: ordering || undefined,
+  ...rest,
 });
 
 async function listMaster(path: string, params: TableParams) {
@@ -29,8 +36,17 @@ async function listMaster(path: string, params: TableParams) {
   };
 }
 
-async function lookupMaster(path: string): Promise<LookupItem[]> {
-  const res = await coreApi.get<LookupItem[]>(path);
+async function listResource<T>(path: string, params: TableParams) {
+  const res = await coreApi.get<PaginatedResponse<T>>(path, { params: toParams(params) });
+  const data = res.data;
+  return {
+    items: Array.isArray(data) ? data : data.results ?? [],
+    total: Array.isArray(data) ? data.length : data.count ?? 0,
+  };
+}
+
+async function lookupMaster(path: string, params?: Record<string, string | number | boolean | null | undefined>): Promise<LookupItem[]> {
+  const res = await coreApi.get<LookupItem[]>(path, { params });
   return res.data;
 }
 
@@ -67,6 +83,34 @@ export const wpeMastersApi = {
   branches: master("branches"),
   priceBooks: master("price-books"),
   warehouses: master("warehouses"),
+  productTypeCategories: {
+    list: (params: TableParams) => listResource<ProductTypeCategoryRecord>(`${BASE}/product-type-categories/`, params),
+    lookup: () => lookupMaster(`${BASE}/product-type-categories/lookup/`),
+    tree: (params: TableParams = {}) => coreApi
+      .get<ProductTypeTreeCategoryRecord[]>(`${BASE}/product-type-categories/tree/`, { params: toParams(params) })
+      .then((res) => res.data),
+    create: (payload: ProductTypeCategoryWritePayload) => coreApi
+      .post<ProductTypeCategoryRecord>(`${BASE}/product-type-categories/`, payload)
+      .then((res) => res.data),
+    update: (id: number, payload: Partial<ProductTypeCategoryWritePayload>) => coreApi
+      .put<ProductTypeCategoryRecord>(`${BASE}/product-type-categories/${id}/`, payload)
+      .then((res) => res.data),
+    delete: (id: number) => coreApi.delete(`${BASE}/product-type-categories/${id}/`).then(() => undefined),
+    toggle: (id: number) => coreApi.patch<ProductTypeCategoryRecord>(`${BASE}/product-type-categories/${id}/toggle/`, {}).then((res) => res.data),
+  },
+  productTypeSubtypes: {
+    list: (params: TableParams) => listResource<ProductTypeSubtypeRecord>(`${BASE}/product-type-subtypes/`, params),
+    lookup: (params?: { category?: number | null; category_id?: number | null; search?: string }) =>
+      lookupMaster(`${BASE}/product-type-subtypes/lookup/`, params ?? undefined) as Promise<ProductTypeSubtypeLookupItem[]>,
+    create: (payload: ProductTypeSubtypeWritePayload) => coreApi
+      .post<ProductTypeSubtypeRecord>(`${BASE}/product-type-subtypes/`, payload)
+      .then((res) => res.data),
+    update: (id: number, payload: Partial<ProductTypeSubtypeWritePayload>) => coreApi
+      .put<ProductTypeSubtypeRecord>(`${BASE}/product-type-subtypes/${id}/`, payload)
+      .then((res) => res.data),
+    delete: (id: number) => coreApi.delete(`${BASE}/product-type-subtypes/${id}/`).then(() => undefined),
+    toggle: (id: number) => coreApi.patch<ProductTypeSubtypeRecord>(`${BASE}/product-type-subtypes/${id}/toggle/`, {}).then((res) => res.data),
+  },
   productionTypes: master("production-types"),
   saleTypes: master("sale-types"),
   purchaseTypes: master("purchase-types"),

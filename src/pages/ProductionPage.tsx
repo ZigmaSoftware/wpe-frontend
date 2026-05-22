@@ -7,6 +7,8 @@ import { z } from "zod";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
+import ProductionOrderDialog from "@/features/production/components/order-dialog/ProductionOrderDialog";
+import type { CreateProductionOrderPayload } from "@/features/production/components/order-dialog/productionOrderForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -72,35 +74,6 @@ const StatusBadge = ({ status, classes }: { status: string; classes: Record<stri
     {status.replace(/_/g, " ")}
   </span>
 );
-
-// ── Create order form ──────────────────────────────────────────────────────────
-
-const orderSchema = z.object({
-  production_id: z.string().min(1, "Required"),
-  production_type: z.string().min(1, "Required"),
-  production_date: z.string().min(1, "Required"),
-  shift: z.string().min(1, "Required"),
-  planned_quantity: z.string().min(1, "Required"),
-  planned_weight: z.string().default("0"),
-  start_date_time: z.string().min(1, "Required"),
-  status: z.string().default("PLANNED"),
-  batch_number: z.string().default(""),
-  line_name: z.string().default(""),
-});
-type OrderFormValues = z.infer<typeof orderSchema>;
-
-const orderDefaults: OrderFormValues = {
-  production_id: "",
-  production_type: "ADDITIVE",
-  production_date: new Date().toISOString().slice(0, 10),
-  shift: "MORNING",
-  planned_quantity: "",
-  planned_weight: "0",
-  start_date_time: new Date().toISOString().slice(0, 16),
-  status: "PLANNED",
-  batch_number: "",
-  line_name: "",
-};
 
 // ── Create batch form ──────────────────────────────────────────────────────────
 
@@ -187,7 +160,6 @@ const ProductionPage = () => {
 
   const [weightValues, setWeightValues] = useState<Record<number, string>>({});
 
-  const orderForm = useForm<OrderFormValues>({ resolver: zodResolver(orderSchema), defaultValues: orderDefaults });
   const batchForm = useForm<BatchFormValues>({ resolver: zodResolver(batchSchema), defaultValues: { stage: "AD", bom_variant: null, machine: null, notes: "" } });
   const regrindForm = useForm<RegrindFormValues>({ resolver: zodResolver(regrindSchema), defaultValues: { item_id: 0, item_display: "", quantity_grams: "", source_lot_no: "", notes: "", stage: "AD" } });
 
@@ -247,11 +219,10 @@ const ProductionPage = () => {
   // ── Mutations ────────────────────────────────────────────────────────────────
 
   const createOrderMutation = useMutation({
-    mutationFn: (values: OrderFormValues) => coreApi.post("/api/production/production/", values),
+    mutationFn: (values: CreateProductionOrderPayload) => coreApi.post("/api/production/production/", values),
     onSuccess: () => {
       toast.success("Production order created.");
       setCreateOrderOpen(false);
-      orderForm.reset(orderDefaults);
       queryClient.invalidateQueries({ queryKey: ["production-orders"] });
       queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
     },
@@ -482,70 +453,14 @@ const ProductionPage = () => {
         )
       )}
 
-      {/* ── Create Order dialog ── */}
-      <Dialog open={createOrderOpen} onOpenChange={(open) => { if (!open) { setCreateOrderOpen(false); orderForm.reset(orderDefaults); } }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>New Production Order</DialogTitle>
-            <DialogDescription>Enter the basic production order details to begin batch tracking.</DialogDescription>
-          </DialogHeader>
-          <Form {...orderForm}>
-            <form onSubmit={orderForm.handleSubmit((v) => createOrderMutation.mutate(v))} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField control={orderForm.control} name="production_id" render={({ field }) => (
-                  <FormItem><FormLabel>Production ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={orderForm.control} name="production_type" render={({ field }) => (
-                  <FormItem><FormLabel>Type</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="ADDITIVE">Additive</SelectItem>
-                        <SelectItem value="BLENDING">Blending</SelectItem>
-                        <SelectItem value="GRANULATION">Granulation</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  <FormMessage /></FormItem>
-                )} />
-                <FormField control={orderForm.control} name="production_date" render={({ field }) => (
-                  <FormItem><FormLabel>Production Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={orderForm.control} name="shift" render={({ field }) => (
-                  <FormItem><FormLabel>Shift</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="MORNING">Morning</SelectItem>
-                        <SelectItem value="AFTERNOON">Afternoon</SelectItem>
-                        <SelectItem value="NIGHT">Night</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  <FormMessage /></FormItem>
-                )} />
-                <FormField control={orderForm.control} name="planned_quantity" render={({ field }) => (
-                  <FormItem><FormLabel>Planned Qty (kg)</FormLabel><FormControl><Input type="number" step="0.001" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={orderForm.control} name="planned_weight" render={({ field }) => (
-                  <FormItem><FormLabel>Planned Weight (g)</FormLabel><FormControl><Input type="number" step="0.001" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={orderForm.control} name="start_date_time" render={({ field }) => (
-                  <FormItem><FormLabel>Start Date/Time</FormLabel><FormControl><Input type="datetime-local" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={orderForm.control} name="batch_number" render={({ field }) => (
-                  <FormItem><FormLabel>Batch Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={orderForm.control} name="line_name" render={({ field }) => (
-                  <FormItem><FormLabel>Line Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => { setCreateOrderOpen(false); orderForm.reset(orderDefaults); }}>Cancel</Button>
-                <Button type="submit" disabled={createOrderMutation.isPending}>Create Order</Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <ProductionOrderDialog
+        open={createOrderOpen}
+        onOpenChange={setCreateOrderOpen}
+        onSubmit={(values) => createOrderMutation.mutate(values)}
+        isSubmitting={createOrderMutation.isPending}
+        machines={machinesQ.data ?? []}
+        machinesLoading={machinesQ.isLoading}
+      />
 
       {/* ── Batch management dialog ── */}
       <Dialog open={batchesOpen} onOpenChange={(open) => { if (!open) setBatchesOpen(false); }}>

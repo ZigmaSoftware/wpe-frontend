@@ -369,10 +369,13 @@ export type ProductionMachine = {
 
 export type BOMVariantComponent = {
   id: number;
-  item: number;
+  item: number | null;
+  product_subtype: number | null;
+  source_type: "ITEM" | "PRODUCT_SUBTYPE";
   item_code: string;
   item_name: string;
   category: string;
+  is_active: boolean | null;
   target_weight_grams: string;
   min_weight_grams: string;
   max_weight_grams: string;
@@ -400,9 +403,11 @@ export type BatchWeightEntry = {
   id: number;
   batch: number;
   bom_component: number;
-  item: number;
+  item: number | null;
+  source_type: "ITEM" | "PRODUCT_SUBTYPE";
   item_code: string;
   item_name: string;
+  category: string;
   target_weight_grams: string;
   min_weight_grams: string;
   max_weight_grams: string;

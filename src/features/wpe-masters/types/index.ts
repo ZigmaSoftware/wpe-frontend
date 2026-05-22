@@ -12,6 +12,61 @@ export interface MasterWritePayload {
   is_active?: boolean;
 }
 
+export interface ProductTypeCategoryRecord {
+  id: number;
+  unique_id: string;
+  name: string;
+  code: string;
+  description: string;
+  sort_order: number;
+  subtype_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductTypeCategoryWritePayload {
+  name: string;
+  description?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface ProductTypeSubtypeRecord {
+  id: number;
+  unique_id: string;
+  category: number;
+  category_name: string;
+  name: string;
+  code: string;
+  description: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductTypeSubtypeLookupItem {
+  id: number;
+  name: string;
+  code: string;
+  category: number;
+  category_name: string;
+  sort_order: number;
+}
+
+export interface ProductTypeSubtypeWritePayload {
+  category: number;
+  name: string;
+  description?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface ProductTypeTreeCategoryRecord extends ProductTypeCategoryRecord {
+  subtypes: ProductTypeSubtypeRecord[];
+}
+
 export interface WPEUserRecord {
   id: number;
   unique_id: string;
@@ -62,6 +117,8 @@ export interface LookupItem {
   name: string;
 }
 
+export type ProductTypeStatusFilterValue = "all" | "active" | "inactive";
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;
@@ -74,6 +131,7 @@ export interface TableParams {
   pageSize?: number;
   search?: string;
   ordering?: string;
+  [key: string]: string | number | boolean | null | undefined;
 }
 
 export interface PermissionRow {

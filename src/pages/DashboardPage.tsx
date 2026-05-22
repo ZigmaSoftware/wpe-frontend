@@ -12,7 +12,7 @@ import type {
 } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
-import { ErrorState, LoadingState } from "@/components/QueryState";
+import { LoadingState } from "@/components/QueryState";
 
 const DashboardPage = () => {
   const overviewQuery = useQuery({
@@ -49,18 +49,22 @@ const DashboardPage = () => {
     return <LoadingState label="Loading dashboard..." />;
   }
 
-  if (overviewQuery.isError) {
-    return <ErrorState description="The dashboard overview could not be loaded from the live backend." />;
-  }
-
-  const { contacts, storeStockCount, blendingStockCount, presales, grn, qcr } = overviewQuery.data;
+  const isOffline = overviewQuery.isError;
+  const { contacts = [], storeStockCount = 0, blendingStockCount = 0, presales = [], grn = [], qcr = [] } =
+    overviewQuery.data ?? {};
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Operations Dashboard"
-        description="Live counts from the exact Core and GRN endpoints used by the admin app."
+        description="Live counts from the Core and GRN backends."
       />
+
+      {isOffline && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          Backend is currently unreachable — showing last known or placeholder values.
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Contacts" value={contacts.length} hint={`${contacts.filter((contact) => contact.is_active).length} active`} />
