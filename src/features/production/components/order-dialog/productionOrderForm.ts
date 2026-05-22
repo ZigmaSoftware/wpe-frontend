@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ProductionMachine } from "@/lib/types";
+import type { ProductTypeSubtypeLookupItem } from "@/features/wpe-masters/types";
+import type { BOMVariantComponent, ProductionMachine } from "@/lib/types";
 
 export const PRODUCTION_ORDER_TABS = [
   { value: "general", label: "General" },
@@ -17,11 +18,13 @@ export const ORDER_STATUS_VALUES = ["PLANNED", "IN_PROGRESS", "PLAN_COMPLETED", 
 export const PRODUCTION_TYPE_VALUES = ["RECYCLING_PRODUCTION", "BLENDING_PRODUCTION", "COMPOUNDING"] as const;
 export const WORKFLOW_STAGE_VALUES = ["AD", "BL", "GL"] as const;
 export const SHIFT_VALUES = ["SHIFT_1", "SHIFT_2", "SHIFT_3"] as const;
+export const MATERIAL_SOURCE_TYPE_VALUES = ["ITEM", "PRODUCT_SUBTYPE"] as const;
 
 export type ProductionOrderStatusValue = (typeof ORDER_STATUS_VALUES)[number];
 export type ProductionTypeValue = (typeof PRODUCTION_TYPE_VALUES)[number];
 export type WorkflowStageValue = (typeof WORKFLOW_STAGE_VALUES)[number];
 export type ProductionShiftValue = (typeof SHIFT_VALUES)[number];
+export type MaterialSourceTypeValue = (typeof MATERIAL_SOURCE_TYPE_VALUES)[number];
 
 export type ProductionItemOption = {
   id: number;
@@ -108,47 +111,152 @@ const planRowSchema = z.object({
   packets: optionalIntegerString.default(""),
 });
 
-export const productionOrderFormSchema = z.object({
-  production_id: z.string().trim().min(1, "Production ID is required"),
-  status: z.enum(ORDER_STATUS_VALUES),
-  production_type: z.enum(PRODUCTION_TYPE_VALUES),
-  stage: z.enum(WORKFLOW_STAGE_VALUES),
-  next_workflow_stage: z.enum(WORKFLOW_STAGE_VALUES),
-  finished_goods: finishedGoodsSchema.nullable().default(null),
-  plan_rows: z.array(planRowSchema).min(1, "Add at least one plan row"),
-  production_for: z.string().trim().default(""),
-  notes: z.string().trim().max(2000, "Notes must be 2000 characters or fewer").default(""),
-  base_order: z.object({
-    base_plan_id: z.string().default(""),
-    base_order_id: z.string().default(""),
-    base_customer_id: z.string().default(""),
-    base_customer_name: z.string().default(""),
-    base_order_date: z.string().default(""),
-  }),
-  resources: z.object({
-    production_date: z.string().min(1, "Production date is required"),
-    shift: z.enum(SHIFT_VALUES),
-    production_facility: z.string().min(1, "Production facility is required"),
-    work_center: z.string().min(1, "Work center is required"),
-    line_machine_id: z.string().default(""),
-    shift_incharge: z.string().min(1, "Shift incharge is required"),
-  }),
-  custom_specs: z.object({
-    material_type: z.string().trim().default(""),
-    cbhr_inward_qty: optionalDecimalString.default(""),
-    cbhr_ok_qty: optionalDecimalString.default(""),
-    cbhr_scrap_qty: optionalDecimalString.default(""),
-    yet_to_pack_mtrs: optionalDecimalString.default(""),
-    yet_to_pack_pcs: optionalIntegerString.default(""),
-  }),
-  details: z.object({
-    batch_auto: z.string().default("Generated on save"),
-    actual_start_time: z.string().default(""),
-    actual_end_time: z.string().default("Captured when the order is completed"),
-  }),
+const materialRowSchema = z.object({
+  client_id: z.string(),
+  sequence: z.number().int().positive(),
+  source_type: z.enum(MATERIAL_SOURCE_TYPE_VALUES),
+  is_bom_derived: z.boolean().default(false),
+  is_manual: z.boolean().default(false),
+  bom_variant: z.number().nullable().default(null),
+  bom_component: z.number().nullable().default(null),
+  item: z.number().nullable().default(null),
+  product_subtype: z.number().nullable().default(null),
+  item_code: z.string().trim().min(1, "Item code is required"),
+  item_name: z.string().trim().min(1, "Item name is required"),
+  unit: z.string().trim().min(1, "Unit is required"),
+  per_unit_quantity: optionalDecimalString.default("0"),
+  received_quantity: optionalDecimalString.default("0"),
+  request_quantity: optionalDecimalString.default("0"),
+  rate: optionalDecimalString.default("0"),
+  notes: z.string().trim().default(""),
 });
 
+export const productionOrderFormSchema = z
+  .object({
+    production_id: z.string().trim().min(1, "Production ID is required"),
+    status: z.enum(ORDER_STATUS_VALUES),
+    production_type: z.enum(PRODUCTION_TYPE_VALUES),
+    stage: z.enum(WORKFLOW_STAGE_VALUES),
+    next_workflow_stage: z.enum(WORKFLOW_STAGE_VALUES),
+    finished_goods: finishedGoodsSchema.nullable().default(null),
+    plan_rows: z.array(planRowSchema).min(1, "Add at least one plan row"),
+    production_for: z.string().trim().default(""),
+    notes: z.string().trim().max(2000, "Notes must be 2000 characters or fewer").default(""),
+    base_order: z.object({
+      base_plan_id: z.string().default(""),
+      base_order_id: z.string().default(""),
+      base_customer_id: z.string().default(""),
+      base_customer_name: z.string().default(""),
+      base_order_date: z.string().default(""),
+    }),
+    resources: z.object({
+      production_date: z.string().min(1, "Production date is required"),
+      shift: z.enum(SHIFT_VALUES),
+      production_facility: z.string().min(1, "Production facility is required"),
+      work_center: z.string().min(1, "Work center is required"),
+      line_machine_id: z.string().default(""),
+      shift_incharge: z.string().min(1, "Shift incharge is required"),
+    }),
+    materials: z.object({
+      selected_bom_variant_id: z.string().default(""),
+      bom_multiplier: optionalDecimalString.default("1"),
+      rows: z.array(materialRowSchema).default([]),
+    }),
+    custom_specs: z.object({
+      material_type: z.string().trim().default(""),
+      cbhr_inward_qty: optionalDecimalString.default(""),
+      cbhr_ok_qty: optionalDecimalString.default(""),
+      cbhr_scrap_qty: optionalDecimalString.default(""),
+      yet_to_pack_mtrs: optionalDecimalString.default(""),
+      yet_to_pack_pcs: optionalIntegerString.default(""),
+    }),
+    details: z.object({
+      batch_auto: z.string().default("Generated on save"),
+      actual_start_time: z.string().default(""),
+      actual_end_time: z.string().default("Captured when the order is completed"),
+    }),
+  })
+  .superRefine((values, ctx) => {
+    const productionQty = getProductionQuantity(values.plan_rows);
+    const bomMultiplier = parseNumericInput(values.materials.bom_multiplier);
+
+    if (productionQty <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Production quantity must be greater than 0.",
+        path: ["plan_rows", 0, "qty_mts"],
+      });
+    }
+
+    if (bomMultiplier <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "BOM multiplier must be greater than 0.",
+        path: ["materials", "bom_multiplier"],
+      });
+    }
+
+    const duplicateKeys = new Set<string>();
+
+    values.materials.rows.forEach((row, index) => {
+      const sourceKey =
+        row.source_type === "PRODUCT_SUBTYPE" && row.product_subtype
+          ? `PRODUCT_SUBTYPE:${row.product_subtype}`
+          : row.item
+            ? `ITEM:${row.item}`
+            : `CODE:${row.item_code}`;
+
+      if (duplicateKeys.has(sourceKey)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Duplicate material row is not allowed.",
+          path: ["materials", "rows", index, "item_code"],
+        });
+      }
+      duplicateKeys.add(sourceKey);
+
+      const perUnitQty = parseNumericInput(row.per_unit_quantity);
+      const receivedQty = parseNumericInput(row.received_quantity);
+      const requestQty = parseNumericInput(row.request_quantity);
+      const rate = parseNumericInput(row.rate);
+      const requiredQty = perUnitQty * productionQty * bomMultiplier;
+      const remainingQty = Math.max(requiredQty - receivedQty, 0);
+
+      if (requiredQty < 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Required quantity cannot be negative.",
+          path: ["materials", "rows", index, "per_unit_quantity"],
+        });
+      }
+
+      if (rate < 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Rate cannot be negative.",
+          path: ["materials", "rows", index, "rate"],
+        });
+      }
+
+      if (requestQty > remainingQty) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Request quantity cannot exceed remaining quantity.",
+          path: ["materials", "rows", index, "request_quantity"],
+        });
+      }
+    });
+  });
+
 export type ProductionOrderFormValues = z.infer<typeof productionOrderFormSchema>;
+export type ProductionOrderMaterialRowForm = ProductionOrderFormValues["materials"]["rows"][number];
+
+export type ProductionMaterialComputedRow = ProductionOrderMaterialRowForm & {
+  bom_quantity: number;
+  required_quantity: number;
+  remaining_quantity: number;
+  amount: number;
+};
 
 export type CreateProductionOrderPayload = {
   production_id: string;
@@ -163,12 +271,47 @@ export type CreateProductionOrderPayload = {
   line_name?: string;
   line_number?: string;
   plan_id?: string;
+  material_cost?: string;
+  total_cost?: string;
+  materials?: Array<{
+    sequence: number;
+    source_type: MaterialSourceTypeValue;
+    is_bom_derived: boolean;
+    is_manual: boolean;
+    bom_variant: number | null;
+    bom_component: number | null;
+    item: number | null;
+    product_subtype: number | null;
+    item_code: string;
+    item_name: string;
+    unit: string;
+    per_unit_quantity: string;
+    bom_quantity: string;
+    required_quantity: string;
+    received_quantity: string;
+    remaining_quantity: string;
+    request_quantity: string;
+    rate: string;
+    amount: string;
+    notes: string;
+  }>;
 };
 
 export const createEmptyPlanRow = (): ProductionOrderFormValues["plan_rows"][number] => ({
   length_mts: "",
   qty_mts: "",
   packets: "",
+});
+
+const createMaterialRowId = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `material-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+export const createEmptyMaterialsState = (): ProductionOrderFormValues["materials"] => ({
+  selected_bom_variant_id: "",
+  bom_multiplier: "1",
+  rows: [],
 });
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -228,6 +371,7 @@ export const createProductionOrderDefaultValues = (): ProductionOrderFormValues 
       line_machine_id: "",
       shift_incharge: "",
     },
+    materials: createEmptyMaterialsState(),
     custom_specs: {
       material_type: "",
       cbhr_inward_qty: "",
@@ -258,13 +402,106 @@ export const sumPlanMetric = (
   field: keyof ProductionOrderFormValues["plan_rows"][number],
 ) => rows.reduce((total, row) => total + parseNumericInput(row[field]), 0);
 
+export const getProductionQuantity = (rows: ProductionOrderFormValues["plan_rows"]) => sumPlanMetric(rows, "qty_mts");
+
+export const createMaterialRowFromBomComponent = (
+  component: BOMVariantComponent,
+  sequence: number,
+  bomVariantId: number,
+): ProductionOrderMaterialRowForm => ({
+  client_id: `bom-${bomVariantId}-${component.id}`,
+  sequence,
+  source_type: component.source_type,
+  is_bom_derived: true,
+  is_manual: false,
+  bom_variant: bomVariantId,
+  bom_component: component.id,
+  item: component.item,
+  product_subtype: component.product_subtype,
+  item_code: component.item_code,
+  item_name: component.item_name,
+  unit: component.unit || "g",
+  per_unit_quantity: component.target_weight_grams || "0",
+  received_quantity: "0",
+  request_quantity: "0",
+  rate: "0",
+  notes: "",
+});
+
+export const createMaterialRowFromItem = (
+  item: ProductTypeSubtypeLookupItem,
+  sequence: number,
+  selectedBomVariantId?: number | null,
+): ProductionOrderMaterialRowForm => ({
+  client_id: createMaterialRowId(),
+  sequence,
+  source_type: "PRODUCT_SUBTYPE",
+  is_bom_derived: false,
+  is_manual: true,
+  bom_variant: selectedBomVariantId ?? null,
+  bom_component: null,
+  item: null,
+  product_subtype: item.id,
+  item_code: item.code,
+  item_name: item.name,
+  unit: "g",
+  per_unit_quantity: "0",
+  received_quantity: "0",
+  request_quantity: "0",
+  rate: "0",
+  notes: "",
+});
+
+export const createMaterialRowFromSubtype = createMaterialRowFromItem;
+
+export const getMaterialRowIdentity = (row: Pick<ProductionOrderMaterialRowForm, "source_type" | "item" | "product_subtype" | "item_code">) => {
+  if (row.source_type === "PRODUCT_SUBTYPE" && row.product_subtype) {
+    return `PRODUCT_SUBTYPE:${row.product_subtype}`;
+  }
+  if (row.item) {
+    return `ITEM:${row.item}`;
+  }
+  return `CODE:${row.item_code}`;
+};
+
+export const computeMaterialRow = (
+  row: ProductionOrderMaterialRowForm,
+  productionQty: number,
+  bomMultiplier: number,
+): ProductionMaterialComputedRow => {
+  const perUnitQuantity = parseNumericInput(row.per_unit_quantity);
+  const receivedQuantity = parseNumericInput(row.received_quantity);
+  const rate = parseNumericInput(row.rate);
+  const bomQuantity = perUnitQuantity * productionQty * bomMultiplier;
+  const requiredQuantity = bomQuantity;
+  const remainingQuantity = Math.max(requiredQuantity - receivedQuantity, 0);
+  const amount = requiredQuantity * rate;
+
+  return {
+    ...row,
+    bom_quantity: bomQuantity,
+    required_quantity: requiredQuantity,
+    remaining_quantity: remainingQuantity,
+    amount,
+  };
+};
+
+export const formatNumberInputValue = (value: number, minimumFractionDigits = 0, maximumFractionDigits = 3) =>
+  value.toLocaleString("en-IN", {
+    minimumFractionDigits,
+    maximumFractionDigits,
+  });
+
 export const toProductionOrderPayload = (
   values: ProductionOrderFormValues,
   machines: ProductionMachine[],
 ): CreateProductionOrderPayload => {
   const selectedMachine = machines.find((machine) => String(machine.id) === values.resources.line_machine_id);
-  const plannedQuantity = sumPlanMetric(values.plan_rows, "qty_mts");
+  const plannedQuantity = getProductionQuantity(values.plan_rows);
   const planId = values.base_order.base_plan_id.trim();
+  const bomMultiplier = parseNumericInput(values.materials.bom_multiplier) || 1;
+  const computedMaterialRows = values.materials.rows.map((row) => computeMaterialRow(row, plannedQuantity, bomMultiplier));
+  const materialCost = computedMaterialRows.reduce((sum, row) => sum + row.amount, 0);
 
   return {
     production_id: values.production_id.trim(),
@@ -278,6 +515,30 @@ export const toProductionOrderPayload = (
     batch_number: "",
     line_name: selectedMachine?.name ?? "",
     line_number: selectedMachine?.machine_code ?? "",
+    material_cost: materialCost.toFixed(2),
+    total_cost: materialCost.toFixed(2),
+    materials: computedMaterialRows.map((row) => ({
+      sequence: row.sequence,
+      source_type: row.source_type,
+      is_bom_derived: row.is_bom_derived,
+      is_manual: row.is_manual,
+      bom_variant: row.bom_variant,
+      bom_component: row.bom_component,
+      item: row.item,
+      product_subtype: row.product_subtype,
+      item_code: row.item_code,
+      item_name: row.item_name,
+      unit: row.unit,
+      per_unit_quantity: parseNumericInput(row.per_unit_quantity).toFixed(3),
+      bom_quantity: row.bom_quantity.toFixed(3),
+      required_quantity: row.required_quantity.toFixed(3),
+      received_quantity: parseNumericInput(row.received_quantity).toFixed(3),
+      remaining_quantity: row.remaining_quantity.toFixed(3),
+      request_quantity: parseNumericInput(row.request_quantity).toFixed(3),
+      rate: parseNumericInput(row.rate).toFixed(3),
+      amount: row.amount.toFixed(2),
+      notes: row.notes,
+    })),
     ...(planId ? { plan_id: planId } : {}),
   };
 };
