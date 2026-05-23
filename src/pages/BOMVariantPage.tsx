@@ -28,6 +28,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -54,16 +55,18 @@ import { toast } from "@/components/ui/sonner";
 
 // ── BOM Create form ───────────────────────────────────────────────────────────
 
+const MINIMUM_COMPONENT_SEARCH_LENGTH = 2;
+const RECIPE_CODE_PATTERN = /^[A-Za-z0-9 .-]+$/;
+const DEFAULT_BOM_REVISION = "v1";
+
 const createSchema = z.object({
-  variant_code: z.string().min(1, "Required").max(30),
-  name: z.string().min(1, "Required").max(255),
-  revision: z.string().default("v1"),
+  recipe_code: z.string()
+    .trim()
+    .min(1, "Recipe code is required")
+    .max(30, "Recipe code must be 30 characters or fewer")
+    .regex(RECIPE_CODE_PATTERN, "Use only letters, numbers, spaces, hyphens, and dots"),
   notes: z.string().default(""),
-  password: z.string().min(1, "Password is required"),
-  confirm_password: z.string().min(1, "Required"),
-}).refine((d) => d.password === d.confirm_password, {
-  message: "Passwords do not match",
-  path: ["confirm_password"],
+  recipes: z.array(z.number()).min(1, "Select at least one recipe"),
 });
 type CreateFormValues = z.infer<typeof createSchema>;
 
@@ -76,95 +79,287 @@ const BOMCreateDialog = ({
   onOpenChange: (o: boolean) => void;
   onSuccess: () => void;
 }) => {
-  const [showPwd, setShowPwd] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [draftComponents, setDraftComponents] = useState<DraftBOMComponent[]>([]);
 
   const form = useForm<CreateFormValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { variant_code: "", name: "", revision: "v1", notes: "", password: "", confirm_password: "" },
+    defaultValues: { recipe_code: "", notes: "", recipes: [] },
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  const subtypeSearchQ = useQuery({
+    queryKey: ["bom-create-subtype-search", debouncedSearchQuery],
+    queryFn: () => wpeMastersApi.productTypeSubtypes.lookup({ search: debouncedSearchQuery }),
+    enabled: open && searchOpen && debouncedSearchQuery.length >= MINIMUM_COMPONENT_SEARCH_LENGTH,
+    refetchOnWindowFocus: false,
+  });
+
+  const searchOptions = useMemo(() => {
+    const query = debouncedSearchQuery || searchQuery.trim();
+    const selectedSubtypeIds = new Set(
+      draftComponents
+        .map((component) => component.product_subtype)
+        .filter((value): value is number => typeof value === "number" && value > 0),
+    );
+
+    return (subtypeSearchQ.data ?? []).filter((option) => {
+      if (selectedSubtypeIds.has(option.id)) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const normalizedQuery = query.toLowerCase();
+      return [option.name, option.code, option.category_name]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
+  }, [debouncedSearchQuery, draftComponents, searchQuery, subtypeSearchQ.data]);
+
+  useEffect(() => {
+    if (!searchOpen) {
+      setHighlightedIndex(-1);
+      return;
+    }
+
+    setHighlightedIndex(searchOptions.length > 0 ? 0 : -1);
+  }, [searchOpen, searchOptions.length]);
+
+  const invalidComponentIds = useMemo(
+    () =>
+      new Set(
+        draftComponents
+          .filter((component) => !isDraftComponentValid(component))
+          .map((component) => component.client_id),
+      ),
+    [draftComponents],
+  );
+
+  const syncSelectedRecipes = (components: DraftBOMComponent[]) => {
+    form.setValue(
+      "recipes",
+      components
+        .map((component) => component.product_subtype)
+        .filter((value): value is number => typeof value === "number" && value > 0),
+      { shouldDirty: true, shouldValidate: true },
+    );
+  };
+
+  const resetCreateDialog = () => {
+    form.reset({ recipe_code: "", notes: "", recipes: [] });
+    setSearchQuery("");
+    setDebouncedSearchQuery("");
+    setSearchOpen(false);
+    setHighlightedIndex(-1);
+    setDraftComponents([]);
+  };
+
+  const addSubtypeComponent = (subtypeId: number) => {
+    const subtype = searchOptions.find((option) => option.id === subtypeId);
+    if (!subtype) {
+      return;
+    }
+
+    if (draftComponents.some((component) => component.product_subtype === subtype.id)) {
+      toast.error(`${subtype.name} is already selected.`);
+      return;
+    }
+
+    const nextComponents = [...draftComponents, createDraftComponentFromSubtype(subtype, draftComponents.length + 1)];
+    setDraftComponents(nextComponents);
+    syncSelectedRecipes(nextComponents);
+    form.clearErrors("recipes");
+    setSearchQuery("");
+    setDebouncedSearchQuery("");
+    setSearchOpen(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleSearchKeyDown: KeyboardEventHandler<HTMLInputElement> = (event) => {
+    if (!searchOpen && ["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) {
+      setSearchOpen(true);
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!searchOptions.length) {
+        return;
+      }
+      setHighlightedIndex((current) => (current + 1) % searchOptions.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!searchOptions.length) {
+        return;
+      }
+      setHighlightedIndex((current) => (current <= 0 ? searchOptions.length - 1 : current - 1));
+      return;
+    }
+
+    if (event.key === "Enter" && searchOpen && highlightedIndex >= 0 && searchOptions[highlightedIndex]) {
+      event.preventDefault();
+      addSubtypeComponent(searchOptions[highlightedIndex].id);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setSearchOpen(false);
+      setHighlightedIndex(-1);
+    }
+  };
+
+  const updateDraftComponent = (clientId: string, updater: (component: DraftBOMComponent) => DraftBOMComponent) => {
+    setDraftComponents((current) =>
+      current.map((component) => (component.client_id === clientId ? updater(component) : component)),
+    );
+  };
+
+  const removeDraftComponent = (clientId: string) => {
+    const nextComponents = draftComponents
+      .filter((component) => component.client_id !== clientId)
+      .map((component, index) => ({ ...component, sequence: index + 1 }));
+    setDraftComponents(nextComponents);
+    syncSelectedRecipes(nextComponents);
+  };
 
   const mutation = useMutation({
     mutationFn: (values: CreateFormValues) =>
       coreApi.post("/api/production/bom-variants/", {
-        variant_code: values.variant_code,
-        name: values.name,
-        revision: values.revision,
+        variant_code: values.recipe_code.trim(),
+        name: values.recipe_code.trim(),
+        revision: DEFAULT_BOM_REVISION,
         notes: values.notes,
-        password: values.password,
+        components: draftComponents.map((component, index) => ({
+          product_subtype: component.product_subtype,
+          target_weight_grams: component.target_weight_grams,
+          min_weight_grams: component.min_weight_grams,
+          max_weight_grams: component.max_weight_grams,
+          sequence: index + 1,
+          is_regrind: component.is_regrind,
+          unit: component.unit,
+        })),
       }),
     onSuccess: () => {
       toast.success("BOM variant created.");
+      resetCreateDialog();
       onOpenChange(false);
-      form.reset();
       onSuccess();
     },
     onError: (e) => toast.error(getApiErrorMessage(e, "Failed to create BOM variant.")),
   });
 
+  const handleSubmit = (values: CreateFormValues) => {
+    const firstInvalidComponent = draftComponents.find((component) => !isDraftComponentValid(component));
+    if (firstInvalidComponent) {
+      form.setError("recipes", {
+        type: "manual",
+        message: `Enter a valid quantity and unit for ${firstInvalidComponent.item_name}.`,
+      });
+      return;
+    }
+
+    mutation.mutate(values);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) form.reset(); onOpenChange(o); }}>
-      <DialogContent className="max-w-md">
+    <Dialog open={open} onOpenChange={(o) => { if (!o) resetCreateDialog(); onOpenChange(o); }}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New BOM Variant</DialogTitle>
-          <DialogDescription>Create a new Bill of Materials variant. You can add components after creation.</DialogDescription>
+          <DialogDescription>
+            Create a BOM variant and map Product Type subcategories as recipe rows. A recipe password can be configured later.
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <FormField control={form.control} name="variant_code" render={({ field }) => (
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <div className="grid gap-3">
+              <FormField control={form.control} name="recipe_code" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Variant Code</FormLabel>
-                  <FormControl><Input {...field} placeholder="BOM-001" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="revision" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Revision</FormLabel>
-                  <FormControl><Input {...field} placeholder="v1" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>Variant Name</FormLabel>
-                  <FormControl><Input {...field} placeholder="Additive Blend Formula A" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="password" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Recipe Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input type={showPwd ? "text" : "password"} {...field} placeholder="••••" />
-                      <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                        {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="confirm_password" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <FormControl>
-                    <Input type={showPwd ? "text" : "password"} {...field} placeholder="••••" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="notes" render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl><Textarea {...field} rows={2} /></FormControl>
+                  <FormLabel>Recipe Code*</FormLabel>
+                  <FormControl><Input {...field} placeholder="WPE0129-RG" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
             </div>
+
+            <FormField control={form.control} name="recipes" render={() => (
+              <FormItem>
+                <FormLabel>Add Recipe*</FormLabel>
+                <FormDescription>
+                  Search WPE Masters / Product Types / Subcategories and add one or more recipe mappings.
+                </FormDescription>
+                <div className="space-y-3">
+                  <div className="relative">
+                    <ComponentSearchInput
+                      value={searchQuery}
+                      isLoading={subtypeSearchQ.isLoading}
+                      onChange={(value) => {
+                        setSearchQuery(value);
+                        setSearchOpen(true);
+                      }}
+                      onFocus={() => setSearchOpen(true)}
+                      onBlur={() => window.setTimeout(() => setSearchOpen(false), 150)}
+                      onKeyDown={handleSearchKeyDown}
+                    />
+                    <ComponentAutocompleteDropdown
+                      open={searchOpen}
+                      query={searchQuery}
+                      options={searchOptions}
+                      highlightedIndex={highlightedIndex}
+                      isLoading={subtypeSearchQ.isLoading}
+                      minimumCharacters={MINIMUM_COMPONENT_SEARCH_LENGTH}
+                      onSelect={(option) => addSubtypeComponent(option.id)}
+                      onHighlight={setHighlightedIndex}
+                    />
+                  </div>
+
+                  {draftComponents.length > 0 ? (
+                    <SelectedComponentTable
+                      components={draftComponents}
+                      invalidComponentIds={invalidComponentIds}
+                      onQuantityChange={(clientId, value) =>
+                        updateDraftComponent(clientId, (component) => ({ ...component, target_weight_grams: value }))
+                      }
+                      onUnitChange={(clientId, value) =>
+                        updateDraftComponent(clientId, (component) => ({ ...component, unit: value }))
+                      }
+                      onRemove={removeDraftComponent}
+                    />
+                  ) : (
+                    <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-sm text-muted-foreground">
+                      Selected recipe rows will appear here.
+                    </div>
+                  )}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="notes" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notes</FormLabel>
+                <FormControl><Textarea {...field} rows={3} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => { resetCreateDialog(); onOpenChange(false); }}>Cancel</Button>
               <Button type="submit" disabled={mutation.isPending}>Create BOM Variant</Button>
             </div>
           </form>
@@ -252,8 +447,6 @@ const ChangePasswordDialog = ({
 };
 
 // ── BOM Detail / Component editor ─────────────────────────────────────────────
-
-const MINIMUM_COMPONENT_SEARCH_LENGTH = 2;
 
 const BOMDetailDialog = ({
   open,
@@ -596,6 +789,8 @@ const BOMVariantPage = () => {
   });
 
   const handleSuccess = () => queryClient.invalidateQueries({ queryKey: ["bom-variants"] });
+  const totalVariants = (bomsQ.data ?? []).length;
+  const passwordConfiguredCount = (bomsQ.data ?? []).filter((bom) => bom.has_password).length;
 
   const filtered = (bomsQ.data ?? []).filter((b) => {
     if (!search.trim()) return true;
@@ -606,7 +801,7 @@ const BOMVariantPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="BOM Variants"
-        description="Manage Bill of Materials variants and their recipe components (password protected)."
+        description="Manage Bill of Materials variants and their recipe components."
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />New BOM Variant
@@ -629,7 +824,7 @@ const BOMVariantPage = () => {
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">
           <p className="text-xs text-muted-foreground">Total Variants</p>
-          <p className="text-2xl font-bold mt-1">{(bomsQ.data ?? []).length}</p>
+          <p className="text-2xl font-bold mt-1">{totalVariants}</p>
         </div>
         <div className="rounded-xl border bg-card p-4">
           <p className="text-xs text-muted-foreground">Total Components</p>
@@ -638,9 +833,9 @@ const BOMVariantPage = () => {
           </p>
         </div>
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs text-muted-foreground">All Password Protected</p>
+          <p className="text-xs text-muted-foreground">Password Configured</p>
           <p className="text-2xl font-bold mt-1 text-green-600">
-            <Lock className="inline h-5 w-5 mr-1" />Yes
+            <Lock className="inline h-5 w-5 mr-1" />{passwordConfiguredCount}/{totalVariants}
           </p>
         </div>
       </div>
@@ -670,7 +865,11 @@ const BOMVariantPage = () => {
                     <TableCell className="text-center text-muted-foreground">{i + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
-                        <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        {bom.has_password ? (
+                          <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        ) : (
+                          <KeyRound className="h-3 w-3 text-amber-600 flex-shrink-0" />
+                        )}
                         <span className="font-mono text-xs font-semibold">{bom.variant_code}</span>
                       </div>
                     </TableCell>

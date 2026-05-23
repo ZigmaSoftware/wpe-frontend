@@ -1,4 +1,8 @@
 import { formatNumberInputValue } from "./productionOrderForm";
+import {
+  productionFieldLabelClassName,
+  productionMetricCardClassName,
+} from "./productionOrderFormStyles";
 
 type MaterialsCalculationSummaryProps = {
   requiredQuantity: number;
@@ -10,8 +14,6 @@ type MaterialsCalculationSummaryProps = {
   manualCount: number;
 };
 
-const cardClassName = "rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3";
-
 const MaterialsCalculationSummary = ({
   requiredQuantity,
   receivedQuantity,
@@ -22,29 +24,29 @@ const MaterialsCalculationSummary = ({
   manualCount,
 }: MaterialsCalculationSummaryProps) => (
   <div className="grid gap-3 xl:grid-cols-6">
-    <div className={cardClassName}>
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Required Qty</div>
+    <div className={productionMetricCardClassName}>
+      <div className={productionFieldLabelClassName}>Required Qty</div>
       <div className="mt-1 text-base font-semibold text-slate-900">{formatNumberInputValue(requiredQuantity, 3, 3)}</div>
     </div>
-    <div className={cardClassName}>
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Received</div>
+    <div className={productionMetricCardClassName}>
+      <div className={productionFieldLabelClassName}>Received</div>
       <div className="mt-1 text-base font-semibold text-slate-900">{formatNumberInputValue(receivedQuantity, 3, 3)}</div>
     </div>
-    <div className={cardClassName}>
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Remaining</div>
+    <div className={productionMetricCardClassName}>
+      <div className={productionFieldLabelClassName}>Running</div>
       <div className="mt-1 text-base font-semibold text-slate-900">{formatNumberInputValue(remainingQuantity, 3, 3)}</div>
     </div>
-    <div className={cardClassName}>
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Requested</div>
+    <div className={productionMetricCardClassName}>
+      <div className={productionFieldLabelClassName}>Requested</div>
       <div className="mt-1 text-base font-semibold text-slate-900">{formatNumberInputValue(requestQuantity, 3, 3)}</div>
     </div>
-    <div className={cardClassName}>
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Material Amount</div>
+    <div className={productionMetricCardClassName}>
+      <div className={productionFieldLabelClassName}>Material Amount</div>
       <div className="mt-1 text-base font-semibold text-slate-900">{formatNumberInputValue(amount, 2, 2)}</div>
     </div>
-    <div className={cardClassName}>
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Rows</div>
-      <div className="mt-1 text-base font-semibold text-slate-900">{bomDerivedCount} BOM · {manualCount} Manual</div>
+    <div className={productionMetricCardClassName}>
+      <div className={productionFieldLabelClassName}>Done</div>
+      <div className="mt-1 text-base font-semibold text-slate-900">{bomDerivedCount} BOM-S · {manualCount} Manual</div>
     </div>
   </div>
 );

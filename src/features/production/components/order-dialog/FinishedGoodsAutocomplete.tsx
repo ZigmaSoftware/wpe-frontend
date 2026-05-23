@@ -7,6 +7,10 @@ import { coreApi } from "@/lib/api";
 import { normalizeListResponse } from "@/lib/api-helpers";
 import { cn } from "@/lib/utils";
 import type { ProductionItemOption } from "./productionOrderForm";
+import {
+  productionHelperTextClassName,
+  productionInputClassName,
+} from "./productionOrderFormStyles";
 
 type FinishedGoodsAutocompleteProps = {
   value: ProductionItemOption | null;
@@ -177,8 +181,8 @@ const FinishedGoodsAutocomplete = ({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className={cn("relative rounded-xl", open && "ring-2 ring-sky-500/30 ring-offset-2 ring-offset-white")}>
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <div className={cn("relative rounded-xl", open && "ring-2 ring-[#2d6cdf]/15 ring-offset-2 ring-offset-white")}>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
         <Input
           id={inputId}
           value={searchTerm}
@@ -201,10 +205,10 @@ const FinishedGoodsAutocomplete = ({
           aria-controls={listId}
           aria-expanded={open}
           aria-invalid={error ? "true" : "false"}
-          className={cn("h-11 rounded-xl border-slate-200 bg-white pl-10 pr-20", error && "border-destructive")}
+          className={cn(productionInputClassName, "pl-10 pr-20", error && "border-destructive")}
         />
         <div className="absolute inset-y-0 right-2 flex items-center gap-1">
-          {searchQuery.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+          {searchQuery.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-300" /> : null}
           {searchTerm ? (
             <Button
               type="button"
@@ -229,7 +233,7 @@ const FinishedGoodsAutocomplete = ({
         <div
           id={listId}
           role="listbox"
-          className="absolute top-[calc(100%+0.35rem)] z-50 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+          className="absolute top-[calc(100%+0.35rem)] z-50 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_42px_-28px_rgba(15,23,42,0.4)]"
         >
           <div className="max-h-72 overflow-y-auto py-1">
             {debouncedSearch.length < 2 ? (
@@ -262,7 +266,7 @@ const FinishedGoodsAutocomplete = ({
                   aria-selected={active}
                   className={cn(
                     "flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors",
-                    active ? "bg-slate-100" : "hover:bg-slate-50",
+                    active ? "bg-[#f5f8ff]" : "hover:bg-slate-50",
                   )}
                   onMouseDown={() => handleSelect(item)}
                   onMouseEnter={() => setHighlightedIndex(index)}
@@ -279,7 +283,7 @@ const FinishedGoodsAutocomplete = ({
         </div>
       ) : null}
 
-      <div className={cn("mt-2 text-xs", error ? "text-destructive" : "text-slate-500")}>{helperMessage}</div>
+      <div className={cn("mt-2", error ? "text-destructive" : productionHelperTextClassName)}>{helperMessage}</div>
     </div>
   );
 };

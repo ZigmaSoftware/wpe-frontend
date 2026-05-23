@@ -1,4 +1,5 @@
 import type { UseFormReturn } from "react-hook-form";
+import { CalendarDays } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,6 +7,11 @@ import type { ProductionMachine } from "@/lib/types";
 import ProductionSectionCard from "./ProductionSectionCard";
 import ProductionShiftSelector from "./ProductionShiftSelector";
 import type { NamedOption, ProductionOrderFormValues } from "./productionOrderForm";
+import {
+  productionFieldLabelClassName,
+  productionHelperTextClassName,
+  productionInputClassName,
+} from "./productionOrderFormStyles";
 
 type ProductionResourcesSectionProps = {
   form: UseFormReturn<ProductionOrderFormValues>;
@@ -31,17 +37,19 @@ const ProductionResourcesSection = ({
   <ProductionSectionCard
     title="Date & Time & Resources"
     description="Assign the production schedule, shift, and operational resources."
+    tone="blue"
+    icon={CalendarDays}
   >
     <div className="grid gap-4">
-      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="grid gap-4">
         <FormField
           control={form.control}
           name="resources.production_date"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-medium text-slate-700">Production Date</FormLabel>
+              <FormLabel className={productionFieldLabelClassName}>Production Date*</FormLabel>
               <FormControl>
-                <Input {...field} type="date" className="h-11 rounded-xl border-slate-200" />
+                <Input {...field} type="date" className={productionInputClassName} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -53,7 +61,7 @@ const ProductionResourcesSection = ({
           name="resources.shift"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-medium text-slate-700">Shift</FormLabel>
+              <FormLabel className={productionFieldLabelClassName}>Shift</FormLabel>
               <FormControl>
                 <ProductionShiftSelector value={field.value} onChange={field.onChange} />
               </FormControl>
@@ -69,10 +77,10 @@ const ProductionResourcesSection = ({
           name="resources.production_facility"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-medium text-slate-700">Production Facility*</FormLabel>
+              <FormLabel className={productionFieldLabelClassName}>Production Facility*</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                  <SelectTrigger className={productionInputClassName}>
                     <SelectValue placeholder={lookupsLoading ? "Loading facilities..." : "Select production facility"} />
                   </SelectTrigger>
                 </FormControl>
@@ -94,10 +102,10 @@ const ProductionResourcesSection = ({
           name="resources.work_center"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-medium text-slate-700">Work Center*</FormLabel>
+              <FormLabel className={productionFieldLabelClassName}>Work Center*</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                  <SelectTrigger className={productionInputClassName}>
                     <SelectValue placeholder={lookupsLoading ? "Loading work centers..." : "Select work center"} />
                   </SelectTrigger>
                 </FormControl>
@@ -119,10 +127,10 @@ const ProductionResourcesSection = ({
           name="resources.line_machine_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-medium text-slate-700">Line (Machine)</FormLabel>
+              <FormLabel className={productionFieldLabelClassName}>Line (Machine)</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                  <SelectTrigger className={productionInputClassName}>
                     <SelectValue placeholder={machinesLoading ? "Loading machines..." : "Select machine"} />
                   </SelectTrigger>
                 </FormControl>
@@ -144,10 +152,10 @@ const ProductionResourcesSection = ({
           name="resources.shift_incharge"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-medium text-slate-700">Shift Incharge*</FormLabel>
+              <FormLabel className={productionFieldLabelClassName}>Shift Incharge*</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                  <SelectTrigger className={productionInputClassName}>
                     <SelectValue placeholder={lookupsLoading ? "Loading incharges..." : "Select shift incharge"} />
                   </SelectTrigger>
                 </FormControl>
@@ -165,7 +173,7 @@ const ProductionResourcesSection = ({
         />
       </div>
 
-      {lookupError ? <div className="text-xs text-amber-600">{lookupError}</div> : null}
+      {lookupError ? <div className={productionHelperTextClassName}>{lookupError}</div> : null}
     </div>
   </ProductionSectionCard>
 );
