@@ -492,6 +492,88 @@ export const formatNumberInputValue = (value: number, minimumFractionDigits = 0,
     maximumFractionDigits,
   });
 
+export type MaterialPlanItem = {
+  id?: number | null;
+  sequence?: number;
+  source_type?: string;
+  is_bom_derived?: boolean;
+  is_manual?: boolean;
+  bom_variant?: number | null;
+  bom_component?: number | null;
+  item?: number | null;
+  product_subtype?: number | null;
+  item_code?: string;
+  item_name?: string;
+  unit?: string;
+  per_unit_quantity?: string | number;
+  rate?: string | number;
+  notes?: string;
+};
+
+export type ProductionOrderDetail = {
+  id: number;
+  production_id: string;
+  production_type?: string;
+  status?: string;
+  production_date?: string;
+  shift?: string;
+  planned_quantity?: string;
+  line_number?: string | null;
+  line_name?: string | null;
+  material_plans?: MaterialPlanItem[];
+};
+
+export const mapOrderDetailToFormValues = (
+  order: ProductionOrderDetail,
+  machines: Array<{ id: number; machine_code?: string | null; name: string }>,
+): ProductionOrderFormValues => {
+  const defaults = createProductionOrderDefaultValues();
+  const shiftValue = SHIFT_OPTIONS.find((o) => o.apiLabel === order.shift)?.value ?? "SHIFT_1";
+  const qty = parseFloat(String(order.planned_quantity ?? "0")) || 0;
+  const machine = machines.find(
+    (m) =>
+      (order.line_number && m.machine_code === order.line_number) ||
+      (order.line_name && m.name === order.line_name),
+  );
+
+  const materialRows: ProductionOrderFormValues["materials"]["rows"] = (order.material_plans ?? []).map(
+    (plan, index) => ({
+      client_id: `edit-${plan.id ?? index}`,
+      sequence: plan.sequence ?? index + 1,
+      source_type: (plan.source_type as MaterialSourceTypeValue) ?? "ITEM",
+      is_bom_derived: plan.is_bom_derived ?? false,
+      is_manual: plan.is_manual ?? true,
+      bom_variant: plan.bom_variant ?? null,
+      bom_component: plan.bom_component ?? null,
+      item: plan.item ?? null,
+      product_subtype: plan.product_subtype ?? null,
+      item_code: plan.item_code ?? "",
+      item_name: plan.item_name ?? "",
+      unit: plan.unit ?? "g",
+      per_unit_quantity: String(plan.per_unit_quantity ?? "0"),
+      received_quantity: "0",
+      request_quantity: "0",
+      rate: String(plan.rate ?? "0"),
+      notes: plan.notes ?? "",
+    }),
+  );
+
+  return {
+    ...defaults,
+    production_id: order.production_id,
+    status: (order.status as ProductionOrderStatusValue) ?? "PLANNED",
+    production_type: (order.production_type as ProductionTypeValue) ?? "RECYCLING_PRODUCTION",
+    plan_rows: [{ length_mts: "", qty_mts: qty > 0 ? qty.toFixed(3) : "", packets: "" }],
+    resources: {
+      ...defaults.resources,
+      production_date: order.production_date ?? defaults.resources.production_date,
+      shift: shiftValue,
+      line_machine_id: machine ? String(machine.id) : "",
+    },
+    materials: { selected_bom_variant_id: "", bom_multiplier: "1", rows: materialRows },
+  };
+};
+
 export const toProductionOrderPayload = (
   values: ProductionOrderFormValues,
   machines: ProductionMachine[],

@@ -427,9 +427,14 @@ const ProductionPage = () => {
                     <TableCell>{formatDecimal(order.planned_quantity)}</TableCell>
                     <TableCell><StatusBadge status={order.status} classes={ORDER_STATUS_CLASSES} /></TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => openBatches(order)}>
-                        Manage Batches
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={() => openBatches(order)}>
+                          Manage Batches
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => navigate(`/app/production/${order.id}/edit`)}>
+                          Edit
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -854,6 +859,7 @@ const ProductionPage = () => {
           )}
         </DialogContent>
       </Dialog>
+
     </div>
   );
 };

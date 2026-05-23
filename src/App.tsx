@@ -51,6 +51,7 @@ import ItemsPage from "@/pages/ItemsPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import PresalesPage from "@/pages/PresalesPage";
+import ProductionEditOrderPage from "@/pages/ProductionEditOrderPage";
 import ProductionNewOrderPage from "@/pages/ProductionNewOrderPage";
 import ProductionPage from "@/pages/ProductionPage";
 import StorePage from "@/pages/StorePage";
@@ -83,6 +84,7 @@ const App = () => (
                   <Route path="/app/blending" element={<BlendingPage />} />
                   <Route path="/app/presales" element={<PresalesPage />} />
                   <Route path="/app/production/neworder" element={<ProductionNewOrderPage />} />
+                  <Route path="/app/production/:id/edit" element={<ProductionEditOrderPage />} />
                   <Route path="/app/production" element={<ProductionPage />} />
                   <Route path="/app/regrind" element={<RegrindPage />} />
                   <Route path="/app/store" element={<StorePage />} />

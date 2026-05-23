@@ -47,7 +47,7 @@ const ProductionNewOrderPage = () => {
           </Button>
         </div>
 
-        <div className="min-h-[calc(100vh-9rem)]">
+        <div className="h-[calc(100vh-9rem)]">
           <ProductionOrderForm
             onSubmit={(values) => createOrderMutation.mutate(values)}
             onCancel={() => navigate("/app/production")}
