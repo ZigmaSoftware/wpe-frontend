@@ -9,6 +9,7 @@ import {
   type ProductionMaterialComputedRow,
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
+import { productionTableInputClassName } from "./productionOrderFormStyles";
 
 type MaterialComponentRowProps = {
   index: number;
@@ -17,10 +18,8 @@ type MaterialComponentRowProps = {
   remove: UseFieldArrayRemove;
 };
 
-const cellInputClassName = "h-9 rounded-lg border-slate-200 bg-white text-right";
-
 const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRowProps) => (
-  <TableRow className="align-top">
+  <TableRow className="align-top hover:bg-slate-50/60">
     <TableCell className="font-medium text-slate-500">{index + 1}</TableCell>
     <TableCell className="font-mono text-xs text-slate-600">{row.item_code}</TableCell>
     <TableCell className="min-w-[220px]">
@@ -45,7 +44,7 @@ const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRow
               <Input
                 {...field}
                 inputMode="decimal"
-                className={cellInputClassName}
+                className={productionTableInputClassName}
                 readOnly={row.is_bom_derived}
               />
             </FormControl>
@@ -64,7 +63,7 @@ const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRow
         render={({ field }) => (
           <FormItem>
             <FormControl>
-              <Input {...field} inputMode="decimal" className={cellInputClassName} />
+              <Input {...field} inputMode="decimal" className={productionTableInputClassName} />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -79,7 +78,7 @@ const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRow
         render={({ field }) => (
           <FormItem>
             <FormControl>
-              <Input {...field} inputMode="decimal" className={cellInputClassName} />
+              <Input {...field} inputMode="decimal" className={productionTableInputClassName} />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -93,7 +92,7 @@ const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRow
         render={({ field }) => (
           <FormItem>
             <FormControl>
-              <Input {...field} inputMode="decimal" className={cellInputClassName} />
+              <Input {...field} inputMode="decimal" className={productionTableInputClassName} />
             </FormControl>
             <FormMessage />
           </FormItem>

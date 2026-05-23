@@ -394,6 +394,7 @@ export type BOMVariant = {
   is_active: boolean;
   notes: string;
   component_count?: number;
+  has_password?: boolean;
   components?: BOMVariantComponent[];
   created_at: string;
   updated_at: string;

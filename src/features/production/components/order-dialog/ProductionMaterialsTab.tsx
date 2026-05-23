@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFieldArray, useWatch, type UseFormReturn } from "react-hook-form";
-import { Loader2 } from "lucide-react";
+import { Boxes, Loader2 } from "lucide-react";
 import { FormField } from "@/components/ui/form";
 import type { ProductTypeSubtypeLookupItem } from "@/features/wpe-masters/types";
 import type { BOMVariant } from "@/lib/types";
@@ -22,6 +22,7 @@ import {
 import { useBomComponents } from "./useBomComponents";
 import { useBomVariants } from "./useBomVariants";
 import { useMaterialCalculations } from "./useMaterialCalculations";
+import { productionHelperTextClassName } from "./productionOrderFormStyles";
 
 type ProductionMaterialsTabProps = {
   form: UseFormReturn<ProductionOrderFormValues>;
@@ -171,7 +172,12 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
         )}
       />
 
-      <ProductionSectionCard title="Materials Planning" description="Select BOM variant, add manual items, and review material requirements before final order creation.">
+      <ProductionSectionCard
+        title="Materials Planning"
+        description="Select BOM variant, add manual items, and review material requirements before final order creation."
+        tone="violet"
+        icon={Boxes}
+      >
         <div className="space-y-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
             <MaterialItemSearch
@@ -202,7 +208,7 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
           ) : null}
 
           {currentBomVariant ? (
-            <div className="text-sm text-slate-500">
+            <div className={productionHelperTextClassName}>
               Selected BOM Variant: <span className="font-medium text-slate-900">{currentBomVariant.variant_code}</span> · {currentBomVariant.name}
             </div>
           ) : null}

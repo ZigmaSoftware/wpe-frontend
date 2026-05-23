@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import {
+  productionCardBaseClassName,
+  productionCardContentClassName,
+  productionCardHeaderClassName,
+} from "./productionOrderFormStyles";
 
 type ProductionSectionCardProps = {
   title: string;
@@ -9,7 +15,42 @@ type ProductionSectionCardProps = {
   children: ReactNode;
   className?: string;
   contentClassName?: string;
+  tone?: "amber" | "blue" | "violet" | "slate" | "gold" | "emerald";
+  icon?: LucideIcon;
 };
+
+const toneClasses = {
+  amber: {
+    accent: "before:bg-[#ff6b00]",
+    iconWrap: "bg-[#fff3e8]",
+    icon: "text-[#ff6b00]",
+  },
+  blue: {
+    accent: "before:bg-[#2d6cdf]",
+    iconWrap: "bg-[#eef4ff]",
+    icon: "text-[#2d6cdf]",
+  },
+  violet: {
+    accent: "before:bg-[#8b5cf6]",
+    iconWrap: "bg-[#f4efff]",
+    icon: "text-[#8b5cf6]",
+  },
+  slate: {
+    accent: "before:bg-[#94a3b8]",
+    iconWrap: "bg-slate-100",
+    icon: "text-slate-500",
+  },
+  gold: {
+    accent: "before:bg-[#f2b200]",
+    iconWrap: "bg-[#fff8e1]",
+    icon: "text-[#c98a00]",
+  },
+  emerald: {
+    accent: "before:bg-[#10b981]",
+    iconWrap: "bg-[#eafaf4]",
+    icon: "text-[#059669]",
+  },
+} as const;
 
 const ProductionSectionCard = ({
   title,
@@ -18,19 +59,33 @@ const ProductionSectionCard = ({
   children,
   className,
   contentClassName,
+  tone = "slate",
+  icon: Icon,
 }: ProductionSectionCardProps) => (
-  <Card className={cn("rounded-2xl border-slate-200/90 bg-white shadow-sm", className)}>
-    <CardHeader className="flex flex-row items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
-      <div className="space-y-1">
-        <div className="inline-flex rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">
-          {title}
+  <Card
+    className={cn(
+      productionCardBaseClassName,
+      "before:absolute before:left-0 before:top-4 before:h-12 before:w-[3px] before:rounded-full",
+      toneClasses[tone].accent,
+      className,
+    )}
+  >
+    <CardHeader className={productionCardHeaderClassName}>
+      <div className="flex min-w-0 items-start gap-3">
+        {Icon ? (
+          <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", toneClasses[tone].iconWrap)}>
+            <Icon className={cn("h-4 w-4", toneClasses[tone].icon)} />
+          </div>
+        ) : null}
+        <div className="min-w-0 space-y-1">
+          <div className="text-sm font-bold uppercase tracking-[0.08em] text-slate-800">{title}</div>
+          {description ? <p className="text-sm leading-5 text-slate-400">{description}</p> : null}
         </div>
-        {description ? <p className="text-sm text-slate-500">{description}</p> : null}
       </div>
       {action}
     </CardHeader>
     <CardTitle className="sr-only">{title}</CardTitle>
-    <CardContent className={cn("px-5 py-5", contentClassName)}>{children}</CardContent>
+    <CardContent className={cn(productionCardContentClassName, contentClassName)}>{children}</CardContent>
   </Card>
 );
 
