@@ -8,6 +8,8 @@ type MasterToolbarProps = {
   createLabel: string;
   onCreate: () => void;
   filters?: React.ReactNode;
+  hideCreate?: boolean;
+  createDisabled?: boolean;
 };
 
 const MasterToolbar = ({
@@ -16,6 +18,8 @@ const MasterToolbar = ({
   createLabel,
   onCreate,
   filters,
+  hideCreate = false,
+  createDisabled = false,
 }: MasterToolbarProps) => (
   <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
     <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
@@ -30,10 +34,12 @@ const MasterToolbar = ({
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {filters}
-        <Button onClick={onCreate} className="h-10">
-          <Plus className="mr-2 h-4 w-4" />
-          {createLabel}
-        </Button>
+        {!hideCreate ? (
+          <Button onClick={onCreate} className="h-10" disabled={createDisabled}>
+            <Plus className="mr-2 h-4 w-4" />
+            {createLabel}
+          </Button>
+        ) : null}
       </div>
     </div>
   </div>

@@ -277,15 +277,30 @@ const StorePage = () => {
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
-              <TableRow key={row.id}>
+                <TableRow key={row.id}>
                 <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                 <TableCell>{formatDateTime(row.requested_at)}</TableCell>
                 <TableCell>
-                  <div className="font-medium">{row.item_name}</div>
-                  <div className="font-mono text-xs text-muted-foreground">{row.item_code}</div>
+                  <div className="space-y-2">
+                    {(row.items?.length ? row.items : []).map((item) => (
+                      <div key={item.id}>
+                        <div className="font-medium">{item.item_name}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{item.item_code}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatDecimal(item.requested_qty)} {item.unit}
+                        </div>
+                      </div>
+                    ))}
+                    {!row.items?.length ? (
+                      <div>
+                        <div className="font-medium">{row.item_name || "-"}</div>
+                        {row.item_code ? <div className="font-mono text-xs text-muted-foreground">{row.item_code}</div> : null}
+                      </div>
+                    ) : null}
+                  </div>
                 </TableCell>
                 <TableCell>
-                  {formatDecimal(row.quantity)} {row.unit}
+                  {formatDecimal(row.total_requested_qty ?? row.quantity)} {row.unit || row.items?.[0]?.unit || ""}
                 </TableCell>
                 <TableCell>{row.requested_for_name}</TableCell>
                 <TableCell className="max-w-xs truncate" title={row.request_reason}>
@@ -320,16 +335,16 @@ const StorePage = () => {
                     <span className="text-muted-foreground">Closed</span>
                   )}
                 </TableCell>
-              </TableRow>
-            ))}
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       </div>
     );
   };
 
-  const isLoading = intakeQuery.isLoading || transactionsQuery.isLoading || requestsQuery.isLoading;
-  const isError = intakeQuery.isError || transactionsQuery.isError || requestsQuery.isError;
+  const isIntakeLoading = intakeQuery.isLoading;
+  const isIntakeError = intakeQuery.isError;
 
   return (
     <div className="space-y-6">
@@ -360,12 +375,12 @@ const StorePage = () => {
         </Select>
       </div>
 
-      {isLoading ? <LoadingState label="Loading store workspace..." /> : null}
-      {isError ? (
-        <ErrorState description="Store data could not be loaded from the GRN and core services." />
+      {isIntakeLoading ? <LoadingState label="Loading store intake..." /> : null}
+      {isIntakeError ? (
+        <ErrorState description="Store intake data could not be loaded from the GRN service." />
       ) : null}
 
-      {!isLoading && !isError ? (
+      {!isIntakeLoading && !isIntakeError ? (
         <Tabs defaultValue="intake" className="space-y-4">
           <TabsList>
             <TabsTrigger value="intake">Store Intake</TabsTrigger>
@@ -373,8 +388,16 @@ const StorePage = () => {
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
           </TabsList>
           <TabsContent value="intake">{renderIntakeTable(filteredIntakeRecords)}</TabsContent>
-          <TabsContent value="requests">{renderRequestsTable(additiveBlendingRequests)}</TabsContent>
-          <TabsContent value="transactions">{renderTransactionsTable(transactionsQuery.data ?? [])}</TabsContent>
+          <TabsContent value="requests">
+            {requestsQuery.isLoading ? <LoadingState label="Loading store requests..." /> : null}
+            {requestsQuery.isError ? <ErrorState description="Store requests could not be loaded." /> : null}
+            {!requestsQuery.isLoading && !requestsQuery.isError ? renderRequestsTable(additiveBlendingRequests) : null}
+          </TabsContent>
+          <TabsContent value="transactions">
+            {transactionsQuery.isLoading ? <LoadingState label="Loading transactions..." /> : null}
+            {transactionsQuery.isError ? <ErrorState description="Store transactions could not be loaded." /> : null}
+            {!transactionsQuery.isLoading && !transactionsQuery.isError ? renderTransactionsTable(transactionsQuery.data ?? []) : null}
+          </TabsContent>
         </Tabs>
       ) : null}
 

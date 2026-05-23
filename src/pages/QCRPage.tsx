@@ -5,9 +5,11 @@ import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { grnApi } from "@/lib/api";
 import { formatDateTime, getApiErrorMessage } from "@/lib/api-helpers";
@@ -38,6 +40,9 @@ const QCRPage = () => {
   const queryClient = useQueryClient();
   const [detailRecord, setDetailRecord] = useState<QcrRecord | null>(null);
   const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [rejectTarget, setRejectTarget] = useState<QcrRecord | null>(null);
+  const [rejectRemarks, setRejectRemarks] = useState("");
+  const [remarksError, setRemarksError] = useState("");
 
   const activeQuery = useQuery({
     queryKey: ["qcr", "active"],
@@ -64,12 +69,12 @@ const QCRPage = () => {
   });
 
   const statusMutation = useMutation({
-    mutationFn: async ({ id, action }: { id: number; action: "move_to_grn" | "reject" }) => {
-      const response = await grnApi.post(`/api/qcr/${id}/status/`, { action });
+    mutationFn: async ({ id, action, remarks }: { id: number; action: "move_to_grn" | "reject"; remarks?: string }) => {
+      const response = await grnApi.post(`/api/qcr/${id}/status/`, { action, remarks });
       return response.data;
     },
     onSuccess: (_, variables) => {
-      toast.success(variables.action === "move_to_grn" ? "QCR moved to GRN." : "QCR rejected.");
+      toast.success(variables.action === "move_to_grn" ? "GRN approved and moved to store." : "QCR cancelled with remarks.");
       queryClient.invalidateQueries({ queryKey: ["qcr"] });
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
@@ -78,6 +83,34 @@ const QCRPage = () => {
       toast.error(getApiErrorMessage(error, "Unable to update QCR status."));
     },
   });
+
+  const openRejectDialog = (record: QcrRecord) => {
+    setRejectTarget(record);
+    setRejectRemarks("");
+    setRemarksError("");
+  };
+
+  const closeRejectDialog = () => {
+    if (statusMutation.isPending) return;
+    setRejectTarget(null);
+    setRejectRemarks("");
+    setRemarksError("");
+  };
+
+  const submitReject = () => {
+    const trimmed = rejectRemarks.trim();
+    if (!trimmed) {
+      setRemarksError("Remarks are required when cancelling a QCR.");
+      return;
+    }
+    if (!rejectTarget) return;
+    statusMutation.mutate(
+      { id: rejectTarget.id, action: "reject", remarks: trimmed },
+      {
+        onSuccess: () => closeRejectDialog(),
+      },
+    );
+  };
 
   const departmentOptions = useMemo(() => {
     const records = [...(activeQuery.data ?? []), ...(movedQuery.data ?? []), ...(rejectedQuery.data ?? [])];
@@ -132,11 +165,11 @@ const QCRPage = () => {
                       <>
                         <Button variant="outline" size="sm" onClick={() => statusMutation.mutate({ id: record.id, action: "move_to_grn" })}>
                           <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Move to GRN
+                          Approve
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => statusMutation.mutate({ id: record.id, action: "reject" })}>
+                        <Button variant="outline" size="sm" onClick={() => openRejectDialog(record)}>
                           <XCircle className="mr-2 h-4 w-4" />
-                          Reject
+                          Not Approve
                         </Button>
                       </>
                     ) : null}
@@ -210,6 +243,12 @@ const QCRPage = () => {
                 <StatCard label="Moved To QCR" value={formatDateTime(detailRecord.moved_to_qcr_at)} />
                 <StatCard label="Moved By" value={detailRecord.moved_to_qcr_by || "-"} />
               </div>
+              {detailRecord.remarks ? (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-destructive">Cancellation Remarks</p>
+                  <p className="text-sm text-foreground">{detailRecord.remarks}</p>
+                </div>
+              ) : null}
               <div className="grid gap-4 xl:grid-cols-2">
                 <div>
                   <h3 className="mb-2 text-sm font-semibold text-foreground">source_grn_data</h3>
@@ -226,6 +265,42 @@ const QCRPage = () => {
               </div>
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(rejectTarget)} onOpenChange={(open) => !open && closeRejectDialog()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel / Not Approve QCR</DialogTitle>
+            <DialogDescription>
+              GRN <span className="font-semibold">{rejectTarget?.grn_reference_no}</span> will be marked as not approved. Stock will not be moved to store. Remarks are mandatory.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="qcr-remarks">
+              Cancellation Remarks <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="qcr-remarks"
+              rows={4}
+              placeholder="Enter reason for cancellation / not approving this QCR..."
+              value={rejectRemarks}
+              onChange={(e) => {
+                setRejectRemarks(e.target.value);
+                if (e.target.value.trim()) setRemarksError("");
+              }}
+              className={remarksError ? "border-destructive" : ""}
+            />
+            {remarksError ? <p className="text-xs text-destructive">{remarksError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeRejectDialog} disabled={statusMutation.isPending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={submitReject} disabled={statusMutation.isPending}>
+              {statusMutation.isPending ? "Saving..." : "Confirm Not Approve"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

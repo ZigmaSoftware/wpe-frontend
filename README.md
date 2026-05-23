@@ -11,7 +11,7 @@ React 18 + Vite + TypeScript admin frontend for the WPE backend split across:
 2. Install dependencies.
 3. Start the backend services:
    - Core at `http://127.0.0.1:8000`
-   - GRN at `http://127.0.0.1:8001`
+   - GRN at `http://127.0.0.1:8000`
 4. Run the frontend:
 
 ```bash
