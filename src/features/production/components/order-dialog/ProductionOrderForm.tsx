@@ -39,6 +39,9 @@ type ProductionOrderFormProps = {
   isSubmitting?: boolean;
   machines: ProductionMachine[];
   machinesLoading?: boolean;
+  initialValues?: ProductionOrderFormValues;
+  formTitle?: string;
+  submitLabel?: string;
 };
 
 const mapNamedOptions = (items: LookupItem[]) =>
@@ -62,22 +65,14 @@ const buildWorkCenterOptions = (warehouses: LookupItem[], locations: LookupItem[
   return mapNamedOptions(locations.filter((location) => /work center|wip/i.test(location.name)));
 };
 
-const buildInchargeOptions = (users: WPEUserRecord[]): NamedOption[] => {
-  const activeUsers = users.filter((user) => user.is_active);
-  const filteredUsers = activeUsers.filter((user) =>
-    [user.role_name, user.job_title]
-      .filter((value): value is string => Boolean(value))
-      .some((value) => value.toLowerCase().includes("incharge")),
-  );
-
-  const source = filteredUsers.length > 0 ? filteredUsers : activeUsers;
-
-  return source.map((user) => ({
-    id: String(user.id),
-    name: user.full_name || user.username,
-    description: user.role_name ?? user.job_title ?? undefined,
-  }));
-};
+const buildInchargeOptions = (users: WPEUserRecord[]): NamedOption[] =>
+  users
+    .filter((user) => user.is_active && user.role_name?.toLowerCase() === "blending incharge")
+    .map((user) => ({
+      id: String(user.id),
+      name: user.full_name || user.username,
+      description: user.role_name ?? undefined,
+    }));
 
 const ProductionOrderForm = ({
   onSubmit,
@@ -85,11 +80,14 @@ const ProductionOrderForm = ({
   isSubmitting = false,
   machines,
   machinesLoading = false,
+  initialValues,
+  formTitle,
+  submitLabel,
 }: ProductionOrderFormProps) => {
   const [activeTab, setActiveTab] = useState<ProductionDialogTab>("general");
   const form = useForm<ProductionOrderFormValues>({
     resolver: zodResolver(productionOrderFormSchema),
-    defaultValues: createProductionOrderDefaultValues(),
+    defaultValues: initialValues ?? createProductionOrderDefaultValues(),
   });
 
   const locationsQuery = useQuery({
@@ -176,7 +174,7 @@ const ProductionOrderForm = ({
                     </div>
 
                     <div className="space-y-2">
-                      <h1 className="text-[2rem] font-semibold tracking-[-0.03em] text-slate-950">New Production Order</h1>
+                      <h1 className="text-[2rem] font-semibold tracking-[-0.03em] text-slate-950">{formTitle ?? "New Production Order"}</h1>
                       <p className="max-w-3xl text-[15px] leading-7 text-slate-500">
                         Configure production details with assignments for materials, stages, output, scrap, cost, and
                         operational resources.
@@ -318,10 +316,10 @@ const ProductionOrderForm = ({
                     {isSubmitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating Order...
+                        {submitLabel ? `${submitLabel}...` : "Creating Order..."}
                       </>
                     ) : (
-                      "Create Order"
+                      submitLabel ?? "Create Order"
                     )}
                   </Button>
                 </div>

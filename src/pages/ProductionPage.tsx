@@ -133,13 +133,18 @@ const ProductionPage = () => {
                       <StatusBadge status={order.status} classes={ORDER_STATUS_CLASSES} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
+                      <div className="flex justify-end gap-2">
+                        <Button
                         size="sm"
                         variant="outline"
                         onClick={() => navigate(`/app/production/manage-batch/${order.id}`)}
                       >
-                        Manage Batch
-                      </Button>
+                          Manage Batch
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => navigate(`/app/production/${order.id}/edit`)}>
+                          Edit
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -150,6 +155,7 @@ const ProductionPage = () => {
           <EmptyState title="No production orders" description="Create a new order to begin tracking production batches." />
         )
       ) : null}
+
     </div>
   );
 };

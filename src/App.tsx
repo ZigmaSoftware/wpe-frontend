@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import AuthGuard from "@/components/AuthGuard";
 import AppLayout from "@/components/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -52,9 +52,9 @@ import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import PresalesPage from "@/pages/PresalesPage";
 import ProductionManageBatchPage from "@/pages/ProductionManageBatchPage";
+import ProductionEditOrderPage from "@/pages/ProductionEditOrderPage";
 import ProductionNewOrderPage from "@/pages/ProductionNewOrderPage";
 import ProductionPage from "@/pages/ProductionPage";
-import QCRPage from "@/pages/QCRPage";
 import StorePage from "@/pages/StorePage";
 
 const queryClient = new QueryClient({
@@ -86,13 +86,14 @@ const App = () => (
                   <Route path="/app/presales" element={<PresalesPage />} />
                   <Route path="/app/production/neworder" element={<ProductionNewOrderPage />} />
                   <Route path="/app/production/manage-batch/:orderId" element={<ProductionManageBatchPage />} />
+                  <Route path="/app/production/:id/edit" element={<ProductionEditOrderPage />} />
                   <Route path="/app/production" element={<ProductionPage />} />
                   <Route path="/app/regrind" element={<RegrindPage />} />
                   <Route path="/app/store" element={<StorePage />} />
                   <Route path="/oims/machines" element={<MachineMasterPage />} />
                   <Route path="/oims/bom-variants" element={<BOMVariantPage />} />
                   <Route path="/app/grn" element={<GRNPage />} />
-                  <Route path="/app/qcr" element={<QCRPage />} />
+                  <Route path="/app/qcr" element={<Navigate to="/app/grn" replace />} />
                   <Route path="/masters/continents" element={<ContinentsPage />} />
                   <Route path="/masters/countries" element={<CountriesPage />} />
                   <Route path="/masters/states" element={<StatesPage />} />
