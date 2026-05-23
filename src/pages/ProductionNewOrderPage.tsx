@@ -34,12 +34,12 @@ const ProductionNewOrderPage = () => {
 
   return (
     <div className="-m-4 min-h-full bg-[#eef3f8] p-4 lg:-m-6 lg:p-6">
-      <div className="mx-auto flex max-w-[1680px] flex-col gap-4">
+      <div className="mx-auto flex max-w-[1240px] flex-col gap-4">
         <div className="flex items-center">
           <Button
             type="button"
             variant="ghost"
-            className="rounded-full px-3 text-slate-600 hover:bg-white/70 hover:text-slate-900"
+            className="rounded-full px-3 text-slate-600 hover:bg-white hover:text-slate-900"
             onClick={() => navigate("/app/production")}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />

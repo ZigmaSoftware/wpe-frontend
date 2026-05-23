@@ -25,24 +25,24 @@ const MaterialComponentsTable = ({ form, rows, emptyState }: MaterialComponentsT
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white">
+    <div className="overflow-hidden rounded-[22px] border border-slate-200/90 bg-white">
       <ScrollArea className="w-full">
         <div className="min-w-[1420px]">
           <Table>
-            <TableHeader className="bg-slate-50">
-              <TableRow className="hover:bg-slate-50">
-                <TableHead>Sl.</TableHead>
-                <TableHead>Item #</TableHead>
-                <TableHead>Item Name</TableHead>
-                <TableHead>1U Qty</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead>BOM</TableHead>
-                <TableHead>Required Qty</TableHead>
-                <TableHead>Received</TableHead>
-                <TableHead>Rem. Qty</TableHead>
-                <TableHead>Request</TableHead>
-                <TableHead>Rate</TableHead>
-                <TableHead>Amount</TableHead>
+            <TableHeader className="bg-[#f8fbff]">
+              <TableRow className="hover:bg-[#f8fbff]">
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Sl.</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Item #</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Item Name</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">1U Qty</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Unit</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">BOM</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Required Qty</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Received</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Running</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Requested</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Rate</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Material Amount</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>

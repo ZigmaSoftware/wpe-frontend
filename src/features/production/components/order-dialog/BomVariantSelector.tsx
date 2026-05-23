@@ -6,6 +6,11 @@ import { FormControl, FormItem, FormLabel, FormMessage } from "@/components/ui/f
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { BOMVariant } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import {
+  productionFieldLabelClassName,
+  productionHelperTextClassName,
+  productionInputClassName,
+} from "./productionOrderFormStyles";
 
 type BomVariantSelectorProps = {
   value: string;
@@ -33,7 +38,7 @@ const BomVariantSelector = ({
 
   return (
     <FormItem>
-      <FormLabel className="text-sm font-medium text-slate-700">BOM Variant</FormLabel>
+      <FormLabel className={productionFieldLabelClassName}>BOM Variant</FormLabel>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <FormControl>
@@ -42,7 +47,7 @@ const BomVariantSelector = ({
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="h-11 w-full justify-between rounded-xl border-slate-200 bg-white px-3 font-normal"
+              className={cn(productionInputClassName, "w-full justify-between px-3 font-normal")}
             >
               <span className="truncate text-left">
                 {selectedOption ? `${selectedOption.variant_code} · ${selectedOption.name}` : "Search or select BOM variant"}
@@ -51,7 +56,7 @@ const BomVariantSelector = ({
             </Button>
           </FormControl>
         </PopoverTrigger>
-        <PopoverContent className="w-[420px] p-0" align="start">
+        <PopoverContent className="w-[420px] max-w-[var(--radix-popover-trigger-width)] p-0" align="start">
           <Command>
             <CommandInput placeholder="Search BOM variants..." />
             <CommandList>
@@ -96,9 +101,9 @@ const BomVariantSelector = ({
         </PopoverContent>
       </Popover>
       {relatedProductItemId === null ? (
-        <div className="text-xs text-slate-500">Showing all BOM variants. Matching finished-good BOMs will be prioritized after General tab selection.</div>
+        <div className={productionHelperTextClassName}>Showing all BOM variants. Planned production qty will be processed after selection.</div>
       ) : (
-        <div className="text-xs text-slate-500">Related BOM variants are listed first for the selected finished good.</div>
+        <div className={productionHelperTextClassName}>Related BOM variants are listed first for the selected finished good.</div>
       )}
       {error ? <FormMessage>{error}</FormMessage> : null}
     </FormItem>

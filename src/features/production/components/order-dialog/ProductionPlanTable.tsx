@@ -1,21 +1,28 @@
-import { Plus, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { ClipboardList, Plus, Trash2 } from "lucide-react";
 import { useFieldArray, type UseFormReturn } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
   createEmptyPlanRow,
   parseNumericInput,
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
+import {
+  productionCompactInputClassName,
+  productionFieldLabelClassName,
+  productionMetricCardClassName,
+} from "./productionOrderFormStyles";
 
 type ProductionPlanTableProps = {
   form: UseFormReturn<ProductionOrderFormValues>;
+  sidebar?: ReactNode;
 };
 
-const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
+const ProductionPlanTable = ({ form, sidebar }: ProductionPlanTableProps) => {
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "plan_rows",
@@ -34,112 +41,121 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
   return (
     <ProductionSectionCard
       title="Plan"
-      description="Capture the compact production plan in ERP-ready rows."
+      description="Capture compact production-plan rows and linked ERP order context."
+      tone="violet"
+      icon={ClipboardList}
       action={
-        <Button type="button" size="sm" variant="outline" className="rounded-xl" onClick={() => append(createEmptyPlanRow())}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="rounded-full border-slate-200 bg-white px-4"
+          onClick={() => append(createEmptyPlanRow())}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Row
         </Button>
       }
-      contentClassName="space-y-4"
+      contentClassName="space-y-5"
     >
-      <div className="overflow-hidden rounded-2xl border border-slate-200">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-slate-50">
-              <TableRow className="hover:bg-slate-50">
-                <TableHead className="min-w-[150px]">LENGTH (mts)</TableHead>
-                <TableHead className="min-w-[150px]">QTY (mts)</TableHead>
-                <TableHead className="min-w-[140px]">PACKETS</TableHead>
-                <TableHead className="w-[84px] text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fields.map((field, index) => (
-                <TableRow key={field.id}>
-                  <TableCell>
-                    <FormField
-                      control={form.control}
-                      name={`plan_rows.${index}.length_mts` as const}
-                      render={({ field: lengthField }) => (
-                        <FormItem>
-                          <Input
-                            {...lengthField}
-                            inputMode="decimal"
-                            placeholder="0.000"
-                            className="h-10 rounded-xl border-slate-200 bg-white"
-                          />
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <FormField
-                      control={form.control}
-                      name={`plan_rows.${index}.qty_mts` as const}
-                      render={({ field: quantityField }) => (
-                        <FormItem>
-                          <Input
-                            {...quantityField}
-                            inputMode="decimal"
-                            placeholder="0.000"
-                            className="h-10 rounded-xl border-slate-200 bg-white"
-                          />
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <FormField
-                      control={form.control}
-                      name={`plan_rows.${index}.packets` as const}
-                      render={({ field: packetsField }) => (
-                        <FormItem>
-                          <Input
-                            {...packetsField}
-                            inputMode="numeric"
-                            placeholder="0"
-                            className="h-10 rounded-xl border-slate-200 bg-white"
-                          />
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 rounded-full text-slate-500"
-                      onClick={() => remove(index)}
-                      disabled={fields.length === 1}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+      <div className={cn("grid gap-6", sidebar && "xl:grid-cols-[minmax(0,1fr)_340px]")}>
+        <div className="space-y-4">
+          <div className="grid gap-3">
+            {fields.map((field, index) => (
+              <div key={field.id} className="rounded-[20px] border border-slate-200/90 bg-[#f8fbff] p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Plan Row {index + 1}</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full text-slate-500 hover:bg-white"
+                    onClick={() => remove(index)}
+                    disabled={fields.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl bg-slate-50 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Total Length</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{totals.length.toFixed(3)} mts</div>
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                  <FormField
+                    control={form.control}
+                    name={`plan_rows.${index}.length_mts` as const}
+                    render={({ field: lengthField }) => (
+                      <FormItem>
+                        <FormLabel className={productionFieldLabelClassName}>Length (DXG)</FormLabel>
+                        <Input
+                          {...lengthField}
+                          inputMode="decimal"
+                          placeholder="0.000"
+                          className={productionCompactInputClassName}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={`plan_rows.${index}.qty_mts` as const}
+                    render={({ field: quantityField }) => (
+                      <FormItem>
+                        <FormLabel className={productionFieldLabelClassName}>Qty (SKG)</FormLabel>
+                        <Input
+                          {...quantityField}
+                          inputMode="decimal"
+                          placeholder="0.000"
+                          className={productionCompactInputClassName}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={`plan_rows.${index}.packets` as const}
+                    render={({ field: packetsField }) => (
+                      <FormItem>
+                        <FormLabel className={productionFieldLabelClassName}>Packets</FormLabel>
+                        <Input
+                          {...packetsField}
+                          inputMode="numeric"
+                          placeholder="0"
+                          className={productionCompactInputClassName}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3 border-t border-slate-200/80 pt-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Computed Totals</div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className={productionMetricCardClassName}>
+                <div className={productionFieldLabelClassName}>Total Length</div>
+                <div className="mt-2 text-[2rem] font-semibold tracking-[-0.04em] text-slate-950">{totals.length.toFixed(3)}</div>
+                <div className="text-sm text-slate-400">metres</div>
+              </div>
+              <div className={productionMetricCardClassName}>
+                <div className={productionFieldLabelClassName}>Total Qty</div>
+                <div className="mt-2 text-[2rem] font-semibold tracking-[-0.04em] text-slate-950">{totals.quantity.toFixed(3)}</div>
+                <div className="text-sm text-slate-400">metres</div>
+              </div>
+              <div className={productionMetricCardClassName}>
+                <div className={productionFieldLabelClassName}>Total Packets</div>
+                <div className="mt-2 text-[2rem] font-semibold tracking-[-0.04em] text-slate-950">{totals.packets.toFixed(0)}</div>
+                <div className="text-sm text-slate-400">units</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="rounded-xl bg-slate-50 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Total Qty</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{totals.quantity.toFixed(3)} mts</div>
-        </div>
-        <div className="rounded-xl bg-slate-50 px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Total Packets</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{totals.packets.toFixed(0)}</div>
-        </div>
+
+        {sidebar ? <div className="rounded-[22px] border border-slate-200/90 bg-[#fbfdff] p-4">{sidebar}</div> : null}
       </div>
     </ProductionSectionCard>
   );

@@ -1,4 +1,5 @@
 import type { UseFormReturn } from "react-hook-form";
+import { Factory } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ProductionMachine } from "@/lib/types";
@@ -15,8 +16,13 @@ import {
   PRODUCTION_TYPE_OPTIONS,
   WORKFLOW_STAGE_OPTIONS,
   type NamedOption,
+  type ProductionItemOption,
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
+import {
+  productionFieldLabelClassName,
+  productionInputClassName,
+} from "./productionOrderFormStyles";
 
 type ProductionGeneralTabProps = {
   form: UseFormReturn<ProductionOrderFormValues>;
@@ -39,11 +45,13 @@ const ProductionGeneralTab = ({
   lookupsLoading = false,
   lookupError,
 }: ProductionGeneralTabProps) => (
-  <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)]">
-    <div className="space-y-5">
+  <div className="space-y-5">
+    <div className="grid gap-5 xl:grid-cols-2">
       <ProductionSectionCard
         title="Production"
         description="Set the production order control fields and finished goods target."
+        tone="amber"
+        icon={Factory}
       >
         <div className="grid gap-4 md:grid-cols-2">
           <FormField
@@ -51,10 +59,10 @@ const ProductionGeneralTab = ({
             name="status"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-sm font-medium text-slate-700">Status*</FormLabel>
+                <FormLabel className={productionFieldLabelClassName}>Status*</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
-                    <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                    <SelectTrigger className={productionInputClassName}>
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                   </FormControl>
@@ -76,10 +84,10 @@ const ProductionGeneralTab = ({
             name="production_type"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-sm font-medium text-slate-700">Production Type*</FormLabel>
+                <FormLabel className={productionFieldLabelClassName}>Production Type*</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
-                    <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                    <SelectTrigger className={productionInputClassName}>
                       <SelectValue placeholder="Select production type" />
                     </SelectTrigger>
                   </FormControl>
@@ -101,10 +109,10 @@ const ProductionGeneralTab = ({
             name="stage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-sm font-medium text-slate-700">Stage*</FormLabel>
+                <FormLabel className={productionFieldLabelClassName}>Stage*</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
-                    <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                    <SelectTrigger className={productionInputClassName}>
                       <SelectValue placeholder="Select stage" />
                     </SelectTrigger>
                   </FormControl>
@@ -126,10 +134,10 @@ const ProductionGeneralTab = ({
             name="next_workflow_stage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-sm font-medium text-slate-700">Next Workflow Stage*</FormLabel>
+                <FormLabel className={productionFieldLabelClassName}>Next Workflow Stage*</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
-                    <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                    <SelectTrigger className={productionInputClassName}>
                       <SelectValue placeholder="Select next stage" />
                     </SelectTrigger>
                   </FormControl>
@@ -152,9 +160,9 @@ const ProductionGeneralTab = ({
               name="finished_goods"
               render={({ field, fieldState }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium text-slate-700">Finished Goods</FormLabel>
+                  <FormLabel className={productionFieldLabelClassName}>Finished Goods</FormLabel>
                   <FinishedGoodsAutocomplete
-                    value={field.value}
+                    value={field.value as ProductionItemOption | null}
                     onChange={(value) => field.onChange(value)}
                     error={fieldState.error?.message}
                   />
@@ -165,12 +173,6 @@ const ProductionGeneralTab = ({
           </div>
         </div>
       </ProductionSectionCard>
-
-      <ProductionPlanTable form={form} />
-      <ProductionNotesSection form={form} />
-    </div>
-
-    <div className="space-y-5">
       <ProductionResourcesSection
         form={form}
         facilityOptions={facilityOptions}
@@ -181,10 +183,21 @@ const ProductionGeneralTab = ({
         lookupsLoading={lookupsLoading}
         lookupError={lookupError}
       />
-      <ProductionBaseOrderSection form={form} />
-      <ProductionSpecsSection form={form} />
-      <ProductionDetailsSection form={form} />
     </div>
+
+    <ProductionPlanTable
+      form={form}
+      sidebar={
+        <ProductionBaseOrderSection form={form} embedded title="Basic Order Details" description="Readonly linkage fields populated for plan, customer, and order integration." />
+      }
+    />
+
+    <div className="grid gap-5 xl:grid-cols-2">
+      <ProductionNotesSection form={form} />
+      <ProductionSpecsSection form={form} />
+    </div>
+
+    <ProductionDetailsSection form={form} />
   </div>
 );
 

@@ -3,6 +3,10 @@ import type { ProductTypeSubtypeLookupItem } from "@/features/wpe-masters/types"
 import ComponentAutocompleteDropdown from "@/features/production/components/bom-variants/ComponentAutocompleteDropdown";
 import ComponentSearchInput from "@/features/production/components/bom-variants/ComponentSearchInput";
 import { useDebouncedItemSearch } from "./useDebouncedItemSearch";
+import {
+  productionFieldLabelClassName,
+  productionHelperTextClassName,
+} from "./productionOrderFormStyles";
 
 const MINIMUM_SEARCH_LENGTH = 2;
 
@@ -68,7 +72,7 @@ const MaterialItemSearch = ({ onSelect, existingItems }: MaterialItemSearchProps
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-slate-700">Add an item</label>
+      <label className={productionFieldLabelClassName}>Add an item</label>
       <div className="relative">
         <ComponentSearchInput
           value={query}
@@ -93,7 +97,7 @@ const MaterialItemSearch = ({ onSelect, existingItems }: MaterialItemSearchProps
           onHighlight={setHighlightedIndex}
         />
       </div>
-      <div className="text-xs text-slate-500">
+      <div className={productionHelperTextClassName}>
         Search WPE Product Type subcategories and append them as manual material rows without saving immediately.
       </div>
     </div>

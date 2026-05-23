@@ -8,12 +8,12 @@ type MaterialsEmptyStateProps = {
 };
 
 const MaterialsEmptyState = ({ title, description, className }: MaterialsEmptyStateProps) => (
-  <div className={cn("rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-10 text-center", className)}>
-    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm">
+  <div className={cn("rounded-[22px] border border-dashed border-slate-200 bg-white px-6 py-14 text-center", className)}>
+    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
       <PackageSearch className="h-5 w-5" />
     </div>
-    <div className="mt-4 text-base font-semibold text-slate-900">{title}</div>
-    <div className="mt-1 text-sm text-slate-500">{description}</div>
+    <div className="mt-4 text-base font-semibold text-slate-800">{title}</div>
+    <div className="mt-2 text-sm leading-6 text-slate-400">{description}</div>
   </div>
 );
 
