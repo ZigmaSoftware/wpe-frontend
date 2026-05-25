@@ -391,7 +391,6 @@ export const commonMasterApi = {
     const response = await coreApi.post<ApiMutationResponse<DocumentRecord>>(
       "/api/masters/customer-documents/",
       buildFormData(payload),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     return unwrapMutation(response.data);
   },
@@ -399,7 +398,6 @@ export const commonMasterApi = {
     const response = await coreApi.put<ApiMutationResponse<DocumentRecord>>(
       `/api/masters/customer-documents/${id}/`,
       buildFormData(payload),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     return unwrapMutation(response.data);
   },
@@ -453,7 +451,6 @@ export const commonMasterApi = {
     const response = await coreApi.post<ApiMutationResponse<DocumentRecord>>(
       "/api/masters/supplier-documents/",
       buildFormData(payload),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     return unwrapMutation(response.data);
   },
@@ -461,7 +458,6 @@ export const commonMasterApi = {
     const response = await coreApi.put<ApiMutationResponse<DocumentRecord>>(
       `/api/masters/supplier-documents/${id}/`,
       buildFormData(payload),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     return unwrapMutation(response.data);
   },
@@ -504,7 +500,6 @@ export const commonMasterApi = {
     const response = await coreApi.post<ApiMutationResponse<CompanyRecord>>(
       "/api/masters/company/create/",
       payload instanceof FormData ? payload : buildFormData(payload),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     return unwrapMutation(response.data);
   },
@@ -512,7 +507,6 @@ export const commonMasterApi = {
     const response = await coreApi.put<ApiMutationResponse<CompanyRecord>>(
       `/api/masters/company/${id}/`,
       payload instanceof FormData ? payload : buildFormData(payload),
-      { headers: { "Content-Type": "multipart/form-data" } },
     );
     return unwrapMutation(response.data);
   },
