@@ -52,10 +52,8 @@ const sectionMeta: Record<string, { accent: string; marker: string; glow: string
   Workspace: { accent: "from-emerald-400 to-cyan-400", marker: "bg-emerald-400", glow: "shadow-emerald-500/20" },
   "Common Masters": { accent: "from-sky-400 to-indigo-400", marker: "bg-sky-400", glow: "shadow-sky-500/20" },
   "WPE Masters": { accent: "from-lime-400 to-emerald-400", marker: "bg-lime-400", glow: "shadow-lime-500/20" },
-  "WPE Users": { accent: "from-fuchsia-400 to-rose-400", marker: "bg-fuchsia-400", glow: "shadow-fuchsia-500/20" },
   "OIMS Masters": { accent: "from-amber-300 to-orange-400", marker: "bg-amber-300", glow: "shadow-amber-500/20" },
-  "Admin Master": { accent: "from-violet-400 to-sky-400", marker: "bg-violet-400", glow: "shadow-violet-500/20" },
-  "HR Master": { accent: "from-rose-300 to-orange-300", marker: "bg-rose-300", glow: "shadow-rose-500/20" },
+  Masters: { accent: "from-sky-400 to-cyan-400", marker: "bg-sky-400", glow: "shadow-sky-500/20" },
   default: { accent: "from-stone-300 to-zinc-100", marker: "bg-zinc-300", glow: "shadow-white/10" },
 };
 
@@ -75,33 +73,25 @@ const wpeMastersSections = [
       { to: "/wpe-masters/departments",     icon: Globe2,       label: "Departments" },
     ],
   },
-  {
-    label: "WPE Users",
-    items: [
-      { to: "/wpe-masters/users", icon: UserCog, label: "User Creation" },
-      { to: "/wpe-masters/role-permissions", icon: Shield, label: "Role Permissions" },
-      { to: "/wpe-masters/user-screen-permissions", icon: Monitor, label: "Screen Permissions" },
-    ],
-  },
 ];
+
+const adminScreenItems = [
+  { codes: ["main-screen-master"], to: "/admin/main-screens", icon: Monitor, label: "Main Screens" },
+  { codes: ["screen-section-master"], to: "/admin/screen-sections", icon: Layers, label: "Screen Sections" },
+  { codes: ["user-screen-master"], to: "/admin/user-screens", icon: Layout, label: "User Screens" },
+  { codes: ["user-type-master"], to: "/admin/user-types", icon: Users, label: "User Types" },
+  { codes: ["user-account-master", "user-creation-master"], to: "/admin/user-creation", icon: UserCog, label: "User Creation" },
+  { codes: ["user-permission-master", "user-screen-permission-master"], to: "/admin/user-screen-permission", icon: Shield, label: "User Screen Permission" },
+] as const;
+
+const adminScreenIconMap: Record<string, React.ElementType> = Object.fromEntries(
+  adminScreenItems.flatMap((item) => item.codes.map((code) => [code, item.icon])),
+);
 
 const adminMasterSections = [
   {
-    label: "Admin Master",
-    items: [
-      { to: "/admin/main-screens",    icon: Monitor,         label: "Main Screen"       },
-      { to: "/admin/screen-sections", icon: Layers,          label: "Screen Sections"   },
-      { to: "/admin/user-screens",    icon: Layout,          label: "User Screens"      },
-      { to: "/admin/user-types",      icon: Tag,             label: "User Types"        },
-      { to: "/admin/user-accounts",   icon: Users,           label: "User Accounts"     },
-      { to: "/admin/user-permissions",icon: Shield,          label: "User Permissions"  },
-    ],
-  },
-  {
-    label: "HR Master",
-    items: [
-      { to: "/admin/staff", icon: UserCog, label: "Staff" },
-    ],
+    label: "Masters",
+    items: adminScreenItems.map(({ to, icon, label }) => ({ to, icon, label })),
   },
 ];
 
@@ -266,10 +256,14 @@ const AppLayout = () => {
             section.screens
               .map((screen) => ({
                 to: resolveAdminRoutePath(screen.code, screen.route_path),
-                icon: Shield,
+                icon: adminScreenIconMap[screen.code] ?? Shield,
                 label: getAdminRouteTitle(screen.code, screen.screen_name),
               }))
-              .filter((item) => item.to !== "/dashboard"),
+              .filter(
+                (item, index, items) =>
+                  item.to !== "/dashboard" &&
+                  items.findIndex((candidate) => candidate.to === item.to) === index,
+              ),
           ),
         }))
         .filter((section) => section.items.length > 0),
@@ -285,7 +279,7 @@ const AppLayout = () => {
     const path = location.pathname;
     if (path === "/app" || path === "/dashboard") return ["Dashboard"];
     const adminMatch = Object.values(adminRouteRegistry).find((e) => e.path === path);
-    if (adminMatch) return ["Admin Master", adminMatch.title];
+    if (adminMatch) return ["Masters", adminMatch.title];
     for (const section of allSections) {
       const match = section.items.find((i) => path === i.to || path.startsWith(i.to + "/"));
       if (match) return [section.label, match.label];
@@ -387,7 +381,7 @@ const AppLayout = () => {
               items={section.items}
               collapsed={collapsed}
               onMobileClose={() => setMobileOpen(false)}
-              defaultOpen={section.label === "Workspace" || section.label === "WPE Masters" || section.label === "WPE Users"}
+              defaultOpen={section.label === "Workspace" || section.label === "WPE Masters" || section.label === "Masters"}
             />
           ))}
         </nav>
