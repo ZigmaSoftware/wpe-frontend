@@ -26,6 +26,8 @@ import UserScreensPage from "@/features/admin-master/pages/UserScreensPage";
 import UserTypesPage from "@/features/admin-master/pages/UserTypesPage";
 import { AuthProvider } from "@/providers/AuthProvider";
 import BlendingPage from "@/pages/BlendingPage";
+import BlendingStockItemPage from "@/pages/BlendingStockItemPage";
+import BlendingTransactionPage from "@/pages/BlendingTransactionPage";
 import BOMVariantPage from "@/pages/BOMVariantPage";
 import ContactsPage from "@/pages/ContactsPage";
 import ContactFormPage from "@/pages/ContactFormPage";
@@ -87,6 +89,8 @@ const App = () => (
                   <Route path="/app/contacts/:id/edit" element={<ContactFormPage />} />
                   <Route path="/app/items" element={<ItemsPage />} />
                   <Route path="/app/blending" element={<BlendingPage />} />
+                  <Route path="/app/blending/stock/:itemId" element={<BlendingStockItemPage />} />
+                  <Route path="/app/blending/transactions/:requestId" element={<BlendingTransactionPage />} />
                   <Route path="/app/presales" element={<PresalesPage />} />
                   <Route path="/app/production/neworder" element={<ProductionNewOrderPage />} />
                   <Route path="/app/production/manage-batch/:orderId" element={<ProductionManageBatchPage />} />

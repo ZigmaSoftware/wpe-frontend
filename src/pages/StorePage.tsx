@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Check, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useDeferredValue, useEffect, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
 import { storeApi } from "@/features/store/api/storeApi";
 import StoreTablePagination from "@/features/store/components/StoreTablePagination";
@@ -17,6 +18,7 @@ import StoreTableToolbar, {
   type StoreExportFormat,
   type StorePageSizeValue,
 } from "@/features/store/components/StoreTableToolbar";
+import { getPageCount, getPageSizeNumber, paginateRows } from "@/features/store/utils/table";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import { toast } from "@/components/ui/sonner";
 import { coreApi } from "@/lib/api";
@@ -75,20 +77,6 @@ const readText = (value: unknown) => {
   }
 
   return String(value);
-};
-
-const getPageSizeNumber = (pageSize: StorePageSizeValue, total: number) => (pageSize === "all" ? Math.max(total, 1) : Number(pageSize));
-
-const getPageCount = (pageSize: StorePageSizeValue, total: number) => Math.max(1, Math.ceil(total / getPageSizeNumber(pageSize, total)));
-
-const paginateRows = <T,>(rows: T[], page: number, pageSize: StorePageSizeValue) => {
-  if (pageSize === "all") {
-    return rows;
-  }
-
-  const pageLength = Number(pageSize);
-  const start = (page - 1) * pageLength;
-  return rows.slice(start, start + pageLength);
 };
 
 const getRequestItemNames = (row: StoreStockRequest) =>
@@ -279,7 +267,6 @@ const StorePage = () => {
   const requestRows = requestsQuery.data ?? [];
   const transactionRows = filteredTransactions;
 
-  const paginatedStockRows = paginateRows(stockRows, stockPage, stockPageSize);
   const paginatedRequestRows = paginateRows(requestRows, requestPage, requestPageSize);
   const paginatedTransactionRows = paginateRows(transactionRows, transactionPage, transactionPageSize);
 
@@ -406,64 +393,13 @@ const StorePage = () => {
     }
 
     return (
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <div className="max-h-[calc(100vh-21rem)] overflow-auto">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
-              <TableRow className="hover:bg-card">
-                <TableHead>Item</TableHead>
-                <TableHead className="text-right">Current Stock</TableHead>
-                <TableHead className="hidden md:table-cell">Unit</TableHead>
-                <TableHead className="hidden lg:table-cell text-right">Total Inward</TableHead>
-                <TableHead className="hidden lg:table-cell text-right">Total Outward</TableHead>
-                <TableHead className="hidden xl:table-cell">Last Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedStockRows.map((row) => (
-                <TableRow
-                  key={`${row.item_id}-${row.item_code}`}
-                  tabIndex={0}
-                  role="button"
-                  className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => navigate(`/app/store/stock/${row.item_id}`, { state: { row } })}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate(`/app/store/stock/${row.item_id}`, { state: { row } });
-                    }
-                  }}
-                >
-                  <TableCell>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-card-foreground">{row.item_name}</div>
-                        <div className="truncate font-mono text-xs text-muted-foreground">{row.item_code}</div>
-                        <div className="mt-1 space-y-1 text-xs text-muted-foreground md:hidden">
-                          <div>Unit: {row.unit}</div>
-                          <div>Updated: {formatDateTime(row.last_updated)}</div>
-                        </div>
-                      </div>
-                      <ArrowUpRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-card-foreground">{formatDecimal(row.current_stock)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{row.unit}</TableCell>
-                  <TableCell className="hidden lg:table-cell text-right">{formatDecimal(row.total_inward)}</TableCell>
-                  <TableCell className="hidden lg:table-cell text-right">{formatDecimal(row.total_outward)}</TableCell>
-                  <TableCell className="hidden xl:table-cell">{formatDateTime(row.last_updated)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <StoreTablePagination
-          page={stockPage}
-          pageSize={getPageSizeNumber(stockPageSize, stockRows.length)}
-          total={stockRows.length}
-          onPageChange={setStockPage}
-        />
-      </div>
+      <InventoryStockTable
+        rows={stockRows}
+        page={stockPage}
+        pageSize={stockPageSize}
+        onPageChange={setStockPage}
+        onRowClick={(row) => navigate(`/app/store/stock/${row.item_id}`, { state: { row } })}
+      />
     );
   };
 
