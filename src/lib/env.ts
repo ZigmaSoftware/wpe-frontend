@@ -1,7 +1,20 @@
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
+const isLocalFrontendHost = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+};
+
 // VITE_ENV: "local" | "server" | "prod"
-const ENV = import.meta.env.VITE_ENV ?? "local";
+// Keep deployment config intact, but when the app is opened from localhost
+// use the local backend so login does not hang on an unreachable LAN server.
+const ENV =
+  import.meta.env.VITE_ENV === "server" && isLocalFrontendHost()
+    ? "local"
+    : (import.meta.env.VITE_ENV ?? "local");
 
 export const CORE_API_URL = trimTrailingSlash(
   ENV === "prod"

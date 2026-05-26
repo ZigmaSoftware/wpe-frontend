@@ -52,10 +52,8 @@ const sectionMeta: Record<string, { accent: string; marker: string; glow: string
   Workspace: { accent: "from-emerald-400 to-cyan-400", marker: "bg-emerald-400", glow: "shadow-emerald-500/20" },
   "Common Masters": { accent: "from-sky-400 to-indigo-400", marker: "bg-sky-400", glow: "shadow-sky-500/20" },
   "WPE Masters": { accent: "from-lime-400 to-emerald-400", marker: "bg-lime-400", glow: "shadow-lime-500/20" },
-  "WPE Users": { accent: "from-fuchsia-400 to-rose-400", marker: "bg-fuchsia-400", glow: "shadow-fuchsia-500/20" },
   "OIMS Masters": { accent: "from-amber-300 to-orange-400", marker: "bg-amber-300", glow: "shadow-amber-500/20" },
-  "Admin Master": { accent: "from-violet-400 to-sky-400", marker: "bg-violet-400", glow: "shadow-violet-500/20" },
-  "HR Master": { accent: "from-rose-300 to-orange-300", marker: "bg-rose-300", glow: "shadow-rose-500/20" },
+  Masters: { accent: "from-sky-400 to-cyan-400", marker: "bg-sky-400", glow: "shadow-sky-500/20" },
   default: { accent: "from-stone-300 to-zinc-100", marker: "bg-zinc-300", glow: "shadow-white/10" },
 };
 
@@ -75,33 +73,25 @@ const wpeMastersSections = [
       { to: "/wpe-masters/departments",     icon: Globe2,       label: "Departments" },
     ],
   },
-  {
-    label: "WPE Users",
-    items: [
-      { to: "/wpe-masters/users", icon: UserCog, label: "User Creation" },
-      { to: "/wpe-masters/role-permissions", icon: Shield, label: "Role Permissions" },
-      { to: "/wpe-masters/user-screen-permissions", icon: Monitor, label: "Screen Permissions" },
-    ],
-  },
 ];
+
+const adminScreenItems = [
+  { codes: ["main-screen-master"], to: "/admin/main-screens", icon: Monitor, label: "Main Screens" },
+  { codes: ["screen-section-master"], to: "/admin/screen-sections", icon: Layers, label: "Screen Sections" },
+  { codes: ["user-screen-master"], to: "/admin/user-screens", icon: Layout, label: "User Screens" },
+  { codes: ["user-type-master"], to: "/admin/user-types", icon: Users, label: "User Types" },
+  { codes: ["user-account-master", "user-creation-master"], to: "/admin/user-creation", icon: UserCog, label: "User Creation" },
+  { codes: ["user-permission-master", "user-screen-permission-master"], to: "/admin/user-screen-permission", icon: Shield, label: "User Screen Permission" },
+] as const;
+
+const adminScreenIconMap: Record<string, React.ElementType> = Object.fromEntries(
+  adminScreenItems.flatMap((item) => item.codes.map((code) => [code, item.icon])),
+);
 
 const adminMasterSections = [
   {
-    label: "Admin Master",
-    items: [
-      { to: "/admin/main-screens",    icon: Monitor,         label: "Main Screen"       },
-      { to: "/admin/screen-sections", icon: Layers,          label: "Screen Sections"   },
-      { to: "/admin/user-screens",    icon: Layout,          label: "User Screens"      },
-      { to: "/admin/user-types",      icon: Tag,             label: "User Types"        },
-      { to: "/admin/user-accounts",   icon: Users,           label: "User Accounts"     },
-      { to: "/admin/user-permissions",icon: Shield,          label: "User Permissions"  },
-    ],
-  },
-  {
-    label: "HR Master",
-    items: [
-      { to: "/admin/staff", icon: UserCog, label: "Staff" },
-    ],
+    label: "Masters",
+    items: adminScreenItems.map(({ to, icon, label }) => ({ to, icon, label })),
   },
 ];
 
@@ -266,10 +256,14 @@ const AppLayout = () => {
             section.screens
               .map((screen) => ({
                 to: resolveAdminRoutePath(screen.code, screen.route_path),
-                icon: Shield,
+                icon: adminScreenIconMap[screen.code] ?? Shield,
                 label: getAdminRouteTitle(screen.code, screen.screen_name),
               }))
-              .filter((item) => item.to !== "/dashboard"),
+              .filter(
+                (item, index, items) =>
+                  item.to !== "/dashboard" &&
+                  items.findIndex((candidate) => candidate.to === item.to) === index,
+              ),
           ),
         }))
         .filter((section) => section.items.length > 0),
@@ -285,13 +279,25 @@ const AppLayout = () => {
     const path = location.pathname;
     if (path === "/app" || path === "/dashboard") return ["Dashboard"];
     const adminMatch = Object.values(adminRouteRegistry).find((e) => e.path === path);
-    if (adminMatch) return ["Admin Master", adminMatch.title];
+    if (adminMatch) return ["Masters", adminMatch.title];
     for (const section of allSections) {
       const match = section.items.find((i) => path === i.to || path.startsWith(i.to + "/"));
       if (match) return [section.label, match.label];
     }
     return [];
   }, [location.pathname, allSections]);
+
+  const isFullscreenFormLayout = useMemo(() => {
+    const path = location.pathname;
+    const fullscreenMatchers = [
+      /^\/app\/production\/neworder\/?$/,
+      /^\/app\/production\/[^/]+\/edit\/?$/,
+      /^\/app\/grn\/new\/?$/,
+      /^\/app\/grn\/[^/]+\/edit\/?$/,
+      /^\/app\/grn\/[^/]+\/?$/,
+    ];
+    return fullscreenMatchers.some((matcher) => matcher.test(path));
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     try {
@@ -314,17 +320,18 @@ const AppLayout = () => {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Mobile overlay */}
-      {mobileOpen && (
+      {mobileOpen && !isFullscreenFormLayout && (
         <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       {/* ── Sidebar ─────────────────────────────────────── */}
-      <aside
-        className={`fixed z-50 flex h-full flex-col border-r border-black/20 shadow-2xl shadow-black/20 transition-all duration-300 lg:static ${
-          collapsed ? "w-[72px]" : "w-[278px]"
-        } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
-        style={{ background: "linear-gradient(180deg, #1e3f7a 0%, #1a3570 44%, #152b5e 100%)" }}
-      >
+      {!isFullscreenFormLayout ? (
+        <aside
+          className={`fixed z-50 flex h-full flex-col border-r border-black/20 shadow-2xl shadow-black/20 transition-all duration-300 lg:static ${
+            collapsed ? "w-[72px]" : "w-[278px]"
+          } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+          style={{ background: "linear-gradient(180deg, #1e3f7a 0%, #1a3570 44%, #152b5e 100%)" }}
+        >
         {/* ── Brand header ─── */}
         <div className={`border-b border-white/[0.08] ${collapsed ? "px-3 py-4" : "px-4 py-4"}`}>
           <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
@@ -387,7 +394,7 @@ const AppLayout = () => {
               items={section.items}
               collapsed={collapsed}
               onMobileClose={() => setMobileOpen(false)}
-              defaultOpen={section.label === "Workspace" || section.label === "WPE Masters" || section.label === "WPE Users"}
+              defaultOpen={section.label === "Workspace" || section.label === "WPE Masters" || section.label === "Masters"}
             />
           ))}
         </nav>
@@ -429,19 +436,22 @@ const AppLayout = () => {
             </div>
           )}
         </div>
-      </aside>
+        </aside>
+      ) : null}
 
       {/* ── Main content ─────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Topbar */}
         <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm lg:px-6">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+            {!isFullscreenFormLayout ? (
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            ) : null}
 
             {breadcrumbItems.length > 0 && (
               <Breadcrumb>

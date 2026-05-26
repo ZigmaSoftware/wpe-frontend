@@ -3,6 +3,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Eye, FileSpreadsheet, MoveRight, Plus, RefreshCw, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -1178,6 +1179,7 @@ const EnterpriseReadField = ({
 
 const GRNPage = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [payloadRecord, setPayloadRecord] = useState<GrnRecord | null>(null);
@@ -1444,11 +1446,6 @@ const GRNPage = () => {
 
   const selectedActiveItem = detailRecord?.items[selectedItemIndex] ?? detailRecord?.items[0] ?? null;
 
-  const openDetailSheet = (scope: RecordScope, record: GrnRecord) => {
-    setSelectedItemIndex(0);
-    setDetailState({ scope, recordId: record.id });
-  };
-
   const openUpdateDialog = (scope: RecordScope, record: GrnRecord) => {
     updateForm.reset(mapRecordToFormValues(record));
     setUpdateState({ scope, recordId: record.id });
@@ -1663,76 +1660,6 @@ const GRNPage = () => {
     );
   };
 
-  const renderMovedTable = () => {
-    if (!movedRecords.length) {
-      return <EmptyState title="No moved GRN records" description="Records moved out of active GRN appear here." />;
-    }
-
-    return (
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>GRN No</TableHead>
-                <TableHead>GRN Date</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>PO No</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Total After Tax</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Moved To QCR</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {movedRecords.map((record, index) => {
-                const isSelected = detailState?.scope === "moved" && detailState.recordId === record.id;
-                return (
-                  <TableRow
-                    key={record.id}
-                    className={cn("cursor-pointer transition-colors hover:bg-muted/50", isSelected ? "bg-primary/5" : "")}
-                    onClick={() => openDetailSheet("moved", record)}
-                  >
-                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                    <TableCell>
-                      <div className="font-medium text-foreground">{record.grn_no}</div>
-                      <div className="text-xs text-muted-foreground">{record.document_details.po_no || "-"}</div>
-                    </TableCell>
-                    <TableCell>{formatDate(record.grn_date)}</TableCell>
-                    <TableCell>{record.supplier_details.trade_name || record.trade_name || "-"}</TableCell>
-                    <TableCell>{record.document_details.po_no || "-"}</TableCell>
-                    <TableCell>{formatDecimal(getPrimaryItemQuantity(record))}</TableCell>
-                    <TableCell>{formatDecimal(record.value_details.total_after_tax ?? record.total_after_tax, 2)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="border-warning/20 bg-warning/10 text-warning">
-                        {record.process_status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openUpdateDialog("moved", record);
-                        }}
-                      >
-                        Update
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    );
-  };
-
   const renderQcrTable = (records: QcrRecord[], showActions: boolean) => {
     if (!records.length) {
       return <EmptyState title="No records found" description="This stage currently has no records." />;
@@ -1843,7 +1770,7 @@ const GRNPage = () => {
                   <TableRow
                     key={record.id}
                     className={cn("cursor-pointer transition-colors hover:bg-muted/50", isSelected ? "bg-primary/5" : "")}
-                    onClick={() => openDetailSheet("active", record)}
+                    onClick={() => navigate(`/app/grn/${record.id}`)}
                   >
                     <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                     <TableCell>
@@ -1870,7 +1797,7 @@ const GRNPage = () => {
                         size="sm"
                         onClick={(event) => {
                           event.stopPropagation();
-                          openDetailSheet("active", record);
+                          navigate(`/app/grn/${record.id}`);
                         }}
                       >
                         Open
@@ -1923,7 +1850,7 @@ const GRNPage = () => {
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button onClick={() => setDialogOpen(true)}>
+            <Button onClick={() => navigate("/app/grn/new")}>
               <Plus className="mr-2 h-4 w-4" />
               Create GRN
             </Button>

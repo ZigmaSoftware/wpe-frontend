@@ -10,12 +10,12 @@ import type {
   PermissionAssignmentEntry,
   ResolvedPermissionResponse,
   ScreenSectionRecord,
-  StaffRecord,
-  UserAccountRecord,
-  UserAccountWritePayload,
-  UserPermissionRecord,
+  UserCreationRecord,
+  UserCreationWritePayload,
+  UserScreenPermissionRecord,
   UserScreenRecord,
   UserTypeRecord,
+  UserTypeWritePayload,
 } from "@/features/admin-master/types";
 
 const toParams = ({ page, pageSize, search, ordering, filters }: AdminTableParams) => ({
@@ -133,38 +133,57 @@ export const adminMasterApi = {
     return response.data;
   },
 
-  listStaff: (params: AdminTableParams) => listEntity<StaffRecord>("/api/users/staff/", params),
-  createStaff: (payload: Partial<StaffRecord>) => createEntity<StaffRecord>("/api/users/staff/", payload),
-  updateStaff: (id: number, payload: Partial<StaffRecord>) => updateEntity<StaffRecord>(`/api/users/staff/${id}/`, payload),
-  deleteStaff: (id: number) => deleteEntity(`/api/users/staff/${id}/`),
-  toggleStaff: (id: number) => toggleEntity(`/api/users/staff/${id}/toggle-status/`),
-  lookupStaff: async () => {
-    const response = await coreApi.get<LookupOption[]>("/api/users/staff/lookup/");
-    return response.data;
-  },
-
   listUserTypes: (params: AdminTableParams) => listEntity<UserTypeRecord>("/api/users/user-types/", params),
-  createUserType: (payload: Partial<UserTypeRecord>) => createEntity<UserTypeRecord>("/api/users/user-types/", payload),
-  updateUserType: (id: number, payload: Partial<UserTypeRecord>) => updateEntity<UserTypeRecord>(`/api/users/user-types/${id}/`, payload),
+  createUserType: (payload: UserTypeWritePayload) => createEntity<UserTypeRecord>("/api/users/user-types/", payload),
+  updateUserType: (id: number, payload: Partial<UserTypeWritePayload>) => updateEntity<UserTypeRecord>(`/api/users/user-types/${id}/`, payload),
   deleteUserType: (id: number) => deleteEntity(`/api/users/user-types/${id}/`),
   toggleUserType: (id: number) => toggleEntity(`/api/users/user-types/${id}/toggle-status/`),
   lookupUserTypes: async () => {
     const response = await coreApi.get<LookupOption[]>("/api/users/user-types/lookup/");
     return response.data;
   },
+  lookupUserTypeDepartments: async () => {
+    const response = await coreApi.get<LookupOption[]>("/api/wpe-masters/departments/lookup/");
+    return response.data;
+  },
+  lookupUserTypeRoles: async () => {
+    const response = await coreApi.get<LookupOption[]>("/api/wpe-masters/roles/lookup/");
+    return response.data;
+  },
 
-  listUserAccounts: (params: AdminTableParams) => listEntity<UserAccountRecord>("/api/users/users-creation/", params),
-  createUserAccount: (payload: UserAccountWritePayload) => createEntity<UserAccountRecord>("/api/users/users-creation/", payload),
-  updateUserAccount: (id: number, payload: Partial<UserAccountWritePayload>) => updateEntity<UserAccountRecord>(`/api/users/users-creation/${id}/`, payload),
-  deleteUserAccount: (id: number) => deleteEntity(`/api/users/users-creation/${id}/`),
-  toggleUserAccount: (id: number) => toggleEntity(`/api/users/users-creation/${id}/toggle-status/`),
+  listUserCreations: (params: AdminTableParams) => listEntity<UserCreationRecord>("/api/users/users-creation/", params),
+  createUserCreation: (payload: UserCreationWritePayload) => createEntity<UserCreationRecord>("/api/users/users-creation/", payload),
+  updateUserCreation: (id: number, payload: Partial<UserCreationWritePayload>) => updateEntity<UserCreationRecord>(`/api/users/users-creation/${id}/`, payload),
+  deleteUserCreation: (id: number) => deleteEntity(`/api/users/users-creation/${id}/`),
+  toggleUserCreation: (id: number) => toggleEntity(`/api/users/users-creation/${id}/toggle-status/`),
+  lookupUserCreationSelectOptions: async () => {
+    const response = await coreApi.get<LookupOption[]>("/api/users/users-creation/lookup-options/");
+    return response.data;
+  },
+  lookupUserCreationDepartments: async () => {
+    const response = await coreApi.get<LookupOption[]>("/api/users/users-creation/department-options/");
+    return response.data;
+  },
+  lookupUserCreationRoles: async (departmentId?: number | null) => {
+    if (!departmentId) {
+      return [] as LookupOption[];
+    }
+    const response = await coreApi.get<LookupOption[]>("/api/users/users-creation/role-options/", {
+      params: { department: departmentId, department_id: departmentId },
+    });
+    return response.data;
+  },
 
-  listUserPermissions: (params: AdminTableParams) => listEntity<UserPermissionRecord>("/api/users/user-permissions/", params),
-  createUserPermission: (payload: Partial<UserPermissionRecord>) => createEntity<UserPermissionRecord>("/api/users/user-permissions/", payload),
-  updateUserPermission: (id: number, payload: Partial<UserPermissionRecord>) => updateEntity<UserPermissionRecord>(`/api/users/user-permissions/${id}/`, payload),
-  deleteUserPermission: (id: number) => deleteEntity(`/api/users/user-permissions/${id}/`),
-  toggleUserPermission: (id: number) => toggleEntity(`/api/users/user-permissions/${id}/toggle-status/`),
-  assignUserPermissions: async (userType: number, permissions: PermissionAssignmentEntry[]) => {
+  listUserScreenPermissions: (params: AdminTableParams) => listEntity<UserScreenPermissionRecord>("/api/users/user-permissions/", params),
+  getUserScreenPermission: async (id: number) => {
+    const response = await coreApi.get<UserScreenPermissionRecord>(`/api/users/user-permissions/${id}/`);
+    return response.data;
+  },
+  createUserScreenPermission: (payload: Partial<UserScreenPermissionRecord>) => createEntity<UserScreenPermissionRecord>("/api/users/user-permissions/", payload),
+  updateUserScreenPermission: (id: number, payload: Partial<UserScreenPermissionRecord>) => updateEntity<UserScreenPermissionRecord>(`/api/users/user-permissions/${id}/`, payload),
+  deleteUserScreenPermission: (id: number) => deleteEntity(`/api/users/user-permissions/${id}/`),
+  toggleUserScreenPermission: (id: number) => toggleEntity(`/api/users/user-permissions/${id}/toggle-status/`),
+  assignUserScreenPermissions: async (userType: number, permissions: PermissionAssignmentEntry[]) => {
     const response = await coreApi.post("/api/users/user-permissions/assign/", {
       user_type: userType,
       permissions,
@@ -182,8 +201,5 @@ export const adminMasterApi = {
       name: item.name ?? item.company_name ?? `Company ${item.id}`,
       code: item.code ?? null,
     }));
-  },
-  lookupDepartments: async () => {
-    return [] as LookupOption[];
   },
 };

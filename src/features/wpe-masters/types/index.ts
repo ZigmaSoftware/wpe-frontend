@@ -133,36 +133,3 @@ export interface TableParams {
   ordering?: string;
   [key: string]: string | number | boolean | null | undefined;
 }
-
-export interface PermissionRow {
-  role_id: number;
-  role_name: string;
-  view_all: boolean;
-  view_self: boolean;
-  can_add: boolean;
-  can_edit: boolean;
-  can_duplicate: boolean;
-  can_delete: boolean;
-  generate_invoice_access: boolean;
-  invoice_access: boolean;
-  access: boolean;
-}
-
-export type PermKey = keyof Omit<PermissionRow, "role_id" | "role_name">;
-
-export interface UserScreenPermRow {
-  user_screen_id: number;
-  screen_name: string;
-  screen_section_name: string;
-  view_all: boolean;
-  view_self: boolean;
-  can_add: boolean;
-  can_edit: boolean;
-  can_duplicate: boolean;
-  can_delete: boolean;
-  generate_invoice_access: boolean;
-  invoice_access: boolean;
-  access: boolean;
-}
-
-export type UserScreenPermKey = keyof Omit<UserScreenPermRow, "user_screen_id" | "screen_name" | "screen_section_name">;
