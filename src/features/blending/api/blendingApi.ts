@@ -15,8 +15,8 @@ export type BlendingStoreRequestPayload = {
   request_type: "ADDITIVE" | "GENERAL";
   department: string;
   request_date: string;
-  require_date: string;
-  require_time: string;
+  require_date?: string;
+  require_time?: string;
   requested_for_name: string;
   request_reason: string;
   items: Array<{

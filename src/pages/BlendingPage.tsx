@@ -83,8 +83,8 @@ const additiveRequestSchema = z.object({
   items: z.array(additiveRequestLineSchema).min(1, "At least one additive item is required."),
   department: z.string().min(1, "Request department is required."),
   request_date: z.string().min(1, "Request date is required."),
-  require_date: z.string().min(1, "Require date is required."),
-  require_time: z.string().min(1, "Require time is required."),
+  require_date: z.string().optional(),
+  require_time: z.string().optional(),
   requested_for_name: z.string().min(1, "Request person is required."),
   request_reason: z.string().min(1, "Request reason is required."),
 });
@@ -290,12 +290,15 @@ const BlendingPage = () => {
         return result;
       }, []);
 
+      const trimmedRequireDate = payload.require_date?.trim();
+      const trimmedRequireTime = payload.require_time?.trim();
+
       return blendingApi.createStoreRequest({
         request_type: "ADDITIVE",
         department: payload.department,
         request_date: payload.request_date,
-        require_date: payload.require_date,
-        require_time: payload.require_time,
+        ...(trimmedRequireDate ? { require_date: trimmedRequireDate } : {}),
+        ...(trimmedRequireTime ? { require_time: trimmedRequireTime } : {}),
         requested_for_name: payload.requested_for_name,
         request_reason: payload.request_reason,
         items: normalizedItems,
@@ -341,8 +344,6 @@ const BlendingPage = () => {
 
   const watchedItems = form.watch("items");
   const watchedRequestedForName = form.watch("requested_for_name");
-  const watchedRequireDate = form.watch("require_date");
-  const watchedRequireTime = form.watch("require_time");
   const watchedRequestReason = form.watch("request_reason");
 
   const hasDuplicateSelectedItems =
@@ -353,8 +354,6 @@ const BlendingPage = () => {
     watchedItems.every((item, index) => Boolean(item.item_id && item.quantity && Number(item.quantity) > 0 && selectedAdditiveItems[index])) &&
     !hasDuplicateSelectedItems &&
     Boolean(watchedRequestedForName.trim()) &&
-    Boolean(watchedRequireDate) &&
-    Boolean(watchedRequireTime) &&
     Boolean(watchedRequestReason.trim()) &&
     !requestStockMutation.isPending;
 
@@ -828,7 +827,7 @@ const BlendingPage = () => {
             <form onSubmit={form.handleSubmit((values) => requestStockMutation.mutate(values))} className="space-y-4">
               <div className="space-y-3">
                 <FormItem>
-                  <FormLabel>Additive Items</FormLabel>
+                  <FormLabel>Additive Items*</FormLabel>
                   <FormControl>
                     <AdditiveItemAutocomplete
                       key={productPickerResetKey}
@@ -915,7 +914,7 @@ const BlendingPage = () => {
                   name="department"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Request Department</FormLabel>
+                      <FormLabel>Request Department*</FormLabel>
                       <FormControl>
                         <Input {...field} readOnly className="bg-slate-50" />
                       </FormControl>
@@ -929,7 +928,7 @@ const BlendingPage = () => {
                   name="request_date"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Request Date</FormLabel>
+                      <FormLabel>Request Date*</FormLabel>
                       <FormControl>
                         <Input {...field} type="date" readOnly className="bg-slate-50" />
                       </FormControl>
@@ -943,7 +942,7 @@ const BlendingPage = () => {
                   name="requested_for_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Request Person</FormLabel>
+                      <FormLabel>Request Person*</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="Blending operator or supervisor" />
                       </FormControl>
@@ -986,7 +985,7 @@ const BlendingPage = () => {
                 name="request_reason"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Request Reason</FormLabel>
+                    <FormLabel>Request Reason*</FormLabel>
                     <FormControl>
                       <Textarea {...field} rows={4} placeholder="Reason for store request, batch, or production need" />
                     </FormControl>

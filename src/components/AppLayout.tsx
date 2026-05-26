@@ -292,6 +292,7 @@ const AppLayout = () => {
     const fullscreenMatchers = [
       /^\/app\/production\/neworder\/?$/,
       /^\/app\/production\/[^/]+\/edit\/?$/,
+      /^\/app\/production\/manage-batch\/[^/]+\/?$/,
       /^\/app\/grn\/new\/?$/,
       /^\/app\/grn\/[^/]+\/edit\/?$/,
       /^\/app\/grn\/[^/]+\/?$/,
