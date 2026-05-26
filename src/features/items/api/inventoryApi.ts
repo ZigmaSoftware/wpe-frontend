@@ -15,6 +15,27 @@ const normalizePaginatedEnvelope = <T>(
   };
 };
 
+const collectAllPages = async <T>(fetchPage: (page: number, pageSize: number) => Promise<InventoryPage<T>>) => {
+  const pageSize = 200;
+  let page = 1;
+  let total = 0;
+  const items: T[] = [];
+
+  while (page <= 100) {
+    const response = await fetchPage(page, pageSize);
+    items.push(...response.items);
+    total = response.total;
+
+    if (!response.next || items.length >= total) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return items;
+};
+
 export const itemsInventoryApi = {
   listSummary: async (
     module: InventoryModule,
@@ -36,6 +57,20 @@ export const itemsInventoryApi = {
     );
     return normalizePaginatedEnvelope<InventorySummaryRow>(response.data);
   },
+
+  listAllSummary: async (
+    module: InventoryModule,
+    params: {
+      search?: string;
+    },
+  ) =>
+    collectAllPages<InventorySummaryRow>((page, pageSize) =>
+      itemsInventoryApi.listSummary(module, {
+        page,
+        pageSize,
+        search: params.search?.trim() || undefined,
+      }),
+    ),
 
   listHistory: async (
     module: InventoryModule,
@@ -62,4 +97,23 @@ export const itemsInventoryApi = {
     );
     return normalizePaginatedEnvelope<InventoryHistoryRow>(response.data);
   },
+
+  listAllHistory: async (
+    module: InventoryModule,
+    itemId: number,
+    params: {
+      search?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) =>
+    collectAllPages<InventoryHistoryRow>((page, pageSize) =>
+      itemsInventoryApi.listHistory(module, itemId, {
+        page,
+        pageSize,
+        search: params.search?.trim() || undefined,
+        dateFrom: params.dateFrom || undefined,
+        dateTo: params.dateTo || undefined,
+      }),
+    ),
 };
