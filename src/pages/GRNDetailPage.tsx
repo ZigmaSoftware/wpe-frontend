@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Boxes, FileJson, FileText, MoveRight, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useMatch, useNavigate, useParams } from "react-router-dom";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { ErrorState, LoadingState } from "@/components/QueryState";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +48,7 @@ const GRNDetailPage = () => {
   const recordId = Number(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isViewOnly = Boolean(useMatch("/app/grn/:id/view"));
   const [payloadOpen, setPayloadOpen] = useState(false);
   const [moveConfirmOpen, setMoveConfirmOpen] = useState(false);
 
@@ -138,7 +139,7 @@ const GRNDetailPage = () => {
                         {detailRecord.process_status}
                       </Badge>
                       <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-500">
-                        {isActiveRecord ? "Active Queue" : "Processed Queue"}
+                        {isViewOnly ? "View Only" : isActiveRecord ? "Active Queue" : "Processed Queue"}
                       </Badge>
                     </div>
                     <p className="max-w-2xl text-sm leading-6 text-slate-500">
@@ -147,17 +148,19 @@ const GRNDetailPage = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      className="rounded-full bg-[linear-gradient(135deg,#2d6cdf_0%,#1953bc_100%)] text-white hover:opacity-95"
-                      onClick={() => navigate(`/app/grn/${detailRecord.id}/edit`)}
-                    >
-                      Edit GRN
-                    </Button>
+                    {!isViewOnly && (
+                      <Button
+                        className="rounded-full bg-[linear-gradient(135deg,#2d6cdf_0%,#1953bc_100%)] text-white hover:opacity-95"
+                        onClick={() => navigate(`/app/grn/${detailRecord.id}/edit`)}
+                      >
+                        Edit GRN
+                      </Button>
+                    )}
                     <Button variant="outline" className="rounded-full" onClick={() => setPayloadOpen(true)}>
                       <FileJson className="mr-2 h-4 w-4" />
                       View Payload
                     </Button>
-                    {isActiveRecord ? (
+                    {!isViewOnly && isActiveRecord ? (
                       <Button variant="outline" className="rounded-full" onClick={() => setMoveConfirmOpen(true)}>
                         <MoveRight className="mr-2 h-4 w-4" />
                         Move to QCR

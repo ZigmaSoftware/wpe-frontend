@@ -1660,7 +1660,7 @@ const GRNPage = () => {
     );
   };
 
-  const renderQcrTable = (records: QcrRecord[], showActions: boolean) => {
+  const renderQcrTable = (records: QcrRecord[], showActions: boolean, viewMode = false) => {
     if (!records.length) {
       return <EmptyState title="No records found" description="This stage currently has no records." />;
     }
@@ -1709,7 +1709,15 @@ const GRNPage = () => {
                   <TableCell>{record.moved_to_qcr_by || "-"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="icon" onClick={() => setQcrDetailRecord(record)}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          viewMode
+                            ? navigate(`/app/grn/${record.source_grn}/view`)
+                            : setQcrDetailRecord(record)
+                        }
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                       {showActions ? (
@@ -1899,7 +1907,7 @@ const GRNPage = () => {
           </TabsList>
           <TabsContent value="active">{renderActiveTable()}</TabsContent>
           <TabsContent value="moved-to-qcr">{renderQcrTable(qcrActiveRecords, true)}</TabsContent>
-          <TabsContent value="next-grn">{renderQcrTable(qcrMovedRecords, false)}</TabsContent>
+          <TabsContent value="next-grn">{renderQcrTable(qcrMovedRecords, false, true)}</TabsContent>
           <TabsContent value="rejected">{renderQcrTable(qcrRejectedRecords, false)}</TabsContent>
         </Tabs>
       ) : null}
