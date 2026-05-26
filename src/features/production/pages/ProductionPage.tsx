@@ -11,10 +11,11 @@ import {
 import { GeneralTab } from '../components/GeneralTab';
 import { MaterialMovementTab } from '../components/MaterialMovementTab';
 import { ProductionTransactionTab } from '../components/ProductionTransactionTab';
+import { RecordOutputTab } from '../components/RecordOutputTab';
 import { SummaryTab } from '../components/SummaryTab';
 import { ProductionOrderDetail } from '../types';
 
-type TabType = 'general' | 'material-movement' | 'transactions' | 'summary';
+type TabType = 'general' | 'material-movement' | 'transactions' | 'summary' | 'output';
 
 export const ProductionPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -45,6 +46,7 @@ export const ProductionPage: React.FC = () => {
     { id: 'material-movement', label: 'MATERIAL MOVEMENT', icon: '📦' },
     { id: 'transactions', label: 'PRDN TRANSACTIONS', icon: '📊' },
     { id: 'summary', label: 'SUMMARY', icon: '💹' },
+    { id: 'output', label: 'RECORD OUTPUT', icon: '⚖️' },
   ];
 
   return (
