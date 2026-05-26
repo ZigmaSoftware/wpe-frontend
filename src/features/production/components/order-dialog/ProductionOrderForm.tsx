@@ -12,6 +12,7 @@ import type { LookupItem, WPEUserRecord } from "@/features/wpe-masters/types";
 import type { ProductionMachine } from "@/lib/types";
 import ProductionGeneralTab from "./ProductionGeneralTab";
 import ProductionMaterialsTab from "./ProductionMaterialsTab";
+import ProductionOutputTab from "./ProductionOutputTab";
 import ProductionPlaceholderTab from "./ProductionPlaceholderTab";
 import ProductionTabs from "./ProductionTabs";
 import {
@@ -268,10 +269,7 @@ const ProductionOrderForm = ({
                 />
               </TabsContent>
               <TabsContent value="output" className="mt-0 outline-none">
-                <ProductionPlaceholderTab
-                  title="Output"
-                  description="Finished output capture and packing details will extend this placeholder."
-                />
+                <ProductionOutputTab form={form} />
               </TabsContent>
               <TabsContent value="scrap" className="mt-0 outline-none">
                 <ProductionPlaceholderTab
