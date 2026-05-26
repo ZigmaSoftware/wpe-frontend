@@ -96,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signIn: async (username: string, password: string) => {
         const response = await loginRequest(username, password);
         setUser(response.user);
-        await hydrateAdminPermissions();
+        void hydrateAdminPermissions();
       },
       signOut: async () => {
         await logoutRequest();

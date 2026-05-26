@@ -127,86 +127,63 @@ export type UserScreenRecord = {
   updated_at?: string;
 };
 
-export type StaffRecord = {
-  id: number;
-  unique_id?: string;
-  staff_id?: string;
-  staff_name: string;
-  mobile_no?: string | null;
-  email?: string | null;
-  department?: number | null;
-  department_name?: string;
-  designation?: string | null;
-  is_active: boolean;
-};
-
 export type UserTypeRecord = {
   id: number;
   unique_id?: string;
-  user_type: string;
-  code?: string | null;
+  department?: number | null;
+  department_name?: string | null;
+  role?: number | null;
+  role_name?: string | null;
   is_active: boolean;
-  under_users?: string | null;
-  company_wise: boolean;
-  project_wise: boolean;
-  department_wise: boolean;
-  user_wise: boolean;
   created_at?: string;
   updated_at?: string;
 };
 
-export type UserAccountRecord = {
+export type UserTypeWritePayload = {
+  department: number;
+  role: number;
+  is_active: boolean;
+};
+
+export type UserCreationRecord = {
   id: number;
   unique_id?: string;
   user?: number | null;
   username: string;
   staff: number;
   staff_id?: string;
-  staff_name?: string;
+  full_name?: string;
   mobile_no?: string | null;
   email?: string | null;
-  user_type: number;
-  user_type_name?: string;
-  company?: number | null;
-  company_name?: string;
   department?: number | null;
-  department_name?: string;
-  project?: string | null;
-  under_users?: string | null;
+  department_name?: string | null;
+  role?: number | null;
+  role_name?: string | null;
+  company?: number | null;
+  company_name?: string | null;
   account_status: "active" | "inactive" | "locked";
   is_active: boolean;
   last_login?: string | null;
   password_changed_at?: string | null;
   failed_login_attempts?: number;
-  force_password_change: boolean;
-  is_team_head: boolean;
-  team_members: number[];
   created_at?: string;
   updated_at?: string;
 };
 
-export type UserAccountWritePayload = {
+export type UserCreationWritePayload = {
   staff: number;
+  department: number;
+  role: number;
+  company: number;
   username: string;
   password?: string;
   confirm_password?: string;
-  user_type: number;
   mobile_no?: string | null;
   email?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  company?: number | null;
-  department?: number | null;
-  project?: string | null;
-  under_users?: string | null;
   account_status: "active" | "inactive" | "locked";
-  force_password_change: boolean;
-  is_team_head: boolean;
-  team_members?: number[];
-  designation?: string | null;
 };
 
-export type UserPermissionRecord = {
+export type UserScreenPermissionRecord = {
   id: number;
   unique_id?: string;
   user_type: number;

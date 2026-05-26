@@ -1,13 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
+import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import {
   mapOrderDetailToFormValues,
   type CreateProductionOrderPayload,
   type ProductionOrderDetail,
 } from "@/features/production/components/order-dialog/productionOrderForm";
-import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/QueryState";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
@@ -52,17 +51,17 @@ const ProductionEditOrderPage = () => {
 
   if (orderQ.isLoading || machinesQ.isLoading) {
     return (
-      <div className="-m-4 min-h-full bg-[#eef3f8] p-4 lg:-m-6 lg:p-6">
+      <ProductionOrderPageLayout onBack={() => navigate("/app/production")}>
         <LoadingState label="Loading production order..." />
-      </div>
+      </ProductionOrderPageLayout>
     );
   }
 
   if (orderQ.isError) {
     return (
-      <div className="-m-4 min-h-full bg-[#eef3f8] p-4 lg:-m-6 lg:p-6">
+      <ProductionOrderPageLayout onBack={() => navigate("/app/production")}>
         <ErrorState description="Could not load production order." />
-      </div>
+      </ProductionOrderPageLayout>
     );
   }
 
@@ -71,34 +70,18 @@ const ProductionEditOrderPage = () => {
   const initialValues = mapOrderDetailToFormValues(order, machines);
 
   return (
-    <div className="-m-4 min-h-full bg-[#eef3f8] p-4 lg:-m-6 lg:p-6">
-      <div className="mx-auto flex max-w-[1680px] flex-col gap-4">
-        <div className="flex items-center">
-          <Button
-            type="button"
-            variant="ghost"
-            className="rounded-full px-3 text-slate-600 hover:bg-white/70 hover:text-slate-900"
-            onClick={() => navigate("/app/production")}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Production
-          </Button>
-        </div>
-
-        <div className="h-[calc(100vh-9rem)]">
-          <ProductionOrderForm
-            onSubmit={(values) => updateOrderMutation.mutate(values)}
-            onCancel={() => navigate("/app/production")}
-            isSubmitting={updateOrderMutation.isPending}
-            machines={machines}
-            machinesLoading={machinesQ.isLoading}
-            initialValues={initialValues}
-            formTitle={`Edit Order — ${order.production_id}`}
-            submitLabel="Save Changes"
-          />
-        </div>
-      </div>
-    </div>
+    <ProductionOrderPageLayout onBack={() => navigate("/app/production")}>
+      <ProductionOrderForm
+        onSubmit={(values) => updateOrderMutation.mutate(values)}
+        onCancel={() => navigate("/app/production")}
+        isSubmitting={updateOrderMutation.isPending}
+        machines={machines}
+        machinesLoading={machinesQ.isLoading}
+        initialValues={initialValues}
+        formTitle={`Edit Order — ${order.production_id}`}
+        submitLabel="Save Changes"
+      />
+    </ProductionOrderPageLayout>
   );
 };
 

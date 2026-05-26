@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
-import { RefreshCw, Search } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
+import { EmptyState, ErrorState } from "@/components/QueryState";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { itemsInventoryApi } from "@/features/items/api/inventoryApi";
 import { itemsInventoryQueryKeys } from "@/features/items/api/queryKeys";
@@ -18,7 +20,12 @@ import {
   type InventorySummaryRow,
   type InventorySummaryState,
 } from "@/features/items/types";
-import { getApiErrorMessage } from "@/lib/api-helpers";
+import { storeApi } from "@/features/store/api/storeApi";
+import StoreTablePagination from "@/features/store/components/StoreTablePagination";
+import StoreTableToolbar, { type StoreExportFormat, type StorePageSizeValue } from "@/features/store/components/StoreTableToolbar";
+import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
+import { toast } from "@/components/ui/sonner";
+import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
 
 const createSummaryState = (): InventorySummaryState => ({
   page: 1,
@@ -36,7 +43,17 @@ const createHistoryState = (): InventoryHistoryState => ({
 
 const isAccessDeniedError = (error: unknown) => axios.isAxiosError(error) && error.response?.status === 403;
 
+const getPageSizeNumber = (pageSize: StorePageSizeValue, total: number) => (pageSize === "all" ? Math.max(total, 1) : Number(pageSize));
+const getPageCount = (pageSize: StorePageSizeValue, total: number) => Math.max(1, Math.ceil(total / getPageSizeNumber(pageSize, total)));
+const paginateRows = <T,>(rows: T[], page: number, pageSize: StorePageSizeValue) => {
+  if (pageSize === "all") return rows;
+  const pageLength = Number(pageSize);
+  const start = (page - 1) * pageLength;
+  return rows.slice(start, start + pageLength);
+};
+
 const ItemsPage = () => {
+  const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState<InventoryModule>("store");
   const [summaryState, setSummaryState] = useState<Record<InventoryModule, InventorySummaryState>>({
     store: createSummaryState(),
@@ -44,22 +61,16 @@ const ItemsPage = () => {
   });
   const [historyState, setHistoryState] = useState<InventoryHistoryState>(createHistoryState);
   const [historyTarget, setHistoryTarget] = useState<InventoryHistoryTarget | null>(null);
+  const [storePage, setStorePage] = useState(1);
+  const [storePageSize, setStorePageSize] = useState<StorePageSizeValue>("10");
 
   const deferredStoreSearch = useDeferredValue(summaryState.store.search.trim());
   const deferredBlendingSearch = useDeferredValue(summaryState.blending.search.trim());
   const deferredHistorySearch = useDeferredValue(historyState.search.trim());
 
   const storeSummaryQuery = useQuery({
-    queryKey: itemsInventoryQueryKeys.summary("store", {
-      ...summaryState.store,
-      deferredSearch: deferredStoreSearch,
-    }),
-    queryFn: () =>
-      itemsInventoryApi.listSummary("store", {
-        page: summaryState.store.page,
-        pageSize: summaryState.store.pageSize,
-        search: deferredStoreSearch,
-      }),
+    queryKey: ["items", "inventory", "store", "stock-summary", deferredStoreSearch],
+    queryFn: () => storeApi.listStockSummary({ search: deferredStoreSearch }),
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -80,11 +91,7 @@ const ItemsPage = () => {
   });
 
   useEffect(() => {
-    if (
-      activeModule === "store" &&
-      isAccessDeniedError(storeSummaryQuery.error) &&
-      !blendingSummaryQuery.isError
-    ) {
+    if (activeModule === "store" && isAccessDeniedError(storeSummaryQuery.error) && !blendingSummaryQuery.isError) {
       setActiveModule("blending");
     }
   }, [activeModule, blendingSummaryQuery.isError, storeSummaryQuery.error]);
@@ -131,10 +138,160 @@ const ItemsPage = () => {
     setHistoryState(createHistoryState());
   };
 
-  const renderModuleTab = (module: InventoryModule) => {
-    const config = INVENTORY_MODULES[module];
-    const query = summaryQueries[module];
-    const state = summaryState[module];
+  const storeRows = storeSummaryQuery.data ?? [];
+  const paginatedStoreRows = paginateRows(storeRows, storePage, storePageSize);
+
+  useEffect(() => {
+    const totalPages = getPageCount(storePageSize, storeRows.length);
+    if (storePage > totalPages) setStorePage(totalPages);
+  }, [storePage, storePageSize, storeRows.length]);
+
+  const handleStoreExport = (format: StoreExportFormat) => {
+    try {
+      const columns: StoreExportColumn<InventorySummaryRow>[] = [
+        { label: "Item Code", value: (row) => row.item_code },
+        { label: "Item Name", value: (row) => row.item_name },
+        { label: "Current Stock", value: (row) => formatDecimal(row.current_stock) },
+        { label: "Unit", value: (row) => row.unit },
+        { label: "Total Inward", value: (row) => formatDecimal(row.total_inward) },
+        { label: "Total Outward", value: (row) => formatDecimal(row.total_outward) },
+        { label: "Last Updated", value: (row) => formatDateTime(row.last_updated) },
+      ];
+      exportTableData({
+        title: "Store Inventory",
+        filename: "items-store-inventory",
+        rows: storeRows,
+        columns,
+        format,
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Unable to export store inventory."));
+    }
+  };
+
+  const renderStoreInventory = () => {
+    const config = INVENTORY_MODULES.store;
+    const accessDenied = isAccessDeniedError(storeSummaryQuery.error);
+
+    if (storeSummaryQuery.isLoading) {
+      return (
+        <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <StoreTableToolbar
+            searchValue={summaryState.store.search}
+            onSearchChange={(value) => {
+              updateSummaryState("store", (current) => ({ ...current, search: value }));
+              setStorePage(1);
+            }}
+            pageSize={storePageSize}
+            onPageSizeChange={(value) => {
+              setStorePageSize(value);
+              setStorePage(1);
+            }}
+            onExport={handleStoreExport}
+            summaryText="Loading store inventory..."
+            isFetching
+          />
+          <div className="py-8 text-sm text-muted-foreground">Loading store inventory...</div>
+        </div>
+      );
+    }
+
+    if (storeSummaryQuery.isError) {
+      return (
+        <ErrorState
+          description={accessDenied ? config.accessDescription : getApiErrorMessage(storeSummaryQuery.error, "Unable to load store inventory.")}
+        />
+      );
+    }
+
+    return (
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <StoreTableToolbar
+          searchValue={summaryState.store.search}
+          onSearchChange={(value) => {
+            updateSummaryState("store", (current) => ({ ...current, search: value }));
+            setStorePage(1);
+          }}
+          pageSize={storePageSize}
+          onPageSizeChange={(value) => {
+            setStorePageSize(value);
+            setStorePage(1);
+          }}
+          onExport={handleStoreExport}
+          summaryText={`${storeRows.length} store rows available`}
+          isFetching={storeSummaryQuery.isFetching}
+        />
+
+        {storeRows.length ? (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                  <TableRow className="hover:bg-card">
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-right">Current Stock</TableHead>
+                    <TableHead className="hidden md:table-cell">Unit</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Total Inward</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Total Outward</TableHead>
+                    <TableHead className="hidden xl:table-cell">Last Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedStoreRows.map((row) => (
+                    <TableRow
+                      key={`${row.item_id}-${row.item_code}`}
+                      tabIndex={0}
+                      role="button"
+                      className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => navigate(`/app/store/stock/${row.item_id}`, { state: { row } })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(`/app/store/stock/${row.item_id}`, { state: { row } });
+                        }
+                      }}
+                    >
+                      <TableCell>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-card-foreground">{row.item_name}</div>
+                            <div className="truncate font-mono text-xs text-muted-foreground">{row.item_code}</div>
+                            <div className="mt-1 space-y-1 text-xs text-muted-foreground md:hidden">
+                              <div>Unit: {row.unit}</div>
+                              <div>Updated: {formatDateTime(row.last_updated)}</div>
+                            </div>
+                          </div>
+                          <ArrowUpRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-card-foreground">{formatDecimal(row.current_stock)}</TableCell>
+                      <TableCell className="hidden md:table-cell">{row.unit}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-right">{formatDecimal(row.total_inward)}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-right">{formatDecimal(row.total_outward)}</TableCell>
+                      <TableCell className="hidden xl:table-cell">{formatDateTime(row.last_updated)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <StoreTablePagination
+              page={storePage}
+              pageSize={getPageSizeNumber(storePageSize, storeRows.length)}
+              total={storeRows.length}
+              onPageChange={setStorePage}
+            />
+          </div>
+        ) : (
+          <EmptyState title={config.emptyTitle} description={config.emptyDescription} />
+        )}
+      </div>
+    );
+  };
+
+  const renderBlendingTab = () => {
+    const config = INVENTORY_MODULES.blending;
+    const query = summaryQueries.blending;
+    const state = summaryState.blending;
     const accessDenied = isAccessDeniedError(query.error);
 
     return (
@@ -151,13 +308,13 @@ const ItemsPage = () => {
         pageSize={state.pageSize}
         total={query.data?.total ?? 0}
         onPageChange={(page) =>
-          updateSummaryState(module, (current) => ({
+          updateSummaryState("blending", (current) => ({
             ...current,
             page,
           }))
         }
         onPageSizeChange={(pageSize) =>
-          updateSummaryState(module, (current) => ({
+          updateSummaryState("blending", (current) => ({
             ...current,
             pageSize,
             page: 1,
@@ -166,15 +323,12 @@ const ItemsPage = () => {
         onRetry={() => {
           void query.refetch();
         }}
-        onRowClick={(row) => openHistory(module, row)}
+        onRowClick={(row) => openHistory("blending", row)}
       />
     );
   };
 
   const activeConfig = INVENTORY_MODULES[activeModule];
-  const activeQuery = summaryQueries[activeModule];
-  const activeState = summaryState[activeModule];
-  const activeAccessDenied = isAccessDeniedError(activeQuery.error);
 
   return (
     <div className="space-y-6">
@@ -185,58 +339,30 @@ const ItemsPage = () => {
 
       <Tabs value={activeModule} onValueChange={(value) => setActiveModule(value as InventoryModule)} className="space-y-4">
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <TabsList className="h-auto flex-wrap bg-slate-100/80 p-1">
-              {(Object.entries(INVENTORY_MODULES) as Array<[InventoryModule, (typeof INVENTORY_MODULES)[InventoryModule]]>).map(
-                ([module, config]) => (
-                  <TabsTrigger key={module} value={module} className="gap-2">
-                    <span>{config.label}</span>
-                    <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                      {summaryQueries[module].data?.total ?? 0}
-                    </span>
-                  </TabsTrigger>
-                ),
-              )}
-            </TabsList>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative min-w-[280px]">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={activeState.search}
-                  onChange={(event) =>
-                    updateSummaryState(activeModule, (current) => ({
-                      ...current,
-                      search: event.target.value,
-                      page: 1,
-                    }))
-                  }
-                  placeholder="Search item name, code, or external ID"
-                  className="pl-9"
-                />
-              </div>
-              <Button variant="outline" onClick={() => void activeQuery.refetch()} disabled={activeQuery.isFetching}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${activeQuery.isFetching ? "animate-spin" : ""}`} />
-                {activeQuery.isFetching ? "Refreshing..." : "Refresh"}
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
-            <div>Open an item row to inspect detailed inward and outward movement history.</div>
-            <div className={activeAccessDenied ? "text-destructive" : ""}>
-              {activeAccessDenied
-                ? activeConfig.accessDescription
-                : `${activeQuery.data?.total ?? 0} monitored item rows in the ${activeConfig.label.toLowerCase()} view.`}
-            </div>
+          <TabsList className="h-auto flex-wrap bg-slate-100/80 p-1">
+            {(Object.entries(INVENTORY_MODULES) as Array<[InventoryModule, (typeof INVENTORY_MODULES)[InventoryModule]]>).map(
+              ([module, config]) => (
+                <TabsTrigger key={module} value={module} className="gap-2">
+                  <span>{config.label}</span>
+                  <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                    {module === "store" ? storeRows.length : summaryQueries[module].data?.total ?? 0}
+                  </span>
+                </TabsTrigger>
+              ),
+            )}
+          </TabsList>
+          <div className="mt-4 text-sm text-muted-foreground">
+            {activeModule === "store"
+              ? "Store inventory now follows the same compact table controls and interactions as Store Stock."
+              : `${summaryQueries.blending.data?.total ?? 0} monitored item rows in the ${activeConfig.label.toLowerCase()} view.`}
           </div>
         </div>
 
         <TabsContent value="store" className="space-y-0">
-          {renderModuleTab("store")}
+          {renderStoreInventory()}
         </TabsContent>
         <TabsContent value="blending" className="space-y-0">
-          {renderModuleTab("blending")}
+          {renderBlendingTab()}
         </TabsContent>
       </Tabs>
 

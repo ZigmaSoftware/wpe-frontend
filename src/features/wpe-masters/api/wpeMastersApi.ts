@@ -4,7 +4,6 @@ import type {
   MasterRecord,
   MasterWritePayload,
   PaginatedResponse,
-  PermissionRow,
   ProductTypeCategoryRecord,
   ProductTypeCategoryWritePayload,
   ProductTypeSubtypeLookupItem,
@@ -12,7 +11,6 @@ import type {
   ProductTypeSubtypeWritePayload,
   ProductTypeTreeCategoryRecord,
   TableParams,
-  UserScreenPermRow,
   WPEUserRecord,
   WPEUserWritePayload,
 } from "@/features/wpe-masters/types";
@@ -140,48 +138,6 @@ export const wpeMastersApi = {
     toggle: async (id: number) => {
       const res = await coreApi.patch<WPEUserRecord>(`${BASE}/users/${id}/toggle/`, {});
       return res.data;
-    },
-  },
-
-  rolePermissions: {
-    listScreens: async (): Promise<{ id: number; name: string; code: string; order_no: number }[]> => {
-      const res = await coreApi.get<{ id: number; name: string; code: string; order_no: number }[]>(
-        `${BASE}/role-permissions/screens/`,
-      );
-      return res.data;
-    },
-    getMatrix: async (mainScreenId: number): Promise<PermissionRow[]> => {
-      const res = await coreApi.get<PermissionRow[]>(`${BASE}/role-permissions/matrix/`, {
-        params: { main_screen_id: mainScreenId },
-      });
-      return res.data;
-    },
-    bulkSave: async (mainScreenId: number, permissions: PermissionRow[]): Promise<void> => {
-      await coreApi.post(`${BASE}/role-permissions/bulk-save/`, {
-        main_screen_id: mainScreenId,
-        permissions,
-      });
-    },
-  },
-
-  userScreenPermissions: {
-    listScreens: async (): Promise<{ id: number; name: string; code: string; order_no: number }[]> => {
-      const res = await coreApi.get<{ id: number; name: string; code: string; order_no: number }[]>(
-        `${BASE}/user-screen-permissions/screens/`,
-      );
-      return res.data;
-    },
-    getMatrix: async (mainScreenId: number): Promise<UserScreenPermRow[]> => {
-      const res = await coreApi.get<UserScreenPermRow[]>(`${BASE}/user-screen-permissions/matrix/`, {
-        params: { main_screen_id: mainScreenId },
-      });
-      return res.data;
-    },
-    bulkSave: async (mainScreenId: number, permissions: UserScreenPermRow[]): Promise<void> => {
-      await coreApi.post(`${BASE}/user-screen-permissions/bulk-save/`, {
-        main_screen_id: mainScreenId,
-        permissions,
-      });
     },
   },
 };
