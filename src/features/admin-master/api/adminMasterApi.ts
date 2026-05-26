@@ -175,6 +175,10 @@ export const adminMasterApi = {
   },
 
   listUserScreenPermissions: (params: AdminTableParams) => listEntity<UserScreenPermissionRecord>("/api/users/user-permissions/", params),
+  getUserScreenPermission: async (id: number) => {
+    const response = await coreApi.get<UserScreenPermissionRecord>(`/api/users/user-permissions/${id}/`);
+    return response.data;
+  },
   createUserScreenPermission: (payload: Partial<UserScreenPermissionRecord>) => createEntity<UserScreenPermissionRecord>("/api/users/user-permissions/", payload),
   updateUserScreenPermission: (id: number, payload: Partial<UserScreenPermissionRecord>) => updateEntity<UserScreenPermissionRecord>(`/api/users/user-permissions/${id}/`, payload),
   deleteUserScreenPermission: (id: number) => deleteEntity(`/api/users/user-permissions/${id}/`),

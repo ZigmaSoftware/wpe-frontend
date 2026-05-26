@@ -23,6 +23,10 @@ const authState: AuthSnapshot = {
 let refreshPromise: Promise<AuthTokens | null> | null = null;
 let logoutHandler: (() => void) | null = null;
 
+const shouldUseCoreForGrnLocally =
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+
 const persistSnapshot = () => {
   if (authState.accessToken && authState.refreshToken) {
     writeStoredAuth({
@@ -85,7 +89,9 @@ export const coreApi = axios.create({
 });
 
 export const grnApi = axios.create({
-  baseURL: GRN_API_URL,
+  // Local development often runs only the core backend, which already serves
+  // the GRN/QCR routes through `grn_app.urls`. Keep deployment GRN targets intact.
+  baseURL: shouldUseCoreForGrnLocally ? CORE_API_URL : GRN_API_URL,
 });
 
 coreApi.interceptors.request.use(withAuthHeader);

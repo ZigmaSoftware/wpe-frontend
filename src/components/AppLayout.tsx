@@ -287,6 +287,18 @@ const AppLayout = () => {
     return [];
   }, [location.pathname, allSections]);
 
+  const isFullscreenFormLayout = useMemo(() => {
+    const path = location.pathname;
+    const fullscreenMatchers = [
+      /^\/app\/production\/neworder\/?$/,
+      /^\/app\/production\/[^/]+\/edit\/?$/,
+      /^\/app\/grn\/new\/?$/,
+      /^\/app\/grn\/[^/]+\/edit\/?$/,
+      /^\/app\/grn\/[^/]+\/?$/,
+    ];
+    return fullscreenMatchers.some((matcher) => matcher.test(path));
+  }, [location.pathname]);
+
   const handleLogout = async () => {
     try {
       setLoggingOut(true);
@@ -308,17 +320,18 @@ const AppLayout = () => {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Mobile overlay */}
-      {mobileOpen && (
+      {mobileOpen && !isFullscreenFormLayout && (
         <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       {/* ── Sidebar ─────────────────────────────────────── */}
-      <aside
-        className={`fixed z-50 flex h-full flex-col border-r border-black/20 shadow-2xl shadow-black/20 transition-all duration-300 lg:static ${
-          collapsed ? "w-[72px]" : "w-[278px]"
-        } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
-        style={{ background: "linear-gradient(180deg, #1e3f7a 0%, #1a3570 44%, #152b5e 100%)" }}
-      >
+      {!isFullscreenFormLayout ? (
+        <aside
+          className={`fixed z-50 flex h-full flex-col border-r border-black/20 shadow-2xl shadow-black/20 transition-all duration-300 lg:static ${
+            collapsed ? "w-[72px]" : "w-[278px]"
+          } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+          style={{ background: "linear-gradient(180deg, #1e3f7a 0%, #1a3570 44%, #152b5e 100%)" }}
+        >
         {/* ── Brand header ─── */}
         <div className={`border-b border-white/[0.08] ${collapsed ? "px-3 py-4" : "px-4 py-4"}`}>
           <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
@@ -423,19 +436,22 @@ const AppLayout = () => {
             </div>
           )}
         </div>
-      </aside>
+        </aside>
+      ) : null}
 
       {/* ── Main content ─────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Topbar */}
         <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm lg:px-6">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+            {!isFullscreenFormLayout ? (
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            ) : null}
 
             {breadcrumbItems.length > 0 && (
               <Breadcrumb>

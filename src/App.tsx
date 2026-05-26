@@ -20,6 +20,7 @@ import { WPE_PRODUCT_TYPES_ROUTE } from "@/features/wpe-masters/constants";
 import MainScreensPage from "@/features/admin-master/pages/MainScreensPage";
 import ScreenSectionsPage from "@/features/admin-master/pages/ScreenSectionsPage";
 import UserCreationPage from "@/features/admin-master/pages/UserCreationPage";
+import UserScreenPermissionAssignmentPage from "@/features/admin-master/pages/UserScreenPermissionAssignmentPage";
 import UserScreenPermissionPage from "@/features/admin-master/pages/UserScreenPermissionPage";
 import UserScreensPage from "@/features/admin-master/pages/UserScreensPage";
 import UserTypesPage from "@/features/admin-master/pages/UserTypesPage";
@@ -28,6 +29,9 @@ import BlendingPage from "@/pages/BlendingPage";
 import BOMVariantPage from "@/pages/BOMVariantPage";
 import ContactsPage from "@/pages/ContactsPage";
 import DashboardPage from "@/pages/DashboardPage";
+import GRNCreatePage from "@/pages/GRNCreatePage";
+import GRNDetailPage from "@/pages/GRNDetailPage";
+import GRNEditPage from "@/pages/GRNEditPage";
 import MachineMasterPage from "@/pages/MachineMasterPage";
 import RegrindPage from "@/pages/RegrindPage";
 import CompaniesPage from "@/features/common-master/pages/CompaniesPage";
@@ -52,6 +56,7 @@ import ProductionEditOrderPage from "@/pages/ProductionEditOrderPage";
 import ProductionNewOrderPage from "@/pages/ProductionNewOrderPage";
 import ProductionPage from "@/pages/ProductionPage";
 import StorePage from "@/pages/StorePage";
+import StoreStockItemPage from "@/pages/StoreStockItemPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -86,8 +91,12 @@ const App = () => (
                   <Route path="/app/production" element={<ProductionPage />} />
                   <Route path="/app/regrind" element={<RegrindPage />} />
                   <Route path="/app/store" element={<StorePage />} />
+                  <Route path="/app/store/stock/:itemId" element={<StoreStockItemPage />} />
                   <Route path="/oims/machines" element={<MachineMasterPage />} />
                   <Route path="/oims/bom-variants" element={<BOMVariantPage />} />
+                  <Route path="/app/grn/new" element={<GRNCreatePage />} />
+                  <Route path="/app/grn/:id/edit" element={<GRNEditPage />} />
+                  <Route path="/app/grn/:id" element={<GRNDetailPage />} />
                   <Route path="/app/grn" element={<GRNPage />} />
                   <Route path="/app/qcr" element={<Navigate to="/app/grn" replace />} />
                   <Route path="/masters/continents" element={<ContinentsPage />} />
@@ -110,6 +119,8 @@ const App = () => (
                   <Route path="/admin/user-types" element={<UserTypesPage />} />
                   <Route path="/admin/user-creation" element={<UserCreationPage />} />
                   <Route path="/admin/user-screen-permission" element={<UserScreenPermissionPage />} />
+                  <Route path="/admin/user-screen-permission/new" element={<UserScreenPermissionAssignmentPage />} />
+                  <Route path="/admin/user-screen-permission/:id/edit" element={<UserScreenPermissionAssignmentPage />} />
                   <Route path="/admin/user-accounts" element={<Navigate to="/admin/user-creation" replace />} />
                   <Route path="/admin/user-permissions" element={<Navigate to="/admin/user-screen-permission" replace />} />
                   <Route path="/wpe-masters/locations" element={<LocationMasterPage />} />

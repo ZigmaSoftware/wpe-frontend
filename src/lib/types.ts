@@ -124,14 +124,26 @@ export type StoreStockRequest = {
 
 export type StoreTransactionRecord = {
   id: number;
+  transaction_no?: string | null;
+  transaction_date?: string | null;
   item: number;
   item_code: string;
   item_name: string;
   unit: string;
   transaction_type: string;
+  reference_type?: string | null;
   quantity: string;
   reference_id: string;
   metadata: Record<string, unknown>;
+  warehouse?: number;
+  warehouse_code?: string | null;
+  warehouse_name?: string | null;
+  inward_qty?: string;
+  outward_qty?: string;
+  balance_qty?: string;
+  remarks?: string | null;
+  created_by?: number | null;
+  created_by_username?: string | null;
   created_at: string;
 };
 

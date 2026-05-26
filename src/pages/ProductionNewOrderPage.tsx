@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
+import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import type { CreateProductionOrderPayload } from "@/features/production/components/order-dialog/productionOrderForm";
-import { Button } from "@/components/ui/button";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type { ProductionMachine } from "@/lib/types";
@@ -33,31 +32,15 @@ const ProductionNewOrderPage = () => {
   });
 
   return (
-    <div className="-m-4 min-h-full bg-[#eef3f8] p-4 lg:-m-6 lg:p-6">
-      <div className="mx-auto flex max-w-[1240px] flex-col gap-4">
-        <div className="flex items-center">
-          <Button
-            type="button"
-            variant="ghost"
-            className="rounded-full px-3 text-slate-600 hover:bg-white hover:text-slate-900"
-            onClick={() => navigate("/app/production")}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Production
-          </Button>
-        </div>
-
-        <div className="h-[calc(100vh-9rem)]">
-          <ProductionOrderForm
-            onSubmit={(values) => createOrderMutation.mutate(values)}
-            onCancel={() => navigate("/app/production")}
-            isSubmitting={createOrderMutation.isPending}
-            machines={machinesQ.data ?? []}
-            machinesLoading={machinesQ.isLoading}
-          />
-        </div>
-      </div>
-    </div>
+    <ProductionOrderPageLayout onBack={() => navigate("/app/production")}>
+      <ProductionOrderForm
+        onSubmit={(values) => createOrderMutation.mutate(values)}
+        onCancel={() => navigate("/app/production")}
+        isSubmitting={createOrderMutation.isPending}
+        machines={machinesQ.data ?? []}
+        machinesLoading={machinesQ.isLoading}
+      />
+    </ProductionOrderPageLayout>
   );
 };
 

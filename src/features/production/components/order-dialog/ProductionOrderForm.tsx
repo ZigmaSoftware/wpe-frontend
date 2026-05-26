@@ -27,9 +27,9 @@ import {
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
 import {
+  productionCompactInputClassName,
   productionFieldLabelClassName,
   productionHelperTextClassName,
-  productionInputClassName,
   productionMetricCardClassName,
 } from "./productionOrderFormStyles";
 
@@ -147,7 +147,7 @@ const ProductionOrderForm = ({
   const referenceDataStatus = lookupsLoading ? "Loading" : lookupError ? "Limited" : "Ready";
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-[32px] border border-slate-200/90 bg-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.42)]">
+    <div className="flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_28px_70px_-50px_rgba(15,23,42,0.38)]">
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((values) => onSubmit(toProductionOrderPayload(values, machines)))}
@@ -155,50 +155,51 @@ const ProductionOrderForm = ({
         >
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ProductionDialogTab)} className="flex h-full flex-col">
             <div className="border-b border-slate-200/80 bg-white">
-              <div className="px-6 py-6 text-left lg:px-8">
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
-                  <div className="space-y-5">
-                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
-                      <span className="inline-flex items-center rounded-full border border-[#ffd3b5] bg-[#fff4eb] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#ff6b00]">
+              <div className="px-5 py-4 text-left lg:px-6 lg:py-5">
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                      <span className="inline-flex items-center rounded-full border border-[#ffd3b5] bg-[#fff4eb] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#ff6b00]">
                         Production Workspace
                       </span>
                       <span className="inline-flex items-center gap-2">
                         <span>General</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
+                        <ArrowRight className="h-3 w-3" />
                       </span>
                       <span className="inline-flex items-center gap-2">
                         <span>Materials Info</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
+                        <ArrowRight className="h-3 w-3" />
                       </span>
                       <span>Maintenance</span>
                     </div>
 
-                    <div className="space-y-2">
-                      <h1 className="text-[2rem] font-semibold tracking-[-0.03em] text-slate-950">{formTitle ?? "New Production Order"}</h1>
-                      <p className="max-w-3xl text-[15px] leading-7 text-slate-500">
-                        Configure production details with assignments for materials, stages, output, scrap, cost, and
-                        operational resources.
+                    <div className="space-y-1.5">
+                      <h1 className="text-[1.75rem] font-semibold leading-[1.1] tracking-[-0.03em] text-slate-950 lg:text-[1.9rem]">
+                        {formTitle ?? "New Production Order"}
+                      </h1>
+                      <p className="max-w-2xl text-sm leading-6 text-slate-500">
+                        Configure materials, stages, output, scrap, cost, and operational resources for this order.
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs">
-                      <span className="inline-flex items-center gap-2 rounded-full bg-[#ecfdf5] px-3 py-1.5 text-[#059669]">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ecfdf5] px-2.5 py-1 text-[#059669]">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Existing order info left preserved
                       </span>
-                      <span className="inline-flex items-center gap-2 rounded-full bg-[#fff7ed] px-3 py-1.5 text-[#f97316]">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fff7ed] px-2.5 py-1 text-[#f97316]">
                         <Sparkles className="h-3.5 w-3.5" />
                         Materials input and final order form
                       </span>
                       {form.formState.isDirty ? (
-                        <span className="inline-flex items-center rounded-full bg-[#fff8e6] px-3 py-1.5 text-[#b7791f]">
+                        <span className="inline-flex items-center rounded-full bg-[#fff8e6] px-2.5 py-1 text-[#b7791f]">
                           Draft changes in progress
                         </span>
                       ) : null}
                     </div>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_132px_132px] xl:grid-cols-[minmax(0,1fr)_120px_120px]">
+                  <div className="grid gap-2.5 sm:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
                     <div className={productionMetricCardClassName}>
                       <FormField
                         control={form.control}
@@ -207,7 +208,11 @@ const ProductionOrderForm = ({
                           <FormItem>
                             <FormLabel className={productionFieldLabelClassName}>Production ID*</FormLabel>
                             <FormControl>
-                              <Input {...field} placeholder="Enter production order ID" className={productionInputClassName} />
+                              <Input
+                                {...field}
+                                placeholder="Enter production order ID"
+                                className={productionCompactInputClassName}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -217,7 +222,7 @@ const ProductionOrderForm = ({
 
                     <div className={productionMetricCardClassName}>
                       <div className={productionFieldLabelClassName}>Active For</div>
-                      <div className="mt-3 inline-flex rounded-full border border-[#bfd3ff] bg-[#eef4ff] px-3 py-1.5 text-sm font-semibold text-[#2d6cdf]">
+                      <div className="mt-2.5 inline-flex rounded-full border border-[#bfd3ff] bg-[#eef4ff] px-2.5 py-1 text-xs font-semibold text-[#2d6cdf]">
                         {activeTabLabel}
                       </div>
                     </div>
@@ -225,7 +230,7 @@ const ProductionOrderForm = ({
                     <div className={productionMetricCardClassName}>
                       <div className={productionFieldLabelClassName}>Reference Data</div>
                       <div
-                        className={`mt-3 inline-flex rounded-full border px-3 py-1.5 text-sm font-semibold ${
+                        className={`mt-2.5 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
                           referenceDataStatus === "Ready"
                             ? "border-[#bbf7d0] bg-[#ecfdf5] text-[#059669]"
                             : referenceDataStatus === "Limited"
@@ -240,12 +245,12 @@ const ProductionOrderForm = ({
                 </div>
               </div>
 
-              <div className="px-6 pb-1 lg:px-8">
+              <div className="px-5 pb-0 lg:px-6">
                 <ProductionTabs value={activeTab} onValueChange={setActiveTab} />
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
+            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5 lg:px-6">
               <TabsContent value="general" className="mt-0 outline-none">
                 <ProductionGeneralTab
                   form={form}
@@ -293,16 +298,16 @@ const ProductionOrderForm = ({
               </TabsContent>
             </div>
 
-            <div className="border-t border-slate-200/80 bg-white/95 px-6 py-4 backdrop-blur lg:px-8">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="border-t border-slate-200/80 bg-white/95 px-5 py-3 backdrop-blur lg:px-6">
+              <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
                 <div className={productionHelperTextClassName}>
-                  {lookupError ? lookupError : "Form state is controlled locally until the final Create Order submission."}
+                  {lookupError ? lookupError : "Form state is controlled locally until the final order submission."}
                 </div>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row">
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-11 rounded-full border-slate-200 bg-white px-6 text-slate-700 hover:bg-slate-50"
+                    className="h-10 rounded-full border-slate-200 bg-white px-5 text-slate-700 hover:bg-slate-50"
                     onClick={onCancel}
                     disabled={isSubmitting}
                   >
@@ -310,7 +315,7 @@ const ProductionOrderForm = ({
                   </Button>
                   <Button
                     type="submit"
-                    className="h-11 rounded-full bg-[linear-gradient(135deg,#ff8f1f_0%,#ff6b00_100%)] px-6 text-white shadow-[0_12px_24px_-16px_rgba(255,107,0,0.9)] hover:opacity-95"
+                    className="h-10 rounded-full bg-[linear-gradient(135deg,#ff8f1f_0%,#ff6b00_100%)] px-5 text-white shadow-[0_12px_24px_-16px_rgba(255,107,0,0.9)] hover:opacity-95"
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? (

@@ -1,26 +1,24 @@
-import { Boxes, Coins, FileText, Layers3, Package, RefreshCcw, Users } from "lucide-react";
+import { Boxes, Building2, Calculator, ClipboardList, FileText } from "lucide-react";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { PRODUCTION_ORDER_TABS, type ProductionDialogTab } from "./productionOrderForm";
+import { grnFormTabs, type GrnFormTab } from "@/features/grn/grnShared";
 
-type ProductionTabsProps = {
-  value: ProductionDialogTab;
-  onValueChange: (value: ProductionDialogTab) => void;
+type GrnTabsProps = {
+  value: GrnFormTab;
+  onValueChange: (value: GrnFormTab) => void;
 };
 
 const tabIcons = {
-  general: FileText,
-  materials: Boxes,
-  stages: Layers3,
-  output: Package,
-  scrap: RefreshCcw,
-  cost: Coins,
-  resources: Users,
+  document: FileText,
+  requirement: ClipboardList,
+  supplier: Building2,
+  items: Boxes,
+  totals: Calculator,
 } as const;
 
-const ProductionTabs = ({ value, onValueChange }: ProductionTabsProps) => (
+const GrnTabs = ({ value, onValueChange }: GrnTabsProps) => (
   <TabsList className="h-auto w-full justify-start gap-0.5 overflow-x-auto rounded-none bg-transparent p-0">
-    {PRODUCTION_ORDER_TABS.map((tab) => {
+    {grnFormTabs.map((tab) => {
       const Icon = tabIcons[tab.value];
 
       return (
@@ -43,4 +41,4 @@ const ProductionTabs = ({ value, onValueChange }: ProductionTabsProps) => (
   </TabsList>
 );
 
-export default ProductionTabs;
+export default GrnTabs;

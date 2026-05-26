@@ -3,12 +3,12 @@ import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
-  productionCardBaseClassName,
-  productionCardContentClassName,
-  productionCardHeaderClassName,
-} from "./productionOrderFormStyles";
+  grnCardBaseClassName,
+  grnCardContentClassName,
+  grnCardHeaderClassName,
+} from "./grnPageStyles";
 
-type ProductionSectionCardProps = {
+type GrnSectionCardProps = {
   title: string;
   description?: string;
   action?: ReactNode;
@@ -52,7 +52,7 @@ const toneClasses = {
   },
 } as const;
 
-const ProductionSectionCard = ({
+const GrnSectionCard = ({
   title,
   description,
   action,
@@ -61,16 +61,16 @@ const ProductionSectionCard = ({
   contentClassName,
   tone = "slate",
   icon: Icon,
-}: ProductionSectionCardProps) => (
+}: GrnSectionCardProps) => (
   <Card
     className={cn(
-      productionCardBaseClassName,
+      grnCardBaseClassName,
       "before:absolute before:left-0 before:top-3.5 before:h-10 before:w-[3px] before:rounded-full",
       toneClasses[tone].accent,
       className,
     )}
   >
-    <CardHeader className={productionCardHeaderClassName}>
+    <CardHeader className={grnCardHeaderClassName}>
       <div className="flex min-w-0 items-start gap-2.5">
         {Icon ? (
           <div className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", toneClasses[tone].iconWrap)}>
@@ -85,8 +85,8 @@ const ProductionSectionCard = ({
       {action}
     </CardHeader>
     <CardTitle className="sr-only">{title}</CardTitle>
-    <CardContent className={cn(productionCardContentClassName, contentClassName)}>{children}</CardContent>
+    <CardContent className={cn(grnCardContentClassName, contentClassName)}>{children}</CardContent>
   </Card>
 );
 
-export default ProductionSectionCard;
+export default GrnSectionCard;
