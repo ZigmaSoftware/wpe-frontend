@@ -30,6 +30,7 @@ import BlendingStockItemPage from "@/pages/BlendingStockItemPage";
 import BlendingTransactionPage from "@/pages/BlendingTransactionPage";
 import BOMVariantPage from "@/pages/BOMVariantPage";
 import ContactsPage from "@/pages/ContactsPage";
+import ContactFormPage from "@/pages/ContactFormPage";
 import DashboardPage from "@/pages/DashboardPage";
 import GRNCreatePage from "@/pages/GRNCreatePage";
 import GRNDetailPage from "@/pages/GRNDetailPage";
@@ -84,6 +85,8 @@ const App = () => (
                   <Route path="/app" element={<DashboardPage />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/app/contacts" element={<ContactsPage />} />
+                  <Route path="/app/contacts/new" element={<ContactFormPage />} />
+                  <Route path="/app/contacts/:id/edit" element={<ContactFormPage />} />
                   <Route path="/app/items" element={<ItemsPage />} />
                   <Route path="/app/blending" element={<BlendingPage />} />
                   <Route path="/app/blending/stock/:itemId" element={<BlendingStockItemPage />} />
@@ -100,6 +103,7 @@ const App = () => (
                   <Route path="/oims/bom-variants" element={<BOMVariantPage />} />
                   <Route path="/app/grn/new" element={<GRNCreatePage />} />
                   <Route path="/app/grn/:id/edit" element={<GRNEditPage />} />
+                  <Route path="/app/grn/:id/view" element={<GRNDetailPage />} />
                   <Route path="/app/grn/:id" element={<GRNDetailPage />} />
                   <Route path="/app/grn" element={<GRNPage />} />
                   <Route path="/app/qcr" element={<Navigate to="/app/grn" replace />} />
