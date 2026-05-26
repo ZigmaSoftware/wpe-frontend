@@ -1,7 +1,6 @@
 import { adminMasterApi } from "@/features/admin-master/api/adminMasterApi";
 import type { LookupOption } from "@/features/admin-master/types";
 import { itemsInventoryApi } from "@/features/items/api/inventoryApi";
-import type { InventoryHistoryRow, InventorySummaryRow } from "@/features/items/types";
 import { coreApi } from "@/lib/api";
 import { unwrapSuccessEnvelope } from "@/lib/api-helpers";
 import type { ApiPaginatedResult, ApiSuccessEnvelope, StoreStockRequest, StoreTransactionRecord } from "@/lib/types";
@@ -69,14 +68,7 @@ export const storeApi = {
 
   listDepartments: async (): Promise<LookupOption[]> => adminMasterApi.lookupUserTypeDepartments(),
 
-  listStockSummary: async (params: { search?: string }) =>
-    collectAllPages<InventorySummaryRow>((page, pageSize) =>
-      itemsInventoryApi.listSummary("store", {
-        page,
-        pageSize,
-        search: params.search?.trim() || undefined,
-      }),
-    ),
+  listStockSummary: async (params: { search?: string }) => itemsInventoryApi.listAllSummary("store", params),
 
   listRequests: async (params: {
     search?: string;
@@ -125,14 +117,5 @@ export const storeApi = {
     search?: string;
     dateFrom?: string;
     dateTo?: string;
-  }) =>
-    collectAllPages<InventoryHistoryRow>((page, pageSize) =>
-      itemsInventoryApi.listHistory("store", params.itemId, {
-        page,
-        pageSize,
-        search: params.search?.trim() || undefined,
-        dateFrom: params.dateFrom || undefined,
-        dateTo: params.dateTo || undefined,
-      }),
-    ),
+  }) => itemsInventoryApi.listAllHistory("store", params.itemId, params),
 };

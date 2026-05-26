@@ -108,6 +108,9 @@ export type StoreStockRequest = {
   quantity: string;
   request_type: "GENERAL" | "ADDITIVE";
   department: string;
+  request_date?: string | null;
+  require_date?: string | null;
+  require_time?: string | null;
   requested_for_name: string;
   request_reason: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "PARTIALLY_APPROVED" | "CANCELLED";

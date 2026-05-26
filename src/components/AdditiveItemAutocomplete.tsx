@@ -29,7 +29,7 @@ const highlightText = (text: string, query: string) => {
 
   return parts.map((part, index) =>
     part.toLowerCase() === query.trim().toLowerCase() ? (
-      <mark key={`${part}-${index}`} className="rounded bg-amber-100 px-0.5 text-inherit">
+      <mark key={`${part}-${index}`} className="rounded bg-sky-100 px-0.5 text-slate-900">
         {part}
       </mark>
     ) : (
@@ -197,7 +197,7 @@ const AdditiveItemAutocomplete = ({
       <div
         className={cn(
           "relative rounded-md transition-all",
-          open && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+          open && "ring-2 ring-sky-500/60 ring-offset-2 ring-offset-background",
         )}
       >
         <Input
@@ -250,7 +250,7 @@ const AdditiveItemAutocomplete = ({
         <div
           id={listboxId}
           role="listbox"
-          className="absolute top-[calc(100%+0.35rem)] z-50 w-full overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
+          className="absolute top-[calc(100%+0.35rem)] z-50 w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-lg animate-in fade-in-0 zoom-in-95"
         >
           <div className="max-h-80 overflow-y-auto py-1">
             {suggestionsQuery.isLoading ? (
@@ -279,8 +279,9 @@ const AdditiveItemAutocomplete = ({
                     role="option"
                     aria-selected={isSelected}
                     className={cn(
-                      "flex w-full items-start gap-3 px-3 py-2.5 text-left text-sm transition-colors",
-                      isActive && "bg-accent text-accent-foreground",
+                      "flex w-full items-start gap-3 border-b border-slate-100 px-3 py-2.5 text-left text-sm transition-colors last:border-b-0",
+                      isSelected && "bg-sky-50",
+                      isActive ? "bg-slate-100 text-slate-900" : "hover:bg-slate-50",
                     )}
                     onMouseDown={(event) => event.preventDefault()}
                     onMouseEnter={() => setHighlightedIndex(index)}
@@ -297,7 +298,7 @@ const AdditiveItemAutocomplete = ({
                         <span>{item.category}</span>
                       </div>
                     </div>
-                    {isSelected ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : null}
+                    {isSelected ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" /> : null}
                   </button>
                 );
               })
