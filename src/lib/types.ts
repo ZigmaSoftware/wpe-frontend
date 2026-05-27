@@ -478,6 +478,7 @@ export type ProductionBatch = {
 export type ProductionOrder = {
   id: number;
   production_id: string;
+  production_for?: string | null;
   production_type: string;
   status: "PLANNED" | "IN_PROGRESS" | "PLAN_COMPLETED" | "CLOSED";
   batch_number: string | null;

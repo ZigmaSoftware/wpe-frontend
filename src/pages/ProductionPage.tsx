@@ -4,38 +4,26 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
-import StatCard from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { coreApi } from "@/lib/api";
-import { formatDate, formatDecimal, normalizeListResponse } from "@/lib/api-helpers";
+import { formatDate, normalizeListResponse } from "@/lib/api-helpers";
 import type { ProductionOrder } from "@/lib/types";
-import { ORDER_STATUS_CLASSES, StatusBadge } from "./productionShared";
-
-type DashboardData = {
-  planned: number;
-  in_progress: number;
-  completed: number;
-  closed: number;
-  total_machines: number;
-  total_bom_variants: number;
-};
 
 const ProductionPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const dashQ = useQuery({
-    queryKey: ["production-dashboard"],
-    queryFn: async () => {
-      const response = await coreApi.get<{ data: DashboardData } | DashboardData>("/api/production/dashboard/");
-      const payload = response.data as { data?: DashboardData } & DashboardData;
-      return (payload.data ?? payload) as DashboardData;
-    },
-  });
+  const getProductionFor = (order: ProductionOrder) => {
+    if (typeof order.production_for === "string" && order.production_for.trim().length > 0) {
+      return order.production_for;
+    }
+
+    return order.production_type || "-";
+  };
 
   const ordersQ = useQuery({
     queryKey: ["production-orders"],
@@ -49,13 +37,11 @@ const ProductionPage = () => {
     if (statusFilter !== "all" && order.status !== statusFilter) return false;
     if (!search.trim()) return true;
 
-    return [order.production_id, order.production_type, order.batch_number ?? ""]
+    return [order.production_id, getProductionFor(order), order.production_type, order.batch_number ?? ""]
       .join(" ")
       .toLowerCase()
       .includes(search.toLowerCase());
   });
-
-  const dash = dashQ.data;
 
   return (
     <div className="space-y-6">
@@ -70,19 +56,13 @@ const ProductionPage = () => {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Planned" value={dash?.planned ?? 0} />
-        <StatCard label="In Progress" value={dash?.in_progress ?? 0} />
-        <StatCard label="Completed" value={dash?.completed ?? 0} />
-      </div>
-
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search production ID, type, batch..."
+            placeholder="Search production ID or production..."
             className="pl-9"
           />
         </div>
@@ -110,39 +90,37 @@ const ProductionPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10 text-center">#</TableHead>
-                  <TableHead>Production ID</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead>Prd ID</TableHead>
+                  <TableHead className="w-12">L</TableHead>
+                  <TableHead className="w-12">S</TableHead>
+                  <TableHead>Production</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Shift</TableHead>
-                  <TableHead>Planned Qty</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredOrders.map((order, index) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="text-center text-muted-foreground">{index + 1}</TableCell>
+                {filteredOrders.map((order) => (
+                  <TableRow
+                    key={order.id}
+                    className="cursor-pointer hover:bg-slate-50/80"
+                    onClick={() => navigate(`/app/production/manage-batch/${order.id}`)}
+                  >
                     <TableCell className="font-mono text-xs font-medium">{order.production_id}</TableCell>
-                    <TableCell>{order.production_type}</TableCell>
+                    <TableCell className="text-muted-foreground">-</TableCell>
+                    <TableCell className="text-muted-foreground">-</TableCell>
+                    <TableCell>{getProductionFor(order)}</TableCell>
                     <TableCell>{formatDate(order.production_date)}</TableCell>
-                    <TableCell>{order.shift}</TableCell>
-                    <TableCell>{formatDecimal(order.planned_quantity)}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={order.status} classes={ORDER_STATUS_CLASSES} />
-                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate(`/app/production/manage-batch/${order.id}`)}
-                      >
+                          size="sm"
+                          variant="outline"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/app/production/manage-batch/${order.id}`);
+                          }}
+                        >
                           Manage Batch
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/app/production/${order.id}/edit`)}>
-                          Edit
                         </Button>
                       </div>
                     </TableCell>
