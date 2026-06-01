@@ -21,6 +21,7 @@ export const commonMasterKeys = {
   companies: (page: number, pageSize: number, search: string, filters?: string) =>
     ["common-masters", "companies", page, pageSize, search, filters] as const,
   company: (id: string | number) => ["common-masters", "company", id] as const,
+  nextCode: (module: string) => ["common-masters", "next-code", module] as const,
   projects: (page: number, pageSize: number, search: string, filters?: string) =>
     ["common-masters", "projects", page, pageSize, search, filters] as const,
   project: (id: string | number) => ["common-masters", "project", id] as const,

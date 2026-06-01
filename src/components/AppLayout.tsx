@@ -1,304 +1,90 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive,
-  Blend,
-  Box,
-  Building2,
+  ArrowRight,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  Globe2,
+  Database,
   LayoutDashboard,
-  Landmark,
   Layers,
-  Layout,
   LogOut,
-  MapPin,
   Menu,
-  Map,
-  Monitor,
-  MapPinned,
-  PackageSearch,
-  ReceiptText,
-  Route,
-  Shield,
-  ShoppingCart,
-  Tag,
-  Truck,
-  UserCog,
-  Users,
-  Warehouse,
+  Search,
+  ShieldCheck,
   X,
 } from "lucide-react";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { adminRouteRegistry, getAdminRouteTitle, resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
-import { WPE_PRODUCT_TYPES_ROUTE } from "@/features/wpe-masters/constants";
-import type { AdminMenuMain } from "@/features/admin-master/types";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/AuthProvider";
+import {
+  buildAppNavigation,
+  buildBreadcrumbs,
+  DASHBOARD_SECTION_LABEL,
+  flattenNavigationLinks,
+  getTopLevelNavKey,
+  isNavGroupActive,
+  isNavItemActive,
+  type AppNavGroup,
+} from "@/lib/appNavigation";
 
-/* ─── colour palette per section ──────────────────────────────────── */
-const sectionMeta: Record<string, { accent: string; marker: string; glow: string }> = {
-  Workspace: { accent: "from-emerald-400 to-cyan-400", marker: "bg-emerald-400", glow: "shadow-emerald-500/20" },
-  "Common Masters": { accent: "from-sky-400 to-indigo-400", marker: "bg-sky-400", glow: "shadow-sky-500/20" },
-  "WPE Masters": { accent: "from-lime-400 to-emerald-400", marker: "bg-lime-400", glow: "shadow-lime-500/20" },
-  "OIMS Masters": { accent: "from-amber-300 to-orange-400", marker: "bg-amber-300", glow: "shadow-amber-500/20" },
-  Masters: { accent: "from-sky-400 to-cyan-400", marker: "bg-sky-400", glow: "shadow-sky-500/20" },
-  default: { accent: "from-stone-300 to-zinc-100", marker: "bg-zinc-300", glow: "shadow-white/10" },
-};
+type MegaSectionKey = "workspace" | "masters" | null;
 
-const wpeMastersSections = [
-  {
-    label: "WPE Masters",
-    items: [
-      { to: "/wpe-masters/locations",       icon: MapPin,       label: "Locations" },
-      { to: "/wpe-masters/branches",        icon: Building2,    label: "Branches" },
-      { to: "/wpe-masters/price-books",     icon: Tag,          label: "Price Books" },
-      { to: "/wpe-masters/warehouses",      icon: Warehouse,    label: "Warehouses" },
-      { to: WPE_PRODUCT_TYPES_ROUTE,        icon: Layers,       label: "Product Types" },
-      { to: "/wpe-masters/production-types",icon: Box,          label: "Production Types" },
-      { to: "/wpe-masters/sale-types",      icon: Truck,        label: "Sale Types" },
-      { to: "/wpe-masters/purchase-types",  icon: ShoppingCart, label: "Purchase Types" },
-      { to: "/wpe-masters/roles",           icon: Shield,       label: "Roles" },
-      { to: "/wpe-masters/departments",     icon: Globe2,       label: "Departments" },
-    ],
-  },
+const fullscreenMatchers = [
+  /^\/app\/production\/neworder\/?$/,
+  /^\/app\/production\/[^/]+\/edit\/?$/,
+  /^\/app\/production\/manage-batch\/[^/]+\/?$/,
+  /^\/app\/grn\/new\/?$/,
+  /^\/app\/grn\/[^/]+\/edit\/?$/,
+  /^\/app\/grn\/[^/]+\/?$/,
 ];
 
-const adminScreenItems = [
-  { codes: ["main-screen-master"], to: "/admin/main-screens", icon: Monitor, label: "Main Screens" },
-  { codes: ["screen-section-master"], to: "/admin/screen-sections", icon: Layers, label: "Screen Sections" },
-  { codes: ["user-screen-master"], to: "/admin/user-screens", icon: Layout, label: "User Screens" },
-  { codes: ["user-type-master"], to: "/admin/user-types", icon: Users, label: "User Types" },
-  { codes: ["user-account-master", "user-creation-master"], to: "/admin/user-creation", icon: UserCog, label: "User Creation" },
-  { codes: ["user-permission-master", "user-screen-permission-master"], to: "/admin/user-screen-permission", icon: Shield, label: "User Screen Permission" },
-] as const;
-
-const adminScreenIconMap: Record<string, React.ElementType> = Object.fromEntries(
-  adminScreenItems.flatMap((item) => item.codes.map((code) => [code, item.icon])),
-);
-
-const adminMasterSections = [
-  {
-    label: "Masters",
-    items: adminScreenItems.map(({ to, icon, label }) => ({ to, icon, label })),
-  },
-];
-
-const navSections = [
-  {
-    label: "Workspace",
-    items: [
-      { to: "/app",                icon: LayoutDashboard, label: "Dashboard" },
-      { to: "/app/contacts",       icon: Users,           label: "Contacts" },
-      { to: "/app/items",          icon: Box,             label: "Inventory" },
-      { to: "/app/blending",       icon: Blend,           label: "Blending" },
-      { to: "/app/presales",       icon: FileText,        label: "Presales" },
-      { to: "/app/production",     icon: Layers,          label: "Production" },
-      { to: "/app/regrind",        icon: Route,           label: "Regrind" },
-      { to: "/app/store",          icon: Archive,         label: "Store" },
-      { to: "/app/grn",            icon: Truck,           label: "GRN" },
-    ],
-  },
-  {
-    label: "OIMS Masters",
-    items: [
-      { to: "/oims/machines",      icon: Monitor,         label: "Machines" },
-      { to: "/oims/bom-variants",  icon: PackageSearch,   label: "BOM Variants" },
-    ],
-  },
-  {
-    label: "Common Masters",
-    items: [
-      { to: "/masters/continents",  icon: Globe2,        label: "Continents" },
-      { to: "/masters/countries",   icon: Map,           label: "Countries" },
-      { to: "/masters/states",      icon: MapPinned,     label: "States" },
-      { to: "/masters/cities",      icon: Landmark,      label: "Cities" },
-      { to: "/masters/taxes",       icon: ReceiptText,   label: "Taxes" },
-      { to: "/masters/currencies",  icon: ReceiptText,   label: "Currencies" },
-      { to: "/masters/customers",   icon: Users,         label: "Customers" },
-      { to: "/masters/suppliers",   icon: PackageSearch, label: "Suppliers" },
-      { to: "/masters/companies",   icon: Users,         label: "Companies" },
-      { to: "/masters/projects",    icon: Route,         label: "Projects" },
-    ],
-  },
-];
-
-/* ─── collapsible nav section ─────────────────────────────────────── */
-interface NavSectionProps {
-  label: string;
-  items: { to: string; icon: React.ElementType; label: string }[];
-  collapsed: boolean;
-  onMobileClose: () => void;
-  defaultOpen?: boolean;
-}
-
-const NavSection = ({ label, items, collapsed, onMobileClose, defaultOpen = true }: NavSectionProps) => {
-  const { accent, marker, glow } = sectionMeta[label] ?? sectionMeta.default;
-  const location = useLocation();
-  const hasActive = items.some((i) => location.pathname === i.to || location.pathname.startsWith(i.to + "/"));
-  const [open, setOpen] = useState(defaultOpen || hasActive);
-
-  useEffect(() => {
-    if (hasActive) {
-      setOpen(true);
-    }
-  }, [hasActive]);
-
-  return (
-    <div className={collapsed ? "space-y-1" : "space-y-1.5"}>
-      {!collapsed && (
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className={[
-            "group flex h-8 w-full items-center justify-between rounded-md px-3 text-left transition-colors",
-            hasActive ? "bg-white/[0.07]" : "hover:bg-white/[0.05]",
-          ].join(" ")}
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            <span className={`h-1.5 w-1.5 rounded-full ${marker}`} />
-            <span className={`truncate text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
-              hasActive ? "text-white/80" : "text-white/40 group-hover:text-white/70"
-            }`}>
-              {label}
-            </span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white/50">
-              {items.length}
-            </span>
-            <ChevronDown className={`h-3 w-3 text-white/40 transition-transform duration-200 group-hover:text-white/60 ${open ? "" : "-rotate-90"}`} />
-          </span>
-        </button>
-      )}
-
-      <div className={`space-y-1 overflow-hidden transition-all duration-200 ${open || collapsed ? "max-h-[2200px] opacity-100" : "max-h-0 opacity-0"}`}>
-        {items.map((item) => {
-          const link = (
-            <NavLink
-              to={item.to}
-              end={item.to === "/app" || item.to === "/dashboard"}
-              onClick={onMobileClose}
-              className={({ isActive }) => [
-                "group relative flex h-10 items-center gap-3 overflow-hidden rounded-md px-2.5 text-[13px] font-medium transition-all duration-150",
-                collapsed ? "mx-auto w-10 justify-center px-0" : "",
-                isActive
-                  ? `bg-white/[0.12] text-white shadow-lg ${glow} ring-1 ring-white/[0.10]`
-                  : "text-white/60 hover:bg-white/[0.07] hover:text-white",
-              ].join(" ")}
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <>
-                      <span className={`absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b ${accent}`} />
-                      <span className={`absolute inset-y-1 right-1 w-10 rounded-full bg-gradient-to-l ${accent} opacity-10 blur-md`} />
-                    </>
-                  )}
-                  <span className={`relative flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md transition-all duration-150 ${
-                    isActive
-                      ? `bg-gradient-to-br ${accent} text-zinc-950 shadow-sm`
-                      : "bg-white/[0.06] text-white/60 group-hover:bg-white/[0.10] group-hover:text-white"
-                  }`}>
-                    <item.icon className="h-3.5 w-3.5" />
-                  </span>
-                  {!collapsed && (
-                    <span className="relative min-w-0 flex-1 truncate leading-none">{item.label}</span>
-                  )}
-                </>
-              )}
-            </NavLink>
-          );
-
-          if (!collapsed) {
-            return <div key={item.to}>{link}</div>;
-          }
-
-          return (
-            <Tooltip key={item.to} delayDuration={150}>
-              <TooltipTrigger asChild>{link}</TooltipTrigger>
-              <TooltipContent side="right" className="border-zinc-800 bg-zinc-950 text-white">
-                {item.label}
-              </TooltipContent>
-            </Tooltip>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-/* ─── main layout ─────────────────────────────────────────────────── */
 const AppLayout = () => {
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openMega, setOpenMega] = useState<MegaSectionKey>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signOut, adminMenu } = useAuth();
+  const searchRef = useRef<HTMLDivElement | null>(null);
+  const { user, signOut, adminMenu = [] } = useAuth();
 
-  const adminNavSections = useMemo(
-    () =>
-      adminMenu
-        .map((main: AdminMenuMain) => ({
-          label: main.name,
-          items: main.sections.flatMap((section) =>
-            section.screens
-              .map((screen) => ({
-                to: resolveAdminRoutePath(screen.code, screen.route_path),
-                icon: adminScreenIconMap[screen.code] ?? Shield,
-                label: getAdminRouteTitle(screen.code, screen.screen_name),
-              }))
-              .filter(
-                (item, index, items) =>
-                  item.to !== "/dashboard" &&
-                  items.findIndex((candidate) => candidate.to === item.to) === index,
-              ),
-          ),
-        }))
-        .filter((section) => section.items.length > 0),
-    [adminMenu],
-  );
+  const isFullscreenFormLayout = fullscreenMatchers.some((matcher) => matcher.test(location.pathname));
 
-  const allSections = useMemo(
-    () => [...navSections, ...wpeMastersSections, ...(adminNavSections.length > 0 ? adminNavSections : adminMasterSections)],
-    [adminNavSections],
-  );
+  const navigation = useMemo(() => buildAppNavigation(adminMenu), [adminMenu]);
+  const breadcrumbs = useMemo(() => buildBreadcrumbs(location.pathname, navigation), [location.pathname, navigation]);
+  const topLevelKey = useMemo(() => getTopLevelNavKey(location.pathname, navigation), [location.pathname, navigation]);
+  const searchableLinks = useMemo(() => flattenNavigationLinks(navigation), [navigation]);
 
-  const breadcrumbItems = useMemo(() => {
-    const path = location.pathname;
-    if (path === "/app" || path === "/dashboard") return ["Dashboard"];
-    const adminMatch = Object.values(adminRouteRegistry).find((e) => e.path === path);
-    if (adminMatch) return ["Masters", adminMatch.title];
-    for (const section of allSections) {
-      const match = section.items.find((i) => path === i.to || path.startsWith(i.to + "/"));
-      if (match) return [section.label, match.label];
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return [];
     }
-    return [];
-  }, [location.pathname, allSections]);
 
-  const isFullscreenFormLayout = useMemo(() => {
-    const path = location.pathname;
-    const fullscreenMatchers = [
-      /^\/app\/production\/neworder\/?$/,
-      /^\/app\/production\/[^/]+\/edit\/?$/,
-      /^\/app\/production\/manage-batch\/[^/]+\/?$/,
-      /^\/app\/grn\/new\/?$/,
-      /^\/app\/grn\/[^/]+\/edit\/?$/,
-      /^\/app\/grn\/[^/]+\/?$/,
-    ];
-    return fullscreenMatchers.some((matcher) => matcher.test(path));
+    return searchableLinks
+      .filter((entry) =>
+        [entry.label, entry.description, entry.group, entry.section]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query)),
+      )
+      .slice(0, 8);
+  }, [searchQuery, searchableLinks]);
+
+  useEffect(() => {
+    setOpenMega(null);
+    setMobileOpen(false);
+    setSearchOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!searchRef.current?.contains(event.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -312,193 +98,316 @@ const AppLayout = () => {
     }
   };
 
+  const handleSearchNavigate = (to: string) => {
+    setSearchQuery("");
+    setSearchOpen(false);
+    navigate(to);
+  };
+
   const initials = (user?.username ?? "U")
     .split(/[\s._-]/)
-    .map((p: string) => p[0]?.toUpperCase() ?? "")
+    .map((part) => part[0]?.toUpperCase() ?? "")
     .slice(0, 2)
     .join("");
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      {/* Mobile overlay */}
-      {mobileOpen && !isFullscreenFormLayout && (
-        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />
-      )}
+  const sessionTitle = user?.username ?? "Authenticated user";
+  const sessionSubtitle = user?.email || `${adminMenu.length} permission group${adminMenu.length === 1 ? "" : "s"}`;
 
-      {/* ── Sidebar ─────────────────────────────────────── */}
-      {!isFullscreenFormLayout ? (
-        <aside
-          className={`fixed z-50 flex h-full flex-col border-r border-black/20 shadow-2xl shadow-black/20 transition-all duration-300 lg:static ${
-            collapsed ? "w-[72px]" : "w-[278px]"
-          } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
-          style={{ background: "linear-gradient(180deg, #1e3f7a 0%, #1a3570 44%, #152b5e 100%)" }}
-        >
-        {/* ── Brand header ─── */}
-        <div className={`border-b border-white/[0.08] ${collapsed ? "px-3 py-4" : "px-4 py-4"}`}>
-          <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-white text-zinc-950 shadow-lg shadow-sky-500/20 ring-1 ring-sky-300/30">
-              {!collapsed ? (
-                <img src="/logo.png" alt="WPE" className="h-8 w-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-              ) : (
-                <span className="text-[12px] font-black">WPE</span>
-              )}
-            </div>
+  if (isFullscreenFormLayout) {
+    return (
+      <div className="min-h-screen bg-background p-4 lg:p-6">
+        <Outlet />
+      </div>
+    );
+  }
 
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <div className="truncate text-[14px] font-bold text-white">WPE ERP</div>
-                  <span className="rounded-full border border-sky-300/30 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold leading-none text-sky-200">
-                    Live
-                  </span>
-                </div>
-                <div className="truncate text-[11px] font-medium text-white/50">Plant operations suite</div>
+  const renderWorkspaceMega = () => (
+    <div className={`wpe-mega ${openMega === "workspace" ? "is-open" : ""}`}>
+      <div className="wpe-mega-inner">
+        <div className="wpe-mega-main">
+          {navigation.workspace.map((group) => (
+            <div key={group.key} className="wpe-mega-col">
+              <div className="wpe-mega-col-head">
+                <span className="wpe-mega-col-icon">
+                  <group.icon className="h-4 w-4" />
+                </span>
+                <span>{group.label}</span>
+                {group.tag ? <span className="wpe-chip-count">{group.tag}</span> : null}
               </div>
-            )}
+              <div className="wpe-mega-stack">
+                {group.items.map((item) => {
+                  const active = isNavItemActive(location.pathname, item);
 
-            <button
-              onClick={() => { setCollapsed((c) => !c); setMobileOpen(false); }}
-              className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-white/[0.08] hover:text-white lg:flex"
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </button>
-
-            <button onClick={() => setMobileOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-md text-white/50 hover:bg-white/[0.08] hover:text-white lg:hidden">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {!collapsed && (
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <div className="rounded-md border border-white/[0.08] bg-white/[0.06] px-3 py-2">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Modules</div>
-                <div className="mt-1 text-sm font-bold text-white">{allSections.length}</div>
-              </div>
-              <div className="rounded-md border border-white/[0.08] bg-white/[0.06] px-3 py-2">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Session</div>
-                <div className="mt-1 flex items-center gap-1.5 text-sm font-bold text-sky-200">
-                  <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
-                  Online
-                </div>
+                  return (
+                    <Link key={item.to} to={item.to} className={`wpe-mega-link ${active ? "is-active" : ""}`}>
+                      <span className="wpe-mega-link-icon">
+                        <item.icon className="h-4 w-4" />
+                      </span>
+                      <span className="wpe-mega-link-copy">
+                        <span className="wpe-mega-link-title">{item.label}</span>
+                        <span className="wpe-mega-link-description">{item.description}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
-          )}
-        </div>
-
-        {/* ── Nav ─── */}
-        <nav className={`flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${collapsed ? "space-y-3 px-2 py-3" : "space-y-4 px-3 py-4"}`}>
-          {allSections.map((section) => (
-            <NavSection
-              key={section.label}
-              label={section.label}
-              items={section.items}
-              collapsed={collapsed}
-              onMobileClose={() => setMobileOpen(false)}
-              defaultOpen={section.label === "Workspace" || section.label === "WPE Masters" || section.label === "Masters"}
-            />
           ))}
-        </nav>
-
-        {/* ── User footer ─── */}
-        <div className={`border-t border-white/[0.08] bg-black/[0.12] ${collapsed ? "px-3 py-3" : "px-3 py-3"}`}>
-          {!collapsed ? (
-            <div className="flex items-center gap-2.5 rounded-md border border-white/[0.08] bg-white/[0.06] p-2">
-              <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-amber-300 to-emerald-300 text-[11px] font-black text-zinc-950 shadow">
-                <span>{initials}</span>
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#1e3f7a] bg-sky-300" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-semibold text-white">{user?.username ?? "User"}</div>
-                <div className="truncate text-[10px] font-medium text-white/40">{user?.email || "Authenticated"}</div>
-              </div>
-              <button
-                onClick={handleLogout}
-                disabled={loggingOut}
-                title="Logout"
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-red-500/15 hover:text-red-300 disabled:opacity-50"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-amber-300 to-emerald-300 text-[11px] font-black text-zinc-950">
-                {initials}
-              </div>
-              <button
-                onClick={handleLogout}
-                disabled={loggingOut}
-                title="Logout"
-                className="flex h-10 w-full items-center justify-center rounded-md text-white/50 transition-colors hover:bg-red-500/15 hover:text-red-300"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          )}
         </div>
-        </aside>
-      ) : null}
+      </div>
+    </div>
+  );
 
-      {/* ── Main content ─────────────────────────────────── */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Topbar */}
-        <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm lg:px-6">
-          <div className="flex items-center gap-3">
-            {!isFullscreenFormLayout ? (
-              <button
-                onClick={() => setMobileOpen(true)}
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-            ) : null}
+  const renderMastersMega = () => (
+    <div className={`wpe-mega ${openMega === "masters" ? "is-open" : ""}`}>
+      <div className="wpe-mega-inner">
+        <div className="wpe-mega-main wpe-mega-main--masters">
+          {navigation.masters.map((group) => (
+            <div key={group.key} className="wpe-mega-col">
+              <div className="wpe-mega-col-head">
+                <span className="wpe-mega-col-icon">
+                  <group.icon className="h-4 w-4" />
+                </span>
+                <span>{group.label}</span>
+                <span className="wpe-chip-count">{group.items.length}</span>
+              </div>
+              <div className="wpe-mega-list">
+                {group.items.map((item) => {
+                  const active = isNavItemActive(location.pathname, item);
 
-            {breadcrumbItems.length > 0 && (
-              <Breadcrumb>
-                <BreadcrumbList>
-                  {breadcrumbItems.map((item, index) => (
-                    <div key={item} className="inline-flex items-center gap-1.5">
-                      <BreadcrumbItem>
-                        {index === breadcrumbItems.length - 1 ? (
-                          <BreadcrumbPage className="text-sm font-medium text-slate-800">{item}</BreadcrumbPage>
-                        ) : (
-                          <BreadcrumbLink asChild>
-                            <Link className="text-sm text-slate-500 hover:text-slate-800" to={index === 0 && item === "Dashboard" ? "/dashboard" : "#"}>
-                              {item}
-                            </Link>
-                          </BreadcrumbLink>
-                        )}
-                      </BreadcrumbItem>
-                      {index < breadcrumbItems.length - 1 && <BreadcrumbSeparator />}
-                    </div>
-                  ))}
-                </BreadcrumbList>
-              </Breadcrumb>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <div className="text-sm font-semibold text-slate-700">{user?.username ?? "User"}</div>
-              <div className="text-xs text-slate-400">{user?.email || "Bearer session"}</div>
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className={`wpe-mega-list-link ${active ? "is-active" : ""}`}
+                    >
+                      <span className="wpe-mega-list-dot" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderMobileGroup = (group: AppNavGroup) => (
+      <div key={group.key} className="wpe-mobile-group">
+        <div className="wpe-mobile-group-head">
+          <span className="wpe-mobile-group-icon">
+            <group.icon className="h-4 w-4" />
+          </span>
+          <span>{group.label}</span>
+          <span className="wpe-chip-count">{group.items.length}</span>
+        </div>
+      <div className="wpe-mobile-links">
+        {group.items.map((item) => (
+          <Link key={item.to} to={item.to} className="wpe-mobile-link" onClick={() => setMobileOpen(false)}>
+            <span className="wpe-mobile-link-copy">
+              <span className="wpe-mobile-link-title">{item.label}</span>
+              <span className="wpe-mobile-link-description">{item.description}</span>
+            </span>
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="wpe-app-shell">
+      <header className="wpe-topnav">
+        <div className="wpe-topnav-inner">
+          <button
+            type="button"
+            className="wpe-toolbar-iconbtn wpe-mobile-trigger"
+            onClick={() => setMobileOpen((current) => !current)}
+            aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+          >
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
+
+          <Link className="wpe-brand" to="/app/dashboard">
+            <span className="wpe-brand-mark">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M5 5h14L5 19h14" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="wpe-brand-copy">
+              <span className="wpe-brand-name">
+                Zigma<span className="text-[var(--wpe-accent)]">.</span>
+              </span>
+              <span className="wpe-brand-sub">WPE ERP</span>
+            </span>
+          </Link>
+
+          <span className="wpe-nav-sep wpe-desktop-only" />
+
+          <nav className="wpe-nav-primary wpe-desktop-only">
+            <Link
+              className={`wpe-nav-item ${topLevelKey === "dashboard" ? "is-active" : ""}`}
+              to={navigation.dashboard.to}
+              onClick={() => setOpenMega(null)}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              <span>{DASHBOARD_SECTION_LABEL}</span>
+            </Link>
+
             <button
+              type="button"
+              className={`wpe-nav-item ${topLevelKey === "workspace" ? "is-active" : ""} ${openMega === "workspace" ? "is-open" : ""}`}
+              onClick={() => setOpenMega((current) => (current === "workspace" ? null : "workspace"))}
+              onMouseEnter={() => {
+                if (openMega) {
+                  setOpenMega("workspace");
+                }
+              }}
+            >
+              <Layers className="h-4 w-4" />
+              <span>WPE Workspace</span>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+
+            <button
+              type="button"
+              className={`wpe-nav-item ${topLevelKey === "masters" ? "is-active" : ""} ${openMega === "masters" ? "is-open" : ""}`}
+              onClick={() => setOpenMega((current) => (current === "masters" ? null : "masters"))}
+              onMouseEnter={() => {
+                if (openMega) {
+                  setOpenMega("masters");
+                }
+              }}
+            >
+              <Database className="h-4 w-4" />
+              <span>Masters</span>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </nav>
+
+          <div className="wpe-nav-right">
+            <div ref={searchRef} className="wpe-search-shell wpe-desktop-only">
+              <Search className="h-4 w-4" />
+              <input
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && searchResults[0]) {
+                    event.preventDefault();
+                    handleSearchNavigate(searchResults[0].to);
+                  }
+                }}
+                placeholder="Search routes, masters, workspaces…"
+              />
+              {searchOpen && searchResults.length > 0 ? (
+                <div className="wpe-search-results">
+                  {searchResults.map((entry) => (
+                    <button
+                      key={`${entry.to}-${entry.label}`}
+                      type="button"
+                      className="wpe-search-result"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        handleSearchNavigate(entry.to);
+                      }}
+                    >
+                      <span className="wpe-search-result-icon">
+                        <entry.icon className="h-4 w-4" />
+                      </span>
+                      <span className="wpe-search-result-copy">
+                        <span className="wpe-search-result-title">{entry.label}</span>
+                        <span className="wpe-search-result-meta">
+                          {entry.section}
+                          {entry.group ? ` · ${entry.group}` : ""}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="wpe-session-chip">
+              <span className="wpe-session-chip-icon">
+                <ShieldCheck className="h-3.5 w-3.5" />
+              </span>
+              <span className="wpe-session-chip-copy">
+                <b>{sessionTitle}</b>
+                <span>{sessionSubtitle}</span>
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="wpe-toolbar-iconbtn"
               onClick={handleLogout}
               disabled={loggingOut}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              aria-label="Log out"
             >
-              <LogOut className="h-3.5 w-3.5" />
-              {loggingOut ? "Logging out…" : "Logout"}
+              <LogOut className="h-4 w-4" />
             </button>
-          </div>
-        </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-4 lg:p-6">
-          <Outlet />
-        </main>
+            <div className="wpe-avatar">
+              <span>{initials || "U"}</span>
+            </div>
+          </div>
+        </div>
+
+        {renderWorkspaceMega()}
+        {renderMastersMega()}
+      </header>
+
+      <div
+        className={`wpe-mega-scrim ${openMega || mobileOpen ? "is-open" : ""}`}
+        onClick={() => {
+          setOpenMega(null);
+          setMobileOpen(false);
+        }}
+      />
+
+      <div className={`wpe-mobile-sheet ${mobileOpen ? "is-open" : ""}`}>
+        <div className="wpe-mobile-sheet-inner">
+          <Link className="wpe-mobile-dashboard" to={navigation.dashboard.to} onClick={() => setMobileOpen(false)}>
+            <LayoutDashboard className="h-4 w-4" />
+            <span>{DASHBOARD_SECTION_LABEL}</span>
+          </Link>
+
+          <div className="wpe-mobile-section">
+            <div className="wpe-mobile-section-title">WPE Workspace</div>
+            {navigation.workspace.map(renderMobileGroup)}
+          </div>
+
+          <div className="wpe-mobile-section">
+            <div className="wpe-mobile-section-title">Masters</div>
+            {navigation.masters.map(renderMobileGroup)}
+          </div>
+        </div>
       </div>
+
+      <main className="wpe-app-main">
+        <div className="wpe-page">
+          {breadcrumbs.length > 0 ? (
+            <div className="wpe-crumbbar">
+              <div className="wpe-crumbs">
+                {breadcrumbs.map((item, index) => (
+                  <span key={`${item.label}-${index}`} className="wpe-crumb">
+                    {item.to && index < breadcrumbs.length - 1 ? <Link to={item.to}>{item.label}</Link> : <span>{item.label}</span>}
+                    {index < breadcrumbs.length - 1 ? <span className="wpe-crumb-sep">/</span> : null}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <Outlet />
+        </div>
+      </main>
     </div>
   );
 };

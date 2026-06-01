@@ -20,6 +20,7 @@ type StoreTableToolbarProps = {
   filterContent?: ReactNode;
   pageSize: StorePageSizeValue;
   onPageSizeChange: (value: StorePageSizeValue) => void;
+  pageSizeOptions?: StorePageSizeValue[];
   onExport: (format: StoreExportFormat) => void;
   summaryText: string;
   isFetching?: boolean;
@@ -31,6 +32,7 @@ const StoreTableToolbar = ({
   filterContent,
   pageSize,
   onPageSizeChange,
+  pageSizeOptions = ["10", "20", "50", "100", "all"],
   onExport,
   summaryText,
   isFetching = false,
@@ -88,11 +90,11 @@ const StoreTableToolbar = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="20">20</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-              <SelectItem value="all">All</SelectItem>
+              {pageSizeOptions.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option === "all" ? "All" : option}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

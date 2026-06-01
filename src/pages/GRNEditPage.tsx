@@ -9,6 +9,10 @@ import {
   type GrnFormValues,
   type GrnUpdateResponse,
 } from "@/features/grn/grnShared";
+import {
+  GRN_PROCESS_ROUTE,
+  getGrnProcessDetailRoute,
+} from "@/features/grn/utils/routes";
 import { grnApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeGrnResponse } from "@/lib/api-helpers";
 import type { GrnListResponse, GrnRecord } from "@/lib/types";
@@ -50,14 +54,14 @@ const GRNEditPage = () => {
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
       queryClient.invalidateQueries({ queryKey: ["qcr"] });
-      navigate(`/app/grn/${payload.data.id}`);
+      navigate(getGrnProcessDetailRoute(payload.data.id));
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update GRN details.")),
   });
 
   if (activeQuery.isLoading || movedQuery.isLoading) {
     return (
-      <GrnPageLayout onBack={() => navigate("/app/grn")}>
+      <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
         <LoadingState label="Loading GRN record..." />
       </GrnPageLayout>
     );
@@ -65,20 +69,20 @@ const GRNEditPage = () => {
 
   if (activeQuery.isError || movedQuery.isError || !record) {
     return (
-      <GrnPageLayout onBack={() => navigate("/app/grn")}>
+      <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
         <ErrorState description="Could not load the GRN record for editing." />
       </GrnPageLayout>
     );
   }
 
   return (
-    <GrnPageLayout onBack={() => navigate(`/app/grn/${record.id}`)}>
+    <GrnPageLayout onBack={() => navigate(getGrnProcessDetailRoute(record.id))}>
       <GrnRecordForm
         title={`Edit GRN — ${record.grn_no}`}
         subtitle="Update receipt, supplier, item, and valuation values using the same compact GRN workspace."
         submitLabel="Save Changes"
         onSubmit={(values) => updateMutation.mutate(values)}
-        onCancel={() => navigate(`/app/grn/${record.id}`)}
+        onCancel={() => navigate(getGrnProcessDetailRoute(record.id))}
         isSubmitting={updateMutation.isPending}
         initialValues={mapRecordToFormValues(record)}
       />

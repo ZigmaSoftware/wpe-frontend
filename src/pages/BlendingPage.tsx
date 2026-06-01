@@ -27,9 +27,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { blendingApi } from "@/features/blending/api/blendingApi";
+import {
+  BLENDING_STOCK_ROUTE,
+  BLENDING_TRANSACTIONS_ROUTE,
+} from "@/features/blending/utils/routes";
 import { itemsInventoryApi } from "@/features/items/api/inventoryApi";
 import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
@@ -44,7 +47,7 @@ import { toast } from "@/components/ui/sonner";
 import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
 import type { StoreStockRecord, StoreStockRequest } from "@/lib/types";
 
-type BlendingTabValue = "stock" | "requests" | "transactions";
+type BlendingPageModule = "stock" | "requests" | "transactions";
 type RequestStatusFilter = "pending" | "all" | "approved";
 type TransactionStatusFilter = "all" | "pending" | "approved" | "rejected";
 
@@ -195,11 +198,28 @@ const getRequestItemCodes = (request: StoreStockRequest) => {
   return readText(request.item_code);
 };
 
-const BlendingPage = () => {
+const BLENDING_MODULE_META: Record<BlendingPageModule, { title: string; description: string }> = {
+  stock: {
+    title: "Blending Stock",
+    description: "Monitor current blending stock balances and review stock movement by item.",
+  },
+  requests: {
+    title: "Store Request",
+    description: "Raise and manage store requests for blending material requirements.",
+  },
+  transactions: {
+    title: "Blending Transactions",
+    description: "Review approved transfer transactions and request movement history for blending.",
+  },
+};
+
+type BlendingPageProps = {
+  module?: BlendingPageModule;
+};
+
+const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const [activeTab, setActiveTab] = useState<BlendingTabValue>("stock");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [productPickerItem, setProductPickerItem] = useState<StoreStockRecord | null>(null);
   const [productPickerResetKey, setProductPickerResetKey] = useState(0);
@@ -241,6 +261,7 @@ const BlendingPage = () => {
   const stockQuery = useQuery({
     queryKey: ["blending", "inventory-summary", deferredStockSearch],
     queryFn: () => itemsInventoryApi.listAllSummary("blending", { search: deferredStockSearch }),
+    enabled: module === "stock",
     placeholderData: (previousData) => previousData,
   });
 
@@ -255,6 +276,7 @@ const BlendingPage = () => {
         requestType: "ADDITIVE",
         department: BLENDING_DEPARTMENT,
       }),
+    enabled: module === "requests",
     placeholderData: (previousData) => previousData,
   });
 
@@ -269,6 +291,7 @@ const BlendingPage = () => {
         requestType: "ADDITIVE",
         department: BLENDING_DEPARTMENT,
       }),
+    enabled: module === "transactions",
     placeholderData: (previousData) => previousData,
   });
 
@@ -368,6 +391,17 @@ const BlendingPage = () => {
     }
   };
 
+  useEffect(() => {
+    if (module !== "requests") {
+      setDialogOpen(false);
+      form.reset(createAdditiveRequestDefaults());
+      setProductPickerItem(null);
+      setProductPickerResetKey(0);
+      setSelectedAdditiveItems([]);
+      setPreviewRequest(null);
+    }
+  }, [form, module]);
+
   const handlePickerItemChange = (item: StoreStockRecord | null) => {
     if (!item) {
       setProductPickerItem(null);
@@ -463,356 +497,342 @@ const BlendingPage = () => {
     }
   };
 
+  const renderStockView = () => (
+    <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <StoreTableToolbar
+        searchValue={stockSearch}
+        onSearchChange={(value) => {
+          setStockSearch(value);
+          setStockPage(1);
+        }}
+        pageSize={stockPageSize}
+        onPageSizeChange={(value) => {
+          setStockPageSize(value);
+          setStockPage(1);
+        }}
+        onExport={handleStockExport}
+        summaryText={`${stockRows.length} blending rows available`}
+        isFetching={stockQuery.isFetching}
+      />
+
+      {stockQuery.isLoading ? <LoadingState label="Loading blending stock..." /> : null}
+      {stockQuery.isError ? <ErrorState description={getApiErrorMessage(stockQuery.error, "Unable to load blending stock.")} /> : null}
+      {!stockQuery.isLoading && !stockQuery.isError ? (
+        stockRows.length ? (
+          <InventoryStockTable
+            rows={stockRows}
+            page={stockPage}
+            pageSize={stockPageSize}
+            onPageChange={setStockPage}
+            onRowClick={(row) => navigate(`${BLENDING_STOCK_ROUTE}/${row.item_id}`, { state: { row } })}
+          />
+        ) : (
+          <EmptyState title="No blending stock rows" description="Approved store requests will start appearing here as current blending stock." />
+        )
+      ) : null}
+    </div>
+  );
+
+  const renderRequestView = () => (
+    <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <StoreTableToolbar
+        searchValue={requestSearch}
+        onSearchChange={(value) => {
+          setRequestSearch(value);
+          setRequestPage(1);
+        }}
+        filterContent={
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_auto]">
+            <div className="space-y-1">
+              <label htmlFor="blending-request-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                From Date
+              </label>
+              <Input
+                id="blending-request-from-date"
+                type="date"
+                value={requestDraftFilters.fromDate}
+                onChange={(event) => setRequestDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="blending-request-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                To Date
+              </label>
+              <Input
+                id="blending-request-to-date"
+                type="date"
+                value={requestDraftFilters.toDate}
+                onChange={(event) => setRequestDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
+              <Select
+                value={requestDraftFilters.status}
+                onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, status: value as RequestStatusFilter }))}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                className="h-9 w-full"
+                disabled={isRequestFilterPending}
+                onClick={() =>
+                  startRequestFilterTransition(() => {
+                    setRequestFilters(requestDraftFilters);
+                    setRequestPage(1);
+                  })
+                }
+              >
+                Go
+              </Button>
+            </div>
+          </div>
+        }
+        pageSize={requestPageSize}
+        onPageSizeChange={(value) => {
+          setRequestPageSize(value);
+          setRequestPage(1);
+        }}
+        onExport={handleRequestExport}
+        summaryText={`${requestRows.length} requests in the current queue`}
+        isFetching={requestsQuery.isFetching}
+      />
+
+      {requestsQuery.isLoading ? <LoadingState label="Loading store requests..." /> : null}
+      {requestsQuery.isError ? <ErrorState description={getApiErrorMessage(requestsQuery.error, "Unable to load store requests.")} /> : null}
+      {!requestsQuery.isLoading && !requestsQuery.isError ? (
+        requestRows.length ? (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                  <TableRow className="hover:bg-card">
+                    <TableHead className="w-16 text-center">S.No</TableHead>
+                    <TableHead>Request ID</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Requested By</TableHead>
+                    <TableHead>Requested Date</TableHead>
+                    <TableHead>Approved By</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedRequestRows.map((request, index) => {
+                    const summary = getRequestItemSummary(request);
+                    return (
+                      <TableRow key={request.id}>
+                        <TableCell className="text-center font-medium text-muted-foreground">
+                          {getPageSerialNumber(requestPage, requestPageSize, requestRows.length, index)}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{getRequestDisplayId(request)}</TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            className="space-y-0.5 text-left transition-colors hover:text-primary"
+                            onClick={() => setPreviewRequest(request)}
+                          >
+                            <div className="font-medium text-card-foreground">{summary.title}</div>
+                            {summary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{summary.subtitle}</div> : null}
+                            {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
+                          </button>
+                        </TableCell>
+                        <TableCell>{request.requested_by_username}</TableCell>
+                        <TableCell>{formatDateTime(request.requested_at)}</TableCell>
+                        <TableCell>{request.approved_by_username || "-"}</TableCell>
+                        <TableCell className={statusClassName(request.status)}>{request.status}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <StoreTablePagination
+              page={requestPage}
+              pageSize={requestPageSize === "all" ? requestRows.length || 1 : Number(requestPageSize)}
+              total={requestRows.length}
+              onPageChange={setRequestPage}
+            />
+          </div>
+        ) : (
+          <EmptyState title="No store requests" description="No requests matched the selected search, date range, or status." />
+        )
+      ) : null}
+    </div>
+  );
+
+  const renderTransactionView = () => (
+    <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <StoreTableToolbar
+        searchValue={transactionSearch}
+        onSearchChange={(value) => {
+          setTransactionSearch(value);
+          setTransactionPage(1);
+        }}
+        filterContent={
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_auto]">
+            <div className="space-y-1">
+              <label htmlFor="blending-transaction-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                From Date
+              </label>
+              <Input
+                id="blending-transaction-from-date"
+                type="date"
+                value={transactionDraftFilters.fromDate}
+                onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="blending-transaction-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                To Date
+              </label>
+              <Input
+                id="blending-transaction-to-date"
+                type="date"
+                value={transactionDraftFilters.toDate}
+                onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
+              <Select
+                value={transactionDraftFilters.status}
+                onValueChange={(value) => setTransactionDraftFilters((current) => ({ ...current, status: value as TransactionStatusFilter }))}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                className="h-9 w-full"
+                disabled={isTransactionFilterPending}
+                onClick={() =>
+                  startTransactionFilterTransition(() => {
+                    setTransactionFilters(transactionDraftFilters);
+                    setTransactionPage(1);
+                  })
+                }
+              >
+                Go
+              </Button>
+            </div>
+          </div>
+        }
+        pageSize={transactionPageSize}
+        onPageSizeChange={(value) => {
+          setTransactionPageSize(value);
+          setTransactionPage(1);
+        }}
+        onExport={handleTransactionExport}
+        summaryText={`${transactionRows.length} transactions in the current result set`}
+        isFetching={transactionsQuery.isFetching}
+      />
+
+      {transactionsQuery.isLoading ? <LoadingState label="Loading blending transactions..." /> : null}
+      {transactionsQuery.isError ? <ErrorState description={getApiErrorMessage(transactionsQuery.error, "Unable to load blending transactions.")} /> : null}
+      {!transactionsQuery.isLoading && !transactionsQuery.isError ? (
+        transactionRows.length ? (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                  <TableRow className="hover:bg-card">
+                    <TableHead className="w-16 text-center">S.No</TableHead>
+                    <TableHead>Request ID</TableHead>
+                    <TableHead>Item Code</TableHead>
+                    <TableHead>Requested Date</TableHead>
+                    <TableHead>Approved Date</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedTransactionRows.map((request, index) => {
+                    const summary = getTransactionItemCodeSummary(request);
+                    return (
+                      <TableRow
+                        key={request.id}
+                        tabIndex={0}
+                        role="button"
+                        className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => navigate(`${BLENDING_TRANSACTIONS_ROUTE}/${request.id}`)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(`${BLENDING_TRANSACTIONS_ROUTE}/${request.id}`);
+                          }
+                        }}
+                      >
+                        <TableCell className="text-center font-medium text-muted-foreground">
+                          {getPageSerialNumber(transactionPage, transactionPageSize, transactionRows.length, index)}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{getRequestDisplayId(request)}</TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <div className="font-mono text-xs text-card-foreground">{summary.code}</div>
+                            <div className="text-sm text-muted-foreground">{summary.name}</div>
+                            {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatDateTime(request.requested_at)}</TableCell>
+                        <TableCell>{request.approved_at ? formatDateTime(request.approved_at) : "-"}</TableCell>
+                        <TableCell className={statusClassName(request.status)}>{request.status}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <StoreTablePagination
+              page={transactionPage}
+              pageSize={transactionPageSize === "all" ? transactionRows.length || 1 : Number(transactionPageSize)}
+              total={transactionRows.length}
+              onPageChange={setTransactionPage}
+            />
+          </div>
+        ) : (
+          <EmptyState title="No blending transactions" description="No transactions matched the selected search, date range, or status." />
+        )
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Blending Store Operations"
-        description="Monitor current blending stock, raise store requests, and review approved transfer transactions from one workspace."
-        actions={
+        title={BLENDING_MODULE_META[module].title}
+        description={BLENDING_MODULE_META[module].description}
+        actions={module === "requests" ? (
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Store Request
           </Button>
-        }
+        ) : undefined}
       />
-
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as BlendingTabValue)} className="space-y-3">
-        <TabsList className="h-auto flex-wrap bg-slate-100/90 p-1">
-          <TabsTrigger value="stock" className="gap-2">
-            <span>Blending Stock</span>
-            <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{stockRows.length}</span>
-          </TabsTrigger>
-          <TabsTrigger value="requests" className="gap-2">
-            <span>Store Requests</span>
-            <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{requestRows.length}</span>
-          </TabsTrigger>
-          <TabsTrigger value="transactions" className="gap-2">
-            <span>Blending Transactions</span>
-            <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{transactionRows.length}</span>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="stock" className="space-y-0">
-          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <StoreTableToolbar
-              searchValue={stockSearch}
-              onSearchChange={(value) => {
-                setStockSearch(value);
-                setStockPage(1);
-              }}
-              pageSize={stockPageSize}
-              onPageSizeChange={(value) => {
-                setStockPageSize(value);
-                setStockPage(1);
-              }}
-              onExport={handleStockExport}
-              summaryText={`${stockRows.length} blending rows available`}
-              isFetching={stockQuery.isFetching}
-            />
-
-            {stockQuery.isLoading ? <LoadingState label="Loading blending stock..." /> : null}
-            {stockQuery.isError ? <ErrorState description={getApiErrorMessage(stockQuery.error, "Unable to load blending stock.")} /> : null}
-            {!stockQuery.isLoading && !stockQuery.isError ? (
-              stockRows.length ? (
-                <InventoryStockTable
-                  rows={stockRows}
-                  page={stockPage}
-                  pageSize={stockPageSize}
-                  onPageChange={setStockPage}
-                  onRowClick={(row) => navigate(`/app/blending/stock/${row.item_id}`, { state: { row } })}
-                />
-              ) : (
-                <EmptyState title="No blending stock rows" description="Approved store requests will start appearing here as current blending stock." />
-              )
-            ) : null}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="requests" className="space-y-0">
-          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <StoreTableToolbar
-              searchValue={requestSearch}
-              onSearchChange={(value) => {
-                setRequestSearch(value);
-                setRequestPage(1);
-              }}
-              filterContent={
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_auto]">
-                  <div className="space-y-1">
-                    <label htmlFor="blending-request-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      From Date
-                    </label>
-                    <Input
-                      id="blending-request-from-date"
-                      type="date"
-                      value={requestDraftFilters.fromDate}
-                      onChange={(event) => setRequestDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="blending-request-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      To Date
-                    </label>
-                    <Input
-                      id="blending-request-to-date"
-                      type="date"
-                      value={requestDraftFilters.toDate}
-                      onChange={(event) => setRequestDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
-                    <Select
-                      value={requestDraftFilters.status}
-                      onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, status: value as RequestStatusFilter }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      className="h-9 w-full"
-                      disabled={isRequestFilterPending}
-                      onClick={() =>
-                        startRequestFilterTransition(() => {
-                          setRequestFilters(requestDraftFilters);
-                          setRequestPage(1);
-                        })
-                      }
-                    >
-                      Go
-                    </Button>
-                  </div>
-                </div>
-              }
-              pageSize={requestPageSize}
-              onPageSizeChange={(value) => {
-                setRequestPageSize(value);
-                setRequestPage(1);
-              }}
-              onExport={handleRequestExport}
-              summaryText={`${requestRows.length} requests in the current queue`}
-              isFetching={requestsQuery.isFetching}
-            />
-
-            {requestsQuery.isLoading ? <LoadingState label="Loading store requests..." /> : null}
-            {requestsQuery.isError ? <ErrorState description={getApiErrorMessage(requestsQuery.error, "Unable to load store requests.")} /> : null}
-            {!requestsQuery.isLoading && !requestsQuery.isError ? (
-              requestRows.length ? (
-                <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                  <div className="max-h-[calc(100vh-21rem)] overflow-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
-                        <TableRow className="hover:bg-card">
-                          <TableHead className="w-16 text-center">S.No</TableHead>
-                          <TableHead>Request ID</TableHead>
-                          <TableHead>Item</TableHead>
-                          <TableHead>Requested By</TableHead>
-                          <TableHead>Requested Date</TableHead>
-                          <TableHead>Approved By</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedRequestRows.map((request, index) => {
-                          const summary = getRequestItemSummary(request);
-                          return (
-                            <TableRow key={request.id}>
-                              <TableCell className="text-center font-medium text-muted-foreground">
-                                {getPageSerialNumber(requestPage, requestPageSize, requestRows.length, index)}
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">{getRequestDisplayId(request)}</TableCell>
-                              <TableCell>
-                                <button
-                                  type="button"
-                                  className="space-y-0.5 text-left transition-colors hover:text-primary"
-                                  onClick={() => setPreviewRequest(request)}
-                                >
-                                  <div className="font-medium text-card-foreground">{summary.title}</div>
-                                  {summary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{summary.subtitle}</div> : null}
-                                  {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
-                                </button>
-                              </TableCell>
-                              <TableCell>{request.requested_by_username}</TableCell>
-                              <TableCell>{formatDateTime(request.requested_at)}</TableCell>
-                              <TableCell>{request.approved_by_username || "-"}</TableCell>
-                              <TableCell className={statusClassName(request.status)}>{request.status}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <StoreTablePagination
-                    page={requestPage}
-                    pageSize={requestPageSize === "all" ? requestRows.length || 1 : Number(requestPageSize)}
-                    total={requestRows.length}
-                    onPageChange={setRequestPage}
-                  />
-                </div>
-              ) : (
-                <EmptyState title="No store requests" description="No requests matched the selected search, date range, or status." />
-              )
-            ) : null}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="transactions" className="space-y-0">
-          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <StoreTableToolbar
-              searchValue={transactionSearch}
-              onSearchChange={(value) => {
-                setTransactionSearch(value);
-                setTransactionPage(1);
-              }}
-              filterContent={
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_auto]">
-                  <div className="space-y-1">
-                    <label htmlFor="blending-transaction-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      From Date
-                    </label>
-                    <Input
-                      id="blending-transaction-from-date"
-                      type="date"
-                      value={transactionDraftFilters.fromDate}
-                      onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="blending-transaction-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      To Date
-                    </label>
-                    <Input
-                      id="blending-transaction-to-date"
-                      type="date"
-                      value={transactionDraftFilters.toDate}
-                      onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
-                    <Select
-                      value={transactionDraftFilters.status}
-                      onValueChange={(value) => setTransactionDraftFilters((current) => ({ ...current, status: value as TransactionStatusFilter }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      className="h-9 w-full"
-                      disabled={isTransactionFilterPending}
-                      onClick={() =>
-                        startTransactionFilterTransition(() => {
-                          setTransactionFilters(transactionDraftFilters);
-                          setTransactionPage(1);
-                        })
-                      }
-                    >
-                      Go
-                    </Button>
-                  </div>
-                </div>
-              }
-              pageSize={transactionPageSize}
-              onPageSizeChange={(value) => {
-                setTransactionPageSize(value);
-                setTransactionPage(1);
-              }}
-              onExport={handleTransactionExport}
-              summaryText={`${transactionRows.length} transactions in the current result set`}
-              isFetching={transactionsQuery.isFetching}
-            />
-
-            {transactionsQuery.isLoading ? <LoadingState label="Loading blending transactions..." /> : null}
-            {transactionsQuery.isError ? <ErrorState description={getApiErrorMessage(transactionsQuery.error, "Unable to load blending transactions.")} /> : null}
-            {!transactionsQuery.isLoading && !transactionsQuery.isError ? (
-              transactionRows.length ? (
-                <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                  <div className="max-h-[calc(100vh-21rem)] overflow-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
-                        <TableRow className="hover:bg-card">
-                          <TableHead className="w-16 text-center">S.No</TableHead>
-                          <TableHead>Request ID</TableHead>
-                          <TableHead>Item Code</TableHead>
-                          <TableHead>Requested Date</TableHead>
-                          <TableHead>Approved Date</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedTransactionRows.map((request, index) => {
-                          const summary = getTransactionItemCodeSummary(request);
-                          return (
-                            <TableRow
-                              key={request.id}
-                              tabIndex={0}
-                              role="button"
-                              className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              onClick={() => navigate(`/app/blending/transactions/${request.id}`)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  navigate(`/app/blending/transactions/${request.id}`);
-                                }
-                              }}
-                            >
-                              <TableCell className="text-center font-medium text-muted-foreground">
-                                {getPageSerialNumber(transactionPage, transactionPageSize, transactionRows.length, index)}
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">{getRequestDisplayId(request)}</TableCell>
-                              <TableCell>
-                                <div className="space-y-0.5">
-                                  <div className="font-mono text-xs text-card-foreground">{summary.code}</div>
-                                  <div className="text-sm text-muted-foreground">{summary.name}</div>
-                                  {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
-                                </div>
-                              </TableCell>
-                              <TableCell>{formatDateTime(request.requested_at)}</TableCell>
-                              <TableCell>{request.approved_at ? formatDateTime(request.approved_at) : "-"}</TableCell>
-                              <TableCell className={statusClassName(request.status)}>{request.status}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <StoreTablePagination
-                    page={transactionPage}
-                    pageSize={transactionPageSize === "all" ? transactionRows.length || 1 : Number(transactionPageSize)}
-                    total={transactionRows.length}
-                    onPageChange={setTransactionPage}
-                  />
-                </div>
-              ) : (
-                <EmptyState title="No blending transactions" description="No transactions matched the selected search, date range, or status." />
-              )
-            ) : null}
-          </div>
-        </TabsContent>
-      </Tabs>
+      {module === "stock" ? renderStockView() : null}
+      {module === "requests" ? renderRequestView() : null}
+      {module === "transactions" ? renderTransactionView() : null}
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="sm:max-w-2xl">

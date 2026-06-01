@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
 import { storeApi } from "@/features/store/api/storeApi";
@@ -18,6 +17,7 @@ import StoreTableToolbar, {
   type StoreExportFormat,
   type StorePageSizeValue,
 } from "@/features/store/components/StoreTableToolbar";
+import { STORE_STOCK_ROUTE, type StoreWorkspaceModuleDefinition } from "@/features/store/utils/routes";
 import { getPageCount, getPageSizeNumber, paginateRows } from "@/features/store/utils/table";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import { toast } from "@/components/ui/sonner";
@@ -26,7 +26,7 @@ import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage } from "@
 import { cn } from "@/lib/utils";
 import type { StoreStockRequest, StoreTransactionRecord } from "@/lib/types";
 
-type StoreTabValue = "stock" | "requests" | "transactions";
+type StorePageModule = "stock" | "requests" | "transactions";
 type RequestStatusFilter = "pending" | "all" | "approved" | "rejected";
 type TransactionTypeFilter = "all" | "inwards" | "outwards";
 
@@ -148,11 +148,28 @@ const statusBadgeClassName = (status: StoreStockRequest["status"]) => {
   }
 };
 
-const StorePage = () => {
+const STORE_MODULE_META: Record<StorePageModule, Pick<StoreWorkspaceModuleDefinition, "label" | "description">> = {
+  stock: {
+    label: "Store Stock",
+    description: "Monitor current store stock balances, inwards, outwards, and item-level movement access.",
+  },
+  requests: {
+    label: "Store Request",
+    description: "Review department requests, approval decisions, issued quantities, and request reasons.",
+  },
+  transactions: {
+    label: "Store Transactions",
+    description: "Audit stock movement transactions by type, department, warehouse, and reference history.",
+  },
+};
+
+type StorePageProps = {
+  module?: StorePageModule;
+};
+
+const StorePage = ({ module = "stock" }: StorePageProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const [activeTab, setActiveTab] = useState<StoreTabValue>("stock");
 
   const [stockSearch, setStockSearch] = useState("");
   const [stockPage, setStockPage] = useState(1);
@@ -179,12 +196,14 @@ const StorePage = () => {
   const departmentsQuery = useQuery({
     queryKey: ["store", "departments"],
     queryFn: storeApi.listDepartments,
+    enabled: module !== "stock",
     staleTime: 5 * 60 * 1000,
   });
 
   const stockQuery = useQuery({
     queryKey: ["store", "stock-summary", deferredStockSearch],
     queryFn: () => storeApi.listStockSummary({ search: deferredStockSearch }),
+    enabled: module === "stock",
     placeholderData: (previousData) => previousData,
   });
 
@@ -198,12 +217,14 @@ const StorePage = () => {
         dateTo: requestFilters.toDate,
         department: requestFilters.department,
       }),
+    enabled: module === "requests",
     placeholderData: (previousData) => previousData,
   });
 
   const requestLookupQuery = useQuery({
     queryKey: ["store", "request-lookup"],
     queryFn: () => storeApi.listRequests({}),
+    enabled: module === "transactions",
     staleTime: 5 * 60 * 1000,
     placeholderData: (previousData) => previousData,
   });
@@ -216,6 +237,7 @@ const StorePage = () => {
         dateFrom: transactionFilters.fromDate,
         dateTo: transactionFilters.toDate,
       }),
+    enabled: module === "transactions",
     placeholderData: (previousData) => previousData,
   });
 
@@ -398,7 +420,7 @@ const StorePage = () => {
         page={stockPage}
         pageSize={stockPageSize}
         onPageChange={setStockPage}
-        onRowClick={(row) => navigate(`/app/store/stock/${row.item_id}`, { state: { row } })}
+        onRowClick={(row) => navigate(`${STORE_STOCK_ROUTE}/${row.item_id}`, { state: { row } })}
       />
     );
   };
@@ -620,247 +642,228 @@ const StorePage = () => {
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Store Operations"
-        description="Monitor current store stock, approve department requests, and audit stock movements from one compact workspace."
+        title={STORE_MODULE_META[module].label}
+        description={STORE_MODULE_META[module].description}
       />
+      {module === "stock" ? (
+        <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <StoreTableToolbar
+            searchValue={stockSearch}
+            onSearchChange={(value) => {
+              setStockSearch(value);
+              setStockPage(1);
+            }}
+            pageSize={stockPageSize}
+            onPageSizeChange={(value) => {
+              setStockPageSize(value);
+              setStockPage(1);
+            }}
+            onExport={handleStockExport}
+            summaryText={`${stockRows.length} stock rows available`}
+            isFetching={stockQuery.isFetching}
+          />
+          {renderStockTable()}
+        </div>
+      ) : null}
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as StoreTabValue)} className="space-y-3">
-        <TabsList className="h-auto flex-wrap bg-slate-100/90 p-1">
-          <TabsTrigger value="stock" className="gap-2">
-            <span>Store Stock</span>
-            <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{stockRows.length}</span>
-          </TabsTrigger>
-          <TabsTrigger value="requests" className="gap-2">
-            <span>Store Request</span>
-            <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{requestRows.length}</span>
-          </TabsTrigger>
-          <TabsTrigger value="transactions" className="gap-2">
-            <span>Stock Transactions</span>
-            <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{transactionRows.length}</span>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="stock" className="space-y-0">
-          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <StoreTableToolbar
-              searchValue={stockSearch}
-              onSearchChange={(value) => {
-                setStockSearch(value);
-                setStockPage(1);
-              }}
-              pageSize={stockPageSize}
-              onPageSizeChange={(value) => {
-                setStockPageSize(value);
-                setStockPage(1);
-              }}
-              onExport={handleStockExport}
-              summaryText={`${stockRows.length} stock rows available`}
-              isFetching={stockQuery.isFetching}
-            />
-            {renderStockTable()}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="requests" className="space-y-0">
-          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <StoreTableToolbar
-              searchValue={requestSearch}
-              onSearchChange={(value) => {
-                setRequestSearch(value);
-                setRequestPage(1);
-              }}
-              filterContent={
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_220px_auto]">
-                  <div className="space-y-1">
-                    <label htmlFor="store-request-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      From Date
-                    </label>
-                    <Input
-                      id="store-request-from-date"
-                      type="date"
-                      value={requestDraftFilters.fromDate}
-                      onChange={(event) => setRequestDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="store-request-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      To Date
-                    </label>
-                    <Input
-                      id="store-request-to-date"
-                      type="date"
-                      value={requestDraftFilters.toDate}
-                      onChange={(event) => setRequestDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
-                    <Select
-                      value={requestDraftFilters.status}
-                      onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, status: value as RequestStatusFilter }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Department</div>
-                    <Select
-                      value={requestDraftFilters.department}
-                      onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, department: value }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        {departmentOptions.map((department) => (
-                          <SelectItem key={department.id} value={department.name}>
-                            {department.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      className="h-9 w-full"
-                      onClick={() =>
-                        startRequestFilterTransition(() => {
-                          setRequestFilters(requestDraftFilters);
-                          setRequestPage(1);
-                        })
-                      }
-                      disabled={isRequestFilterPending}
-                    >
-                      Go
-                    </Button>
-                  </div>
+      {module === "requests" ? (
+        <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <StoreTableToolbar
+            searchValue={requestSearch}
+            onSearchChange={(value) => {
+              setRequestSearch(value);
+              setRequestPage(1);
+            }}
+            filterContent={
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_220px_auto]">
+                <div className="space-y-1">
+                  <label htmlFor="store-request-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    From Date
+                  </label>
+                  <Input
+                    id="store-request-from-date"
+                    type="date"
+                    value={requestDraftFilters.fromDate}
+                    onChange={(event) => setRequestDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
+                    className="h-9"
+                  />
                 </div>
-              }
-              pageSize={requestPageSize}
-              onPageSizeChange={(value) => {
-                setRequestPageSize(value);
-                setRequestPage(1);
-              }}
-              onExport={handleRequestExport}
-              summaryText={`${requestRows.length} requests in the current queue`}
-              isFetching={requestsQuery.isFetching || approveRequestMutation.isPending || rejectRequestMutation.isPending}
-            />
-            {renderRequestTable()}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="transactions" className="space-y-0">
-          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <StoreTableToolbar
-              searchValue={transactionSearch}
-              onSearchChange={(value) => {
-                setTransactionSearch(value);
-                setTransactionPage(1);
-              }}
-              filterContent={
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_220px_auto]">
-                  <div className="space-y-1">
-                    <label htmlFor="store-transaction-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      From Date
-                    </label>
-                    <Input
-                      id="store-transaction-from-date"
-                      type="date"
-                      value={transactionDraftFilters.fromDate}
-                      onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="store-transaction-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      To Date
-                    </label>
-                    <Input
-                      id="store-transaction-to-date"
-                      type="date"
-                      value={transactionDraftFilters.toDate}
-                      onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Type</div>
-                    <Select
-                      value={transactionDraftFilters.type}
-                      onValueChange={(value) => setTransactionDraftFilters((current) => ({ ...current, type: value as TransactionTypeFilter }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="inwards">Inwards</SelectItem>
-                        <SelectItem value="outwards">Outwards</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Department</div>
-                    <Select
-                      value={transactionDraftFilters.department}
-                      onValueChange={(value) => setTransactionDraftFilters((current) => ({ ...current, department: value }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        {departmentOptions.map((department) => (
-                          <SelectItem key={department.id} value={department.name}>
-                            {department.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      className="h-9 w-full"
-                      onClick={() =>
-                        startTransactionFilterTransition(() => {
-                          setTransactionFilters(transactionDraftFilters);
-                          setTransactionPage(1);
-                        })
-                      }
-                      disabled={isTransactionFilterPending}
-                    >
-                      Go
-                    </Button>
-                  </div>
+                <div className="space-y-1">
+                  <label htmlFor="store-request-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    To Date
+                  </label>
+                  <Input
+                    id="store-request-to-date"
+                    type="date"
+                    value={requestDraftFilters.toDate}
+                    onChange={(event) => setRequestDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
+                    className="h-9"
+                  />
                 </div>
-              }
-              pageSize={transactionPageSize}
-              onPageSizeChange={(value) => {
-                setTransactionPageSize(value);
-                setTransactionPage(1);
-              }}
-              onExport={handleTransactionExport}
-              summaryText={`${transactionRows.length} transactions in the current result set`}
-              isFetching={transactionsQuery.isFetching || requestLookupQuery.isFetching}
-            />
-            {renderTransactionTable()}
-          </div>
-        </TabsContent>
-      </Tabs>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
+                  <Select
+                    value={requestDraftFilters.status}
+                    onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, status: value as RequestStatusFilter }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Department</div>
+                  <Select
+                    value={requestDraftFilters.department}
+                    onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, department: value }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {departmentOptions.map((department) => (
+                        <SelectItem key={department.id} value={department.name}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    className="h-9 w-full"
+                    onClick={() =>
+                      startRequestFilterTransition(() => {
+                        setRequestFilters(requestDraftFilters);
+                        setRequestPage(1);
+                      })
+                    }
+                    disabled={isRequestFilterPending}
+                  >
+                    Go
+                  </Button>
+                </div>
+              </div>
+            }
+            pageSize={requestPageSize}
+            onPageSizeChange={(value) => {
+              setRequestPageSize(value);
+              setRequestPage(1);
+            }}
+            onExport={handleRequestExport}
+            summaryText={`${requestRows.length} requests in the current queue`}
+            isFetching={requestsQuery.isFetching || approveRequestMutation.isPending || rejectRequestMutation.isPending}
+          />
+          {renderRequestTable()}
+        </div>
+      ) : null}
 
+      {module === "transactions" ? (
+        <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <StoreTableToolbar
+            searchValue={transactionSearch}
+            onSearchChange={(value) => {
+              setTransactionSearch(value);
+              setTransactionPage(1);
+            }}
+            filterContent={
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_220px_auto]">
+                <div className="space-y-1">
+                  <label htmlFor="store-transaction-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    From Date
+                  </label>
+                  <Input
+                    id="store-transaction-from-date"
+                    type="date"
+                    value={transactionDraftFilters.fromDate}
+                    onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="store-transaction-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    To Date
+                  </label>
+                  <Input
+                    id="store-transaction-to-date"
+                    type="date"
+                    value={transactionDraftFilters.toDate}
+                    onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Type</div>
+                  <Select
+                    value={transactionDraftFilters.type}
+                    onValueChange={(value) => setTransactionDraftFilters((current) => ({ ...current, type: value as TransactionTypeFilter }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="inwards">Inwards</SelectItem>
+                      <SelectItem value="outwards">Outwards</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Department</div>
+                  <Select
+                    value={transactionDraftFilters.department}
+                    onValueChange={(value) => setTransactionDraftFilters((current) => ({ ...current, department: value }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {departmentOptions.map((department) => (
+                        <SelectItem key={department.id} value={department.name}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    className="h-9 w-full"
+                    onClick={() =>
+                      startTransactionFilterTransition(() => {
+                        setTransactionFilters(transactionDraftFilters);
+                        setTransactionPage(1);
+                      })
+                    }
+                    disabled={isTransactionFilterPending}
+                  >
+                    Go
+                  </Button>
+                </div>
+              </div>
+            }
+            pageSize={transactionPageSize}
+            onPageSizeChange={(value) => {
+              setTransactionPageSize(value);
+              setTransactionPage(1);
+            }}
+            onExport={handleTransactionExport}
+            summaryText={`${transactionRows.length} transactions in the current result set`}
+            isFetching={transactionsQuery.isFetching || requestLookupQuery.isFetching}
+          />
+          {renderTransactionTable()}
+        </div>
+      ) : null}
     </div>
   );
 };

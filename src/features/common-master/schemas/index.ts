@@ -19,6 +19,8 @@ const optionalPhone = () =>
   z.string().trim().optional().or(z.literal("")).nullable().refine((value) => !value || phoneRegex.test(value), "Enter a valid phone number.");
 const optionalPincode = () =>
   z.string().trim().optional().or(z.literal("")).nullable().refine((value) => !value || pincodeRegex.test(value), "Enter a valid pincode.");
+const requiredPincode = () =>
+  z.string().trim().min(1, "Pincode is required.").refine((value) => pincodeRegex.test(value), "Enter a valid pincode.");
 const optionalPan = () =>
   z.string().trim().toUpperCase().optional().or(z.literal("")).nullable().refine((value) => !value || panRegex.test(value), "Enter a valid PAN.");
 const optionalGst = () =>
@@ -59,45 +61,50 @@ const addressSchema = z.object({
 });
 
 export const continentSchema = z.object({
+  code: z.string().trim().optional().or(z.literal("")),
   name: z.string().trim().min(1, "Continent name is required."),
   order_no: z.coerce.number().min(1).default(1),
   status: z.boolean(),
 });
 
 export const countrySchema = z.object({
+  code: z.string().trim().optional().or(z.literal("")),
   continent: z.coerce.number().min(1, "Continent is required."),
   name: z.string().trim().min(1, "Country name is required."),
-  code: z.string().trim().min(1, "Country code is required.").max(10, "Max 10 characters."),
+  currency: z.coerce.number().min(1, "Currency is required."),
   status: z.boolean(),
 });
 
 export const stateSchema = z.object({
+  code: z.string().trim().optional().or(z.literal("")),
   country: z.coerce.number().min(1, "Country is required."),
   name: z.string().trim().min(1, "State name is required."),
   is_active: z.boolean(),
 });
 
 export const citySchema = z.object({
+  code: z.string().trim().optional().or(z.literal("")),
   country: z.coerce.number().min(1, "Country is required."),
   state: z.coerce.number().min(1, "State is required."),
   name: z.string().trim().min(1, "City name is required."),
-  pincode: optionalPincode(),
+  pincode: requiredPincode(),
   city_type: optionalNumberId(),
   is_active: z.boolean(),
 });
 
 export const taxSchema = z.object({
-  country: optionalNumberId(),
+  code: z.string().trim().optional().or(z.literal("")),
+  country: z.coerce.number().min(1, "Country is required."),
   name: z.string().trim().min(1, "Tax name is required."),
   value: z.coerce.number().min(0, "Tax value cannot be negative.").max(100, "Tax percentage must be between 0 and 100."),
   is_active: z.boolean(),
 });
 
 export const currencySchema = z.object({
+  code: z.string().trim().optional().or(z.literal("")),
   country: z.coerce.number().min(1, "Country is required."),
   name: z.string().trim().min(1, "Currency name is required."),
-  code: z.string().trim().min(1, "Currency code is required.").max(10, "Max 10 characters."),
-  symbol: optionalString(),
+  symbol: z.string().trim().min(1, "Currency symbol is required."),
   is_active: z.boolean(),
 });
 
@@ -260,14 +267,18 @@ export const supplierDocumentSchema = z.object({
 });
 
 export const companySchema = z.object({
+  code: z.string().trim().optional().or(z.literal("")),
   name: z.string().trim().min(1, "Company name is required."),
-  code: z.string().trim().min(1, "Company code is required."),
-  country: optionalNumberId(),
-  state: optionalNumberId(),
-  city: optionalNumberId(),
-  pincode: optionalPincode(),
-  latitude: optionalString(),
-  longitude: optionalString(),
+  gst_number: optionalGst(),
+  pan_number: optionalPan(),
+  address: z.string().trim().min(1, "Company address is required."),
+  country: z.coerce.number().min(1, "Country is required."),
+  state: z.coerce.number().min(1, "State is required."),
+  city: z.coerce.number().min(1, "City is required."),
+  pincode: requiredPincode(),
+  contact_person: optionalString(),
+  mobile_no: optionalPhone(),
+  email: z.string().trim().email("Enter a valid email."),
   logo: optionalFile,
   document: optionalFile,
   is_active: z.boolean(),

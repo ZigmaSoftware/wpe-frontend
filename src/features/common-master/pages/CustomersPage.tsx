@@ -77,8 +77,8 @@ const CustomersPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Customers"
-        description="Maintain customer commercial profiles with geography, statutory, banking, and document setup."
+        title="Customer Creations"
+        description="Create and maintain customer master records."
       />
       <MasterToolbar
         search={table.search}

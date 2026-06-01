@@ -76,22 +76,22 @@ const UserScreenPermissionPage = () => {
   const toggleMutation = useAdminMutation({
     mutationFn: adminMasterApi.toggleUserScreenPermission,
     queryKey: ["admin-master", "user-screen-permission"],
-    successMessage: "User screen permission status updated.",
-    errorMessage: "Unable to update user screen permission status.",
+    successMessage: "User type permission status updated.",
+    errorMessage: "Unable to update user type permission status.",
   });
 
   const deleteMutation = useAdminMutation({
     mutationFn: adminMasterApi.deleteUserScreenPermission,
     queryKey: ["admin-master", "user-screen-permission"],
-    successMessage: "User screen permission deleted successfully.",
-    errorMessage: "Unable to delete user screen permission.",
+    successMessage: "User type permission deleted successfully.",
+    errorMessage: "Unable to delete user type permission.",
   });
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="User Screen Permission"
-        description="Manage stored permission rows, launch the new bulk assignment page, and preview resolved access by user type or user."
+        title="User Type Permissions"
+        description="Manage screen-level access rows, launch the bulk assignment page, and preview resolved access by user type or user."
       />
 
       <Tabs defaultValue="rows" className="space-y-4">
@@ -146,9 +146,9 @@ const UserScreenPermissionPage = () => {
             records={permissionsQuery.data?.items ?? []}
             isLoading={permissionsQuery.isLoading}
             isError={permissionsQuery.isError}
-            errorDescription="User screen permissions could not be loaded."
-            emptyTitle="No user screen permissions found"
-            emptyDescription="Launch the new assignment page to configure screen permissions and save them in one final step."
+            errorDescription="User type permissions could not be loaded."
+            emptyTitle="No user type permissions found"
+            emptyDescription="Launch the assignment page to configure screen permissions and save them in one final step."
             page={table.page}
             pageSize={table.pageSize}
             total={permissionsQuery.data?.filtered ?? 0}
@@ -263,7 +263,7 @@ const UserScreenPermissionPage = () => {
       <ConfirmDialog
         open={Boolean(toggleTarget)}
         onOpenChange={(open) => !open && setToggleTarget(null)}
-        title="Update user screen permission status"
+        title="Update user type permission status"
         description={`Change the status for ${getPermissionTargetLabel(toggleTarget)}?`}
         onConfirm={() => {
           if (toggleTarget) {
@@ -276,7 +276,7 @@ const UserScreenPermissionPage = () => {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete user screen permission"
+        title="Delete user type permission"
         description={`Delete ${getPermissionTargetLabel(deleteTarget)}?`}
         confirmLabel="Delete"
         onConfirm={() => {

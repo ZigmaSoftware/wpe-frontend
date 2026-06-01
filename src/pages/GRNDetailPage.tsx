@@ -24,6 +24,10 @@ import {
   valueFieldConfigs,
 } from "@/features/grn/grnShared";
 import { grnFieldLabelClassName, grnMetricCardClassName } from "@/features/grn/components/grnPageStyles";
+import {
+  GRN_PROCESS_ROUTE,
+  getGrnProcessEditRoute,
+} from "@/features/grn/utils/routes";
 import { grnApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeGrnResponse } from "@/lib/api-helpers";
 import type { GrnListResponse, GrnRecord } from "@/lib/types";
@@ -48,7 +52,7 @@ const GRNDetailPage = () => {
   const recordId = Number(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const isViewOnly = Boolean(useMatch("/app/grn/:id/view"));
+  const isViewOnly = Boolean(useMatch("/app/grn/process/:id/view"));
   const [payloadOpen, setPayloadOpen] = useState(false);
   const [moveConfirmOpen, setMoveConfirmOpen] = useState(false);
 
@@ -88,14 +92,14 @@ const GRNDetailPage = () => {
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
       queryClient.invalidateQueries({ queryKey: ["qcr"] });
-      navigate("/app/grn");
+      navigate(GRN_PROCESS_ROUTE);
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move GRN to QCR.")),
   });
 
   if (activeQuery.isLoading || movedQuery.isLoading) {
     return (
-      <GrnPageLayout onBack={() => navigate("/app/grn")}>
+      <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
         <LoadingState label="Loading GRN details..." />
       </GrnPageLayout>
     );
@@ -103,14 +107,14 @@ const GRNDetailPage = () => {
 
   if (activeQuery.isError || movedQuery.isError || !detailRecord) {
     return (
-      <GrnPageLayout onBack={() => navigate("/app/grn")}>
+      <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
         <ErrorState description="Could not load the selected GRN record." />
       </GrnPageLayout>
     );
   }
 
   return (
-    <GrnPageLayout onBack={() => navigate("/app/grn")}>
+    <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
       <div className="flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_28px_70px_-50px_rgba(15,23,42,0.38)]">
         <Tabs defaultValue="overview" className="flex h-full flex-col">
           <div className="border-b border-slate-200/80 bg-white">
@@ -151,7 +155,7 @@ const GRNDetailPage = () => {
                     {!isViewOnly && (
                       <Button
                         className="rounded-full bg-[linear-gradient(135deg,#2d6cdf_0%,#1953bc_100%)] text-white hover:opacity-95"
-                        onClick={() => navigate(`/app/grn/${detailRecord.id}/edit`)}
+                        onClick={() => navigate(getGrnProcessEditRoute(detailRecord.id))}
                       >
                         Edit GRN
                       </Button>
