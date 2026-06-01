@@ -13,6 +13,8 @@ import {
   productionFieldLabelClassName,
   productionHelperTextClassName,
   productionInputClassName,
+  productionInsetPanelClassName,
+  productionMetricCardClassName,
 } from "./productionOrderFormStyles";
 
 type MaterialsSummaryPanelProps = {
@@ -34,12 +36,12 @@ const MaterialsSummaryPanel = ({
     tone="amber"
     icon={Package2}
   >
-    <div className="rounded-[22px] border border-slate-200/90 bg-[#f8fbff] p-5">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_160px_160px] xl:items-start">
+    <div className={productionInsetPanelClassName}>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_150px_170px] xl:items-start">
         <div className="space-y-3">
           <div>
             <div className={productionFieldLabelClassName}>Manufacture Item*</div>
-            <div className="relative mt-2">
+            <div className="relative mt-1.5">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
               <div
                 className={cn(
@@ -51,12 +53,12 @@ const MaterialsSummaryPanel = ({
                 {finishedGoods ? `${finishedGoods.item_name}${finishedGoods.unit ? ` · ${finishedGoods.unit}` : ""}` : "Search FMS Product type sub-category..."}
               </div>
             </div>
-            <div className={`mt-2 ${productionHelperTextClassName}`}>
+            <div className={`mt-1.5 ${productionHelperTextClassName}`}>
               Search FMS Product Type sub-category and append them as manual material items without saving immediately.
             </div>
           </div>
 
-          <div className="rounded-[20px] border border-dashed border-[#cddcf0] bg-white px-4 py-4">
+          <div className="rounded-[16px] border border-dashed border-[#cddcf0] bg-white px-3.5 py-3.5">
             {finishedGoods ? (
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef4ff] text-[#2d6cdf]">
@@ -86,10 +88,10 @@ const MaterialsSummaryPanel = ({
 
         <div>
           <div className={productionFieldLabelClassName}>Production Qty*</div>
-          <div className="mt-2 rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-[1.2rem] font-semibold tracking-[-0.03em] text-slate-950">
+          <div className={cn(productionMetricCardClassName, "mt-1.5 text-[1.05rem] font-semibold tracking-[-0.03em] text-slate-950")}>
             {formatNumberInputValue(productionQty, 3, 3)}
           </div>
-          <div className={`mt-2 ${productionHelperTextClassName}`}>Populated from General tab plan total.</div>
+          <div className={`mt-1.5 ${productionHelperTextClassName}`}>Populated from General tab plan total.</div>
         </div>
 
         <FormItem>
@@ -98,11 +100,11 @@ const MaterialsSummaryPanel = ({
             <Input
               {...bomMultiplierField}
               inputMode="decimal"
-              className={cn(productionInputClassName, "mt-2 text-[1.2rem] font-semibold tracking-[-0.03em]")}
+              className={cn(productionInputClassName, "mt-1.5 text-[1rem] font-semibold tracking-[-0.03em]")}
             />
           </FormControl>
-          <div className={`mt-2 ${productionHelperTextClassName}`}>Recalculate BOM and required quantities.</div>
-          <div className="mt-3 inline-flex items-start gap-2 rounded-2xl border border-[#facc15] bg-[#fff8dc] px-3 py-2 text-sm text-[#c56a00]">
+          <div className={`mt-1.5 ${productionHelperTextClassName}`}>Recalculate BOM and required quantities.</div>
+          <div className="mt-2 inline-flex items-start gap-2 rounded-2xl border border-[#facc15] bg-[#fff8dc] px-3 py-2 text-[12px] text-[#c56a00]">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <span>Recalculate BOM and required quantities.</span>
           </div>

@@ -18,7 +18,7 @@ type ProductionBaseOrderSectionProps = {
 };
 
 const BaseOrderFields = ({ form }: Pick<ProductionBaseOrderSectionProps, "form">) => (
-  <div className="grid gap-4">
+  <div className="grid gap-3">
     <FormField
       control={form.control}
       name="base_order.base_plan_id"
@@ -80,9 +80,9 @@ const ProductionBaseOrderSection = ({
 }: ProductionBaseOrderSectionProps) => {
   if (embedded) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div>
-          <div className="text-sm font-bold uppercase tracking-[0.08em] text-slate-800">{title}</div>
+          <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-800">{title}</div>
           <p className={`mt-1 ${productionHelperTextClassName}`}>{description}</p>
         </div>
         <BaseOrderFields form={form} />

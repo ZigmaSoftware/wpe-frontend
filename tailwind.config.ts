@@ -14,6 +14,14 @@ export default {
       },
     },
     extend: {
+      fontSize: {
+        xs: ["0.8125rem", { lineHeight: "1.4" }],
+        sm: ["0.9375rem", { lineHeight: "1.5" }],
+        base: ["1rem", { lineHeight: "1.55" }],
+        lg: ["1.0625rem", { lineHeight: "1.55" }],
+        xl: ["1.1875rem", { lineHeight: "1.45" }],
+        "2xl": ["1.375rem", { lineHeight: "1.35" }],
+      },
       fontFamily: {
         mono: ['"JetBrains Mono"', '"Courier New"', 'monospace'],
       },

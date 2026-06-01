@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useDeferredValue, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
@@ -19,10 +20,15 @@ import StoreTableToolbar, {
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import {
   getProductionManageBatchRoute,
+  PRODUCTION_NEW_ORDER_ROUTE,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
-import { formatDate, formatDateTime } from "@/lib/api-helpers";
-import type { ProductionStageRecord } from "@/lib/types";
+import {
+  formatProductionListLabel,
+  ProductionStatusBadge,
+} from "@/features/production/components/productionListShared";
+import { formatDate } from "@/lib/api-helpers";
+import type { ProductionOrder, ProductionStageRecord } from "@/lib/types";
 
 type ProductionStageListProps = {
   stage: ProductionStageValue;
@@ -83,88 +89,29 @@ const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; 
   ],
 };
 
-const STATUS_BADGE_CLASSES: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-800",
-  PLANNED: "bg-slate-100 text-slate-700",
-  IN_PROGRESS: "bg-blue-100 text-blue-700",
-  COMPLETED: "bg-emerald-100 text-emerald-700",
-  PLAN_COMPLETED: "bg-emerald-100 text-emerald-700",
-  CLOSED: "bg-slate-200 text-slate-700",
-  FAILED: "bg-rose-100 text-rose-700",
-  REJECTED: "bg-rose-100 text-rose-700",
-  DRAFT: "bg-slate-100 text-slate-700",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: "Pending",
-  PLANNED: "Planned",
-  IN_PROGRESS: "In Progress",
-  COMPLETED: "Completed",
-  PLAN_COMPLETED: "Completed",
-  CLOSED: "Closed",
-  FAILED: "Failed",
-  REJECTED: "Rejected",
-  DRAFT: "Draft",
-};
-
-const formatLabel = (value?: string | null) => {
-  if (!value) {
-    return "-";
-  }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    return "-";
-  }
-
-  if (STATUS_LABELS[normalized]) {
-    return STATUS_LABELS[normalized];
-  }
-
-  if (/^[A-Z0-9_]+$/.test(normalized)) {
-    return normalized
-      .toLowerCase()
-      .split("_")
-      .filter(Boolean)
-      .map((part) => part[0]?.toUpperCase() + part.slice(1))
-      .join(" ");
-  }
-
-  return normalized;
-};
-
-const ProductionStatusBadge = ({ status }: { status: string }) => (
-  <span
-    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-      STATUS_BADGE_CLASSES[status] ?? "bg-slate-100 text-slate-700"
-    }`}
-  >
-    {formatLabel(status)}
-  </span>
-);
-
 const resolvePageSize = (value: StorePageSizeValue) => (value === "all" ? 200 : Number(value));
 
 const getExportColumns = (
-  stage: ProductionStageValue,
+  orderLookup: Map<number, ProductionOrder>,
 ): StoreExportColumn<ProductionStageRecord>[] => {
+  const getProductionName = (row: ProductionStageRecord) => {
+    const matchedOrder = orderLookup.get(row.order_id);
+    if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
+      return matchedOrder.production_for;
+    }
+
+    return formatProductionListLabel(row.production_type);
+  };
+
   const columns: StoreExportColumn<ProductionStageRecord>[] = [
-    { label: "Production Type", value: (row) => formatLabel(row.production_type) },
-    { label: "Batch", value: (row) => row.batch_no || "-" },
-    { label: "Production Date", value: (row) => formatDate(row.production_date) },
-    { label: "Shift", value: (row) => row.shift || "-" },
-    { label: "Line No", value: (row) => row.line_no || "-" },
-    { label: "Start DateTime", value: (row) => formatDateTime(row.start_date_time) },
+    { label: "Prd ID", value: (row) => row.production_id || "-" },
+    { label: "Production Name", value: (row) => getProductionName(row) },
+    { label: "No.of Batch", value: (row) => row.batch_no || "-" },
+    { label: "BOM Varient", value: () => "-" },
+    { label: "Started Date", value: (row) => formatDate(row.start_date_time || row.production_date) },
+    { label: "Ended Date", value: (row) => formatDate(row.end_date_time) },
+    { label: "Production Status", value: (row) => formatProductionListLabel(row.status) },
   ];
-
-  if (stage === "PR") {
-    columns.push({ label: "End DateTime", value: (row) => formatDateTime(row.end_date_time) });
-  }
-
-  columns.push(
-    { label: "Plan ID", value: (row) => row.plan_id || "0" },
-    { label: "Production Status", value: (row) => formatLabel(row.status) },
-  );
   return columns;
 };
 
@@ -207,24 +154,51 @@ const ProductionStageList = ({ stage }: ProductionStageListProps) => {
       }),
     placeholderData: (previousData) => previousData,
   });
+  const ordersLookupQuery = useQuery({
+    queryKey: ["production-orders-stage-lookup"],
+    queryFn: productionWorkspaceApi.listOrders,
+  });
 
   const rows = stageQuery.data?.results ?? [];
   const total = stageQuery.data?.count ?? 0;
   const statusOptions = STAGE_STATUS_OPTIONS[stage];
+  const ordersById = useMemo(
+    () =>
+      new Map((ordersLookupQuery.data ?? []).map((order) => [order.id, order])),
+    [ordersLookupQuery.data],
+  );
+
+  const getProductionName = (row: ProductionStageRecord) => {
+    const matchedOrder = ordersById.get(row.order_id);
+    if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
+      return matchedOrder.production_for;
+    }
+
+    return formatProductionListLabel(row.production_type);
+  };
 
   const handleExport = (format: StoreExportFormat) => {
     exportTableData({
       title: meta.label,
       filename: meta.filename,
       rows,
-      columns: getExportColumns(stage),
+      columns: getExportColumns(ordersById),
       format,
     });
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader title={meta.label} description={meta.pageDescription} />
+      <PageHeader
+        title={meta.label}
+        description={meta.pageDescription}
+        actions={
+          <Button onClick={() => navigate(PRODUCTION_NEW_ORDER_ROUTE)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Order
+          </Button>
+        }
+      />
 
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="p-4">
@@ -278,16 +252,13 @@ const ProductionStageList = ({ stage }: ProductionStageListProps) => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Production Type</TableHead>
-                      <TableHead>Batch</TableHead>
-                      <TableHead>Production Date</TableHead>
-                      <TableHead>Shift</TableHead>
-                      <TableHead>Line No</TableHead>
-                      <TableHead>Start DateTime</TableHead>
-                      {stage === "PR" ? <TableHead>End DateTime</TableHead> : null}
-                      <TableHead>Plan ID</TableHead>
+                      <TableHead>Prd ID</TableHead>
+                      <TableHead>Production Name</TableHead>
+                      <TableHead>No.of Batch</TableHead>
+                      <TableHead>BOM Varient</TableHead>
+                      <TableHead>Started Date</TableHead>
+                      <TableHead>Ended Date</TableHead>
                       <TableHead>Production Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -297,28 +268,14 @@ const ProductionStageList = ({ stage }: ProductionStageListProps) => {
                         className="cursor-pointer hover:bg-slate-50/80"
                         onClick={() => navigate(getProductionManageBatchRoute(row.order_id))}
                       >
-                        <TableCell className="font-medium">{formatLabel(row.production_type)}</TableCell>
-                        <TableCell className="font-mono text-xs">{row.batch_no || "-"}</TableCell>
-                        <TableCell>{formatDate(row.production_date)}</TableCell>
-                        <TableCell>{row.shift || "-"}</TableCell>
-                        <TableCell>{row.line_no || "-"}</TableCell>
-                        <TableCell>{formatDateTime(row.start_date_time)}</TableCell>
-                        {stage === "PR" ? <TableCell>{formatDateTime(row.end_date_time)}</TableCell> : null}
-                        <TableCell>{row.plan_id || "0"}</TableCell>
+                        <TableCell className="font-mono text-xs font-medium">{row.production_id || "-"}</TableCell>
+                        <TableCell className="font-medium">{getProductionName(row)}</TableCell>
+                        <TableCell>{row.batch_no || "-"}</TableCell>
+                        <TableCell className="text-muted-foreground">-</TableCell>
+                        <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
+                        <TableCell>{formatDate(row.end_date_time)}</TableCell>
                         <TableCell>
                           <ProductionStatusBadge status={row.status} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              navigate(getProductionManageBatchRoute(row.order_id));
-                            }}
-                          >
-                            Manage Batch
-                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

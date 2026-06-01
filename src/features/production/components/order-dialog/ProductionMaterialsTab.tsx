@@ -158,7 +158,7 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
   }, [bomComponentsQuery.data?.components?.length, bomComponentsQuery.isSuccess, bomVariantId, bomVariantsQuery.data, bomVariantsQuery.isSuccess, calculations.computedRows.length, finishedGoods]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <FormField
         control={form.control}
         name="materials.bom_multiplier"
@@ -178,8 +178,8 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
         tone="violet"
         icon={Boxes}
       >
-        <div className="space-y-5">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-4">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
             <MaterialItemSearch
               onSelect={handleManualItemAdd}
               existingItems={materialsState.rows.map((row) => ({ product_subtype: row.product_subtype, item_code: row.item_code }))}

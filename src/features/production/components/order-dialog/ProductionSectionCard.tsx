@@ -65,7 +65,7 @@ const ProductionSectionCard = ({
   <Card
     className={cn(
       productionCardBaseClassName,
-      "before:absolute before:left-0 before:top-3.5 before:h-10 before:w-[3px] before:rounded-full",
+      "before:absolute before:left-0 before:top-3 before:h-9 before:w-[3px] before:rounded-full",
       toneClasses[tone].accent,
       className,
     )}
@@ -73,13 +73,13 @@ const ProductionSectionCard = ({
     <CardHeader className={productionCardHeaderClassName}>
       <div className="flex min-w-0 items-start gap-2.5">
         {Icon ? (
-          <div className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", toneClasses[tone].iconWrap)}>
+          <div className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md", toneClasses[tone].iconWrap)}>
             <Icon className={cn("h-3.5 w-3.5", toneClasses[tone].icon)} />
           </div>
         ) : null}
         <div className="min-w-0 space-y-1">
-          <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-800">{title}</div>
-          {description ? <p className="text-[13px] leading-5 text-slate-400">{description}</p> : null}
+          <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-800">{title}</div>
+          {description ? <p className="text-[12px] leading-5 text-slate-500">{description}</p> : null}
         </div>
       </div>
       {action}
