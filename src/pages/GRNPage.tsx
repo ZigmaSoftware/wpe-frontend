@@ -1,14 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, FileSpreadsheet, MoveRight, Plus, RefreshCw, XCircle } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, FileSpreadsheet, MoveRight, Plus, RefreshCw, XCircle } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
+import StoreTablePagination from "@/features/store/components/StoreTablePagination";
+import StoreTableToolbar, { type StoreExportFormat, type StorePageSizeValue } from "@/features/store/components/StoreTableToolbar";
+import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
+import { getPageCount, getPageSerialNumber, getPageSizeNumber, paginateRows } from "@/features/store/utils/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,12 +21,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
+import {
+  GRN_PROCESS_CREATE_ROUTE,
+  GRN_PROCESS_ROUTE,
+  getGrnProcessDetailRoute,
+} from "@/features/grn/utils/routes";
 import { grnApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeGrnResponse, summarizeImportResponse } from "@/lib/api-helpers";
 import type { GrnListResponse, GrnRecord, ImportResponse, QcrRecord } from "@/lib/types";
@@ -115,7 +123,13 @@ type DetailFieldProps = {
   emphasized?: boolean;
 };
 
+type GrnPageModule = "process" | "status";
 type RecordScope = "active" | "moved";
+type GrnTabValue = "active" | "moved-to-qcr" | "next-grn" | "rejected";
+type GrnTableFilterState = {
+  fromDate: string;
+  toDate: string;
+};
 
 type EnterpriseFieldTone = "editable" | "synced" | "protected" | "system";
 
@@ -294,10 +308,54 @@ const defaultValues: GrnFormValues = {
   },
 };
 
+const grnTabs: GrnTabValue[] = ["active", "moved-to-qcr", "next-grn", "rejected"];
+const processTabs: GrnTabValue[] = ["active", "moved-to-qcr"];
+const statusTabs: GrnTabValue[] = ["next-grn", "rejected"];
+
+const GRN_MODULE_META: Record<GrnPageModule, { title: string; description: string; defaultTab: GrnTabValue }> = {
+  process: {
+    title: "GRN Process",
+    description: "Manage active GRN records and QCR movement from one workspace.",
+    defaultTab: "active",
+  },
+  status: {
+    title: "GRN Status",
+    description: "Review completed and rejected GRN records.",
+    defaultTab: "next-grn",
+  },
+};
+
+const createDefaultTabTextState = () =>
+  grnTabs.reduce<Record<GrnTabValue, string>>(
+    (state, tab) => ({ ...state, [tab]: "" }),
+    { active: "", "moved-to-qcr": "", "next-grn": "", rejected: "" },
+  );
+
+const createDefaultTabPageState = () =>
+  grnTabs.reduce<Record<GrnTabValue, number>>(
+    (state, tab) => ({ ...state, [tab]: 1 }),
+    { active: 1, "moved-to-qcr": 1, "next-grn": 1, rejected: 1 },
+  );
+
+const createDefaultTabPageSizeState = () =>
+  grnTabs.reduce<Record<GrnTabValue, StorePageSizeValue>>(
+    (state, tab) => ({ ...state, [tab]: "10" }),
+    { active: "10", "moved-to-qcr": "10", "next-grn": "10", rejected: "10" },
+  );
+
+const createDefaultTabFiltersState = () =>
+  grnTabs.reduce<Record<GrnTabValue, GrnTableFilterState>>(
+    (state, tab) => ({ ...state, [tab]: { fromDate: "", toDate: "" } }),
+    {
+      active: { fromDate: "", toDate: "" },
+      "moved-to-qcr": { fromDate: "", toDate: "" },
+      "next-grn": { fromDate: "", toDate: "" },
+      rejected: { fromDate: "", toDate: "" },
+    },
+  );
+
 const getPrimaryItemQuantity = (record: GrnRecord) =>
   record.items?.[0]?.quantity ?? record.items?.[0]?.total_quantity ?? null;
-
-const getGrnDepartment = (record: GrnRecord) => record.document_requirement_details.req_department?.trim() || "Unassigned";
 
 const toFormString = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) {
@@ -324,9 +382,40 @@ const getQcrField = (record: QcrRecord, key: string) => {
   return record.snapshot?.[key];
 };
 
-const getQcrDepartment = (record: QcrRecord) => {
-  const value = getQcrField(record, "req_department");
-  return value === null || value === undefined || value === "" ? "Unassigned" : String(value).trim();
+
+const getActiveItemSummary = (record: GrnRecord) => {
+  const items = record.items ?? [];
+  if (!items.length) {
+    return { title: record.product_description || "-", subtitle: record.item_id || null, extra: null as string | null };
+  }
+
+  const [firstItem, ...restItems] = items;
+  return {
+    title: firstItem.product_description || firstItem.item_id || "-",
+    subtitle: firstItem.item_id || null,
+    extra: restItems.length ? `+${restItems.length} more` : null,
+  };
+};
+
+const toDateKey = (value: string | null | undefined) => {
+  if (!value) return "";
+  const source = String(value);
+  const match = source.match(/\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
+
+  const parsed = new Date(source);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+};
+
+const isWithinDateRange = (dateValue: string | null | undefined, fromDate: string, toDate: string) => {
+  const dateKey = toDateKey(dateValue);
+  if (!dateKey) {
+    return !fromDate && !toDate;
+  }
+  if (fromDate && dateKey < fromDate) return false;
+  if (toDate && dateKey > toDate) return false;
+  return true;
 };
 
 const toFieldLabel = (value: string) =>
@@ -1177,17 +1266,28 @@ const EnterpriseReadField = ({
   </div>
 );
 
-const GRNPage = () => {
+type GRNPageProps = {
+  module?: GrnPageModule;
+};
+
+const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [payloadRecord, setPayloadRecord] = useState<GrnRecord | null>(null);
   const [moveTarget, setMoveTarget] = useState<GrnRecord | null>(null);
-  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState<GrnTabValue>(GRN_MODULE_META[module].defaultTab);
+  const [searchByTab, setSearchByTab] = useState<Record<GrnTabValue, string>>(createDefaultTabTextState);
+  const [pageByTab, setPageByTab] = useState<Record<GrnTabValue, number>>(createDefaultTabPageState);
+  const [pageSizeByTab, setPageSizeByTab] = useState<Record<GrnTabValue, StorePageSizeValue>>(createDefaultTabPageSizeState);
+  const [draftFiltersByTab, setDraftFiltersByTab] = useState<Record<GrnTabValue, GrnTableFilterState>>(createDefaultTabFiltersState);
+  const [appliedFiltersByTab, setAppliedFiltersByTab] = useState<Record<GrnTabValue, GrnTableFilterState>>(createDefaultTabFiltersState);
+  const [isFilterPending, startFilterTransition] = useTransition();
   const [detailState, setDetailState] = useState<{ scope: RecordScope; recordId: number } | null>(null);
   const [updateState, setUpdateState] = useState<{ scope: RecordScope; recordId: number } | null>(null);
   const [selectedItemIndex, setSelectedItemIndex] = useState(0);
+  const [itemListPreviewRecord, setItemListPreviewRecord] = useState<GrnRecord | null>(null);
   const form = useForm<GrnFormValues>({
     resolver: zodResolver(grnSchema),
     defaultValues,
@@ -1311,6 +1411,10 @@ const GRNPage = () => {
   const [qcrRejectTarget, setQcrRejectTarget] = useState<QcrRecord | null>(null);
   const [qcrRejectRemarks, setQcrRejectRemarks] = useState("");
   const [qcrRemarksError, setQcrRemarksError] = useState("");
+  const deferredActiveSearch = useDeferredValue(searchByTab.active.trim());
+  const deferredMovedToQcrSearch = useDeferredValue(searchByTab["moved-to-qcr"].trim());
+  const deferredCompletedSearch = useDeferredValue(searchByTab["next-grn"].trim());
+  const deferredRejectedSearch = useDeferredValue(searchByTab.rejected.trim());
 
   const qcrStatusMutation = useMutation({
     mutationFn: async ({ id, action, remarks }: { id: number; action: "move_to_grn" | "reject"; remarks?: string }) => {
@@ -1354,58 +1458,149 @@ const GRNPage = () => {
     );
   };
 
-  const departmentOptions = useMemo(() => {
-    const grnRecords = [...(activeQuery.data?.data ?? []), ...(movedQuery.data?.data ?? [])];
-    const qcrRecords = [...(qcrActiveQuery.data ?? []), ...(qcrMovedQuery.data ?? []), ...(qcrRejectedQuery.data ?? [])];
-    const grnDepts = grnRecords.map((r) => getGrnDepartment(r));
-    const qcrDepts = qcrRecords.map((r) => getQcrDepartment(r));
-    return Array.from(new Set([...grnDepts, ...qcrDepts])).sort((a, b) => a.localeCompare(b));
-  }, [activeQuery.data?.data, movedQuery.data?.data, qcrActiveQuery.data, qcrMovedQuery.data, qcrRejectedQuery.data]);
+  useEffect(() => {
+    setActiveTab(GRN_MODULE_META[module].defaultTab);
+  }, [module]);
+  const activeRecords = useMemo(() => activeQuery.data?.data ?? [], [activeQuery.data?.data]);
+  const movedRecords = useMemo(() => movedQuery.data?.data ?? [], [movedQuery.data?.data]);
+  const qcrActiveRecords = useMemo(() => qcrActiveQuery.data ?? [], [qcrActiveQuery.data]);
+  const qcrMovedRecords = useMemo(() => qcrMovedQuery.data ?? [], [qcrMovedQuery.data]);
+  const qcrRejectedRecords = useMemo(() => qcrRejectedQuery.data ?? [], [qcrRejectedQuery.data]);
 
-  const activeRecords = useMemo(() => {
-    const records = activeQuery.data?.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((record) => getGrnDepartment(record) === departmentFilter);
-  }, [activeQuery.data?.data, departmentFilter]);
+  const activeAppliedFilters = appliedFiltersByTab.active;
+  const movedToQcrAppliedFilters = appliedFiltersByTab["moved-to-qcr"];
+  const completedAppliedFilters = appliedFiltersByTab["next-grn"];
+  const rejectedAppliedFilters = appliedFiltersByTab.rejected;
 
-  const movedRecords = useMemo(() => {
-    const records = movedQuery.data?.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((record) => getGrnDepartment(record) === departmentFilter);
-  }, [movedQuery.data?.data, departmentFilter]);
+  const filteredActiveRecords = useMemo(() => {
+    const search = deferredActiveSearch.toLowerCase();
+    const { fromDate, toDate } = activeAppliedFilters;
+    return activeRecords.filter((record) => {
+      if (!isWithinDateRange(record.grn_date, fromDate, toDate)) return false;
+      if (!search) return true;
+      const searchable = [
+        record.grn_no,
+        record.item_id,
+        record.product_description,
+        record.supplier_details.trade_name,
+        record.trade_name,
+        record.document_details.po_no,
+        ...record.items.flatMap((item) => [item.item_id, item.product_description]),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(search);
+    });
+  }, [activeAppliedFilters, activeRecords, deferredActiveSearch]);
 
-  const qcrActiveRecords = useMemo(() => {
-    const records = qcrActiveQuery.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
-  }, [qcrActiveQuery.data, departmentFilter]);
+  const filteredQcrActiveRecords = useMemo(() => {
+    const search = deferredMovedToQcrSearch.toLowerCase();
+    const { fromDate, toDate } = movedToQcrAppliedFilters;
+    return qcrActiveRecords.filter((record) => {
+      if (!isWithinDateRange(record.moved_to_qcr_at, fromDate, toDate)) return false;
+      if (!search) return true;
+      const searchable = [
+        record.grn_reference_no,
+        getQcrField(record, "product_description"),
+        getQcrField(record, "trade_name"),
+        getQcrField(record, "item_id"),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(search);
+    });
+  }, [deferredMovedToQcrSearch, movedToQcrAppliedFilters, qcrActiveRecords]);
 
-  const qcrMovedRecords = useMemo(() => {
-    const records = qcrMovedQuery.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
-  }, [qcrMovedQuery.data, departmentFilter]);
+  const filteredQcrMovedRecords = useMemo(() => {
+    const search = deferredCompletedSearch.toLowerCase();
+    const { fromDate, toDate } = completedAppliedFilters;
+    return qcrMovedRecords.filter((record) => {
+      if (!isWithinDateRange(record.moved_to_qcr_at, fromDate, toDate)) return false;
+      if (!search) return true;
+      const searchable = [
+        record.grn_reference_no,
+        getQcrField(record, "product_description"),
+        getQcrField(record, "trade_name"),
+        getQcrField(record, "item_id"),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(search);
+    });
+  }, [completedAppliedFilters, deferredCompletedSearch, qcrMovedRecords]);
 
-  const qcrRejectedRecords = useMemo(() => {
-    const records = qcrRejectedQuery.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
-  }, [qcrRejectedQuery.data, departmentFilter]);
+  const filteredQcrRejectedRecords = useMemo(() => {
+    const search = deferredRejectedSearch.toLowerCase();
+    const { fromDate, toDate } = rejectedAppliedFilters;
+    return qcrRejectedRecords.filter((record) => {
+      if (!isWithinDateRange(record.moved_to_qcr_at, fromDate, toDate)) return false;
+      if (!search) return true;
+      const searchable = [
+        record.grn_reference_no,
+        getQcrField(record, "product_description"),
+        getQcrField(record, "trade_name"),
+        getQcrField(record, "item_id"),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(search);
+    });
+  }, [deferredRejectedSearch, qcrRejectedRecords, rejectedAppliedFilters]);
 
-  const resolveScopedRecord = (scope: RecordScope, recordId: number) => {
-    const records = scope === "active" ? activeRecords : movedRecords;
-    return records.find((record) => record.id === recordId) ?? null;
+  const rowsByTab: Record<GrnTabValue, GrnRecord[] | QcrRecord[]> = {
+    active: filteredActiveRecords,
+    "moved-to-qcr": filteredQcrActiveRecords,
+    "next-grn": filteredQcrMovedRecords,
+    rejected: filteredQcrRejectedRecords,
   };
+
+  const paginatedRowsByTab: Record<GrnTabValue, GrnRecord[] | QcrRecord[]> = {
+    active: paginateRows(filteredActiveRecords, pageByTab.active, pageSizeByTab.active),
+    "moved-to-qcr": paginateRows(filteredQcrActiveRecords, pageByTab["moved-to-qcr"], pageSizeByTab["moved-to-qcr"]),
+    "next-grn": paginateRows(filteredQcrMovedRecords, pageByTab["next-grn"], pageSizeByTab["next-grn"]),
+    rejected: paginateRows(filteredQcrRejectedRecords, pageByTab.rejected, pageSizeByTab.rejected),
+  };
+
+  useEffect(() => {
+    const totalsByTab: Record<GrnTabValue, number> = {
+      active: filteredActiveRecords.length,
+      "moved-to-qcr": filteredQcrActiveRecords.length,
+      "next-grn": filteredQcrMovedRecords.length,
+      rejected: filteredQcrRejectedRecords.length,
+    };
+    grnTabs.forEach((tab) => {
+      const totalPages = getPageCount(pageSizeByTab[tab], totalsByTab[tab]);
+      if (pageByTab[tab] > totalPages) {
+        setPageByTab((current) => ({ ...current, [tab]: totalPages }));
+      }
+    });
+  }, [
+    filteredActiveRecords.length,
+    filteredQcrActiveRecords.length,
+    filteredQcrMovedRecords.length,
+    filteredQcrRejectedRecords.length,
+    pageByTab,
+    pageSizeByTab,
+  ]);
 
   const detailRecord = useMemo(() => {
     if (!detailState) {
       return null;
     }
-
-    return resolveScopedRecord(detailState.scope, detailState.recordId);
+    const records = detailState.scope === "active" ? activeRecords : movedRecords;
+    return records.find((record) => record.id === detailState.recordId) ?? null;
   }, [activeRecords, detailState, movedRecords]);
 
   const updateRecord = useMemo(() => {
     if (!updateState) {
       return null;
     }
-
-    return resolveScopedRecord(updateState.scope, updateState.recordId);
+    const records = updateState.scope === "active" ? activeRecords : movedRecords;
+    return records.find((record) => record.id === updateState.recordId) ?? null;
   }, [activeRecords, movedRecords, updateState]);
 
   useEffect(() => {
@@ -1465,6 +1660,59 @@ const GRNPage = () => {
 
     setUpdateState(null);
     updateForm.reset(defaultValues);
+  };
+
+  const currentSearch = searchByTab[activeTab];
+  const currentPageSize = pageSizeByTab[activeTab];
+  const currentDraftFilters = draftFiltersByTab[activeTab];
+  const currentRows = rowsByTab[activeTab];
+  const visibleTabs = module === "process" ? processTabs : statusTabs;
+
+  const handleToolbarExport = (format: StoreExportFormat) => {
+    if (activeTab === "active") {
+      const columns: StoreExportColumn<GrnRecord>[] = [
+        { label: "S.No", value: (_row, index) => index + 1 },
+        { label: "GRN No", value: (row) => row.grn_no },
+        { label: "Supplier", value: (row) => row.supplier_details.trade_name || row.trade_name || "-" },
+        {
+          label: "Item",
+          value: (row) => {
+            const summary = getActiveItemSummary(row);
+            return summary.extra ? `${summary.title} ${summary.extra}` : summary.title;
+          },
+        },
+        { label: "Quantity", value: (row) => formatDecimal(getPrimaryItemQuantity(row)) },
+        { label: "Status", value: (row) => row.process_status },
+        { label: "GRN Date", value: (row) => formatDate(row.grn_date) },
+      ];
+      exportTableData({
+        title: "GRN Active Records",
+        filename: "grn-active-records",
+        rows: filteredActiveRecords,
+        columns,
+        format,
+      });
+      return;
+    }
+
+    const rows = activeTab === "moved-to-qcr" ? filteredQcrActiveRecords : activeTab === "next-grn" ? filteredQcrMovedRecords : filteredQcrRejectedRecords;
+    const columns: StoreExportColumn<QcrRecord>[] = [
+      { label: "S.No", value: (_row, index) => index + 1 },
+      { label: "GRN Reference", value: (row) => row.grn_reference_no },
+      { label: "Supplier", value: (row) => readText(getQcrField(row, "trade_name")) },
+      { label: "Item", value: (row) => readText(getQcrField(row, "product_description")) },
+      { label: "Quantity", value: (row) => readText(getQcrField(row, "quantity")) },
+      { label: "Status", value: (row) => row.status },
+      { label: "Moved To QCR", value: (row) => formatDateTime(row.moved_to_qcr_at) },
+      { label: "Moved By", value: (row) => row.moved_to_qcr_by || "-" },
+    ];
+    exportTableData({
+      title: "GRN QCR Records",
+      filename: `grn-${activeTab}-records`,
+      rows,
+      columns,
+      format,
+    });
   };
 
   const renderDetailSheet = () => {
@@ -1660,10 +1908,11 @@ const GRNPage = () => {
     );
   };
 
-  const renderQcrTable = (records: QcrRecord[], showActions: boolean, viewMode = false) => {
+  const renderQcrTable = (tab: Exclude<GrnTabValue, "active">, records: QcrRecord[]) => {
     if (!records.length) {
       return <EmptyState title="No records found" description="This stage currently has no records." />;
     }
+    const paginatedRows = paginatedRowsByTab[tab] as QcrRecord[];
     return (
       <Card className="overflow-hidden">
         <CardContent className="p-0">
@@ -1675,22 +1924,36 @@ const GRNPage = () => {
                 <TableHead>Supplier</TableHead>
                 <TableHead>Item</TableHead>
                 <TableHead>Quantity</TableHead>
-                <TableHead>Department</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Moved To QCR</TableHead>
                 <TableHead>Moved By</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map((record, index) => (
-                <TableRow key={record.id}>
-                  <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+              {paginatedRows.map((record, index) => (
+                <TableRow
+                  key={record.id}
+                  className="cursor-pointer transition-colors hover:bg-muted/50"
+                  onClick={() => setQcrDetailRecord(record)}
+                >
+                  <TableCell className="text-center font-medium text-muted-foreground">
+                    {getPageSerialNumber(pageByTab[tab], pageSizeByTab[tab], records.length, index)}
+                  </TableCell>
                   <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
                   <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
-                  <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      className="text-left transition-colors hover:text-primary"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setQcrDetailRecord(record);
+                      }}
+                    >
+                      {readText(getQcrField(record, "product_description"))}
+                    </button>
+                  </TableCell>
                   <TableCell>{readText(getQcrField(record, "quantity"))}</TableCell>
-                  <TableCell>{readText(getQcrField(record, "req_department"))}</TableCell>
                   <TableCell>
                     <Badge
                       variant="outline"
@@ -1707,51 +1970,27 @@ const GRNPage = () => {
                   </TableCell>
                   <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
                   <TableCell>{record.moved_to_qcr_by || "-"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() =>
-                          viewMode
-                            ? navigate(`/app/grn/${record.source_grn}/view`)
-                            : setQcrDetailRecord(record)
-                        }
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      {showActions ? (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={qcrStatusMutation.isPending}
-                            onClick={() => qcrStatusMutation.mutate({ id: record.id, action: "move_to_grn" })}
-                          >
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Approve
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => openQcrRejectDialog(record)}>
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Not Approve
-                          </Button>
-                        </>
-                      ) : null}
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
+        <StoreTablePagination
+          page={pageByTab[tab]}
+          pageSize={getPageSizeNumber(pageSizeByTab[tab], records.length)}
+          total={records.length}
+          onPageChange={(value) => setPageByTab((current) => ({ ...current, [tab]: value }))}
+        />
       </Card>
     );
   };
 
-  const renderActiveTable = () => {
-    if (!activeRecords.length) {
+  const renderActiveTable = (records: GrnRecord[]) => {
+    if (!records.length) {
       return <EmptyState title="No active GRN records" description="Create a GRN or import an Excel workbook to populate the active queue." />;
     }
+
+    const paginatedRows = paginatedRowsByTab.active as GrnRecord[];
 
     return (
       <Card className="overflow-hidden">
@@ -1768,19 +2007,21 @@ const GRNPage = () => {
                 <TableHead>Total After Tax</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Details</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {activeRecords.map((record, index) => {
+              {paginatedRows.map((record, index) => {
                 const isSelected = detailState?.scope === "active" && detailState.recordId === record.id;
+                const itemSummary = getActiveItemSummary(record);
                 return (
                   <TableRow
                     key={record.id}
                     className={cn("cursor-pointer transition-colors hover:bg-muted/50", isSelected ? "bg-primary/5" : "")}
-                    onClick={() => navigate(`/app/grn/${record.id}`)}
+                    onClick={() => navigate(getGrnProcessDetailRoute(record.id))}
                   >
-                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {getPageSerialNumber(pageByTab.active, pageSizeByTab.active, records.length, index)}
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium text-foreground">{record.grn_no}</div>
                       <div className="text-xs text-muted-foreground">{formatDate(record.grn_date)}</div>
@@ -1790,7 +2031,20 @@ const GRNPage = () => {
                       <div className="text-xs text-muted-foreground">{record.document_details.supplier_invoice_no || "No invoice"}</div>
                     </TableCell>
                     <TableCell>{record.document_details.po_no || "-"}</TableCell>
-                    <TableCell>{record.items.length || 1}</TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        className="space-y-0.5 text-left transition-colors hover:text-primary"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setItemListPreviewRecord(record);
+                        }}
+                      >
+                        <div className="font-medium text-card-foreground">{itemSummary.title}</div>
+                        {itemSummary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{itemSummary.subtitle}</div> : null}
+                        {itemSummary.extra ? <div className="text-xs text-primary">{itemSummary.extra}</div> : null}
+                      </button>
+                    </TableCell>
                     <TableCell>{formatDecimal(getPrimaryItemQuantity(record))}</TableCell>
                     <TableCell>{formatDecimal(record.value_details.total_after_tax ?? record.total_after_tax, 2)}</TableCell>
                     <TableCell>{record.document_requirement_details.req_department || "-"}</TableCell>
@@ -1799,24 +2053,18 @@ const GRNPage = () => {
                         {record.process_status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigate(`/app/grn/${record.id}`);
-                        }}
-                      >
-                        Open
-                      </Button>
-                    </TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
           </Table>
         </CardContent>
+        <StoreTablePagination
+          page={pageByTab.active}
+          pageSize={getPageSizeNumber(pageSizeByTab.active, records.length)}
+          total={records.length}
+          onPageChange={(value) => setPageByTab((current) => ({ ...current, active: value }))}
+        />
       </Card>
     );
   };
@@ -1824,27 +2072,31 @@ const GRNPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="GRN Management"
-        description="Active GRN with inline detail selection, guarded update controls, moved-to-QCR records, and Excel import against the GRN service."
+        title={GRN_MODULE_META[module].title}
+        description={GRN_MODULE_META[module].description}
         actions={
           <>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx,.xlsm,.xltx,.xltm"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) {
-                  importMutation.mutate(file);
-                }
-              }}
-            />
-            <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importMutation.isPending}>
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Import Excel
-            </Button>
+            {module === "process" ? (
+              <>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx,.xlsm,.xltx,.xltm"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) {
+                      importMutation.mutate(file);
+                    }
+                  }}
+                />
+                <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importMutation.isPending}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Import Excel
+                </Button>
+              </>
+            ) : null}
             <Button
               variant="outline"
               onClick={() => {
@@ -1858,36 +2110,15 @@ const GRNPage = () => {
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button onClick={() => navigate("/app/grn/new")}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create GRN
-            </Button>
+            {module === "process" ? (
+              <Button onClick={() => navigate(GRN_PROCESS_CREATE_ROUTE)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create GRN
+              </Button>
+            ) : null}
           </>
         }
       />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active GRN" value={activeQuery.data?.count ?? 0} />
-        <StatCard label="Moved to QCR" value={qcrActiveQuery.data?.length ?? 0} />
-        <StatCard label="Completed GRN" value={qcrMovedQuery.data?.length ?? 0} />
-        <StatCard label="Rejected" value={qcrRejectedQuery.data?.length ?? 0} />
-      </div>
-
-      <div className="flex justify-end">
-        <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-          <SelectTrigger className="w-full sm:w-64">
-            <SelectValue placeholder="Filter by department" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {departmentOptions.map((department) => (
-              <SelectItem key={department} value={department}>
-                {department}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
       {activeQuery.isLoading || qcrActiveQuery.isLoading || qcrMovedQuery.isLoading || qcrRejectedQuery.isLoading ? (
         <LoadingState label="Loading GRN records..." />
@@ -1898,21 +2129,141 @@ const GRNPage = () => {
 
       {!activeQuery.isLoading && !qcrActiveQuery.isLoading && !qcrMovedQuery.isLoading && !qcrRejectedQuery.isLoading &&
        !activeQuery.isError && !qcrActiveQuery.isError && !qcrMovedQuery.isError && !qcrRejectedQuery.isError ? (
-        <Tabs defaultValue="active" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as GrnTabValue)} className="space-y-4">
           <TabsList>
-            <TabsTrigger value="active">Active GRN</TabsTrigger>
-            <TabsTrigger value="moved-to-qcr">Moved to QCR</TabsTrigger>
-            <TabsTrigger value="next-grn">Completed GRN</TabsTrigger>
-            <TabsTrigger value="rejected">Rejected</TabsTrigger>
+            {visibleTabs.includes("active") ? <TabsTrigger value="active">GRN Process</TabsTrigger> : null}
+            {visibleTabs.includes("moved-to-qcr") ? <TabsTrigger value="moved-to-qcr">QCR</TabsTrigger> : null}
+            {visibleTabs.includes("next-grn") ? <TabsTrigger value="next-grn">Completed GRN</TabsTrigger> : null}
+            {visibleTabs.includes("rejected") ? <TabsTrigger value="rejected">Rejected</TabsTrigger> : null}
           </TabsList>
-          <TabsContent value="active">{renderActiveTable()}</TabsContent>
-          <TabsContent value="moved-to-qcr">{renderQcrTable(qcrActiveRecords, true)}</TabsContent>
-          <TabsContent value="next-grn">{renderQcrTable(qcrMovedRecords, false, true)}</TabsContent>
-          <TabsContent value="rejected">{renderQcrTable(qcrRejectedRecords, false)}</TabsContent>
+          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <StoreTableToolbar
+              searchValue={currentSearch}
+              onSearchChange={(value) => {
+                setSearchByTab((current) => ({ ...current, [activeTab]: value }));
+                setPageByTab((current) => ({ ...current, [activeTab]: 1 }));
+              }}
+              filterContent={
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
+                  <div className="space-y-1">
+                    <label htmlFor={`grn-filter-from-${activeTab}`} className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      From Date
+                    </label>
+                    <Input
+                      id={`grn-filter-from-${activeTab}`}
+                      type="date"
+                      value={currentDraftFilters.fromDate}
+                      onChange={(event) =>
+                        setDraftFiltersByTab((current) => ({
+                          ...current,
+                          [activeTab]: { ...current[activeTab], fromDate: event.target.value },
+                        }))
+                      }
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor={`grn-filter-to-${activeTab}`} className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      To Date
+                    </label>
+                    <Input
+                      id={`grn-filter-to-${activeTab}`}
+                      type="date"
+                      value={currentDraftFilters.toDate}
+                      onChange={(event) =>
+                        setDraftFiltersByTab((current) => ({
+                          ...current,
+                          [activeTab]: { ...current[activeTab], toDate: event.target.value },
+                        }))
+                      }
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      className="h-9 w-full"
+                      disabled={isFilterPending}
+                      onClick={() =>
+                        startFilterTransition(() => {
+                          setAppliedFiltersByTab((current) => ({ ...current, [activeTab]: draftFiltersByTab[activeTab] }));
+                          setPageByTab((current) => ({ ...current, [activeTab]: 1 }));
+                        })
+                      }
+                    >
+                      Go
+                    </Button>
+                  </div>
+                </div>
+              }
+              pageSize={currentPageSize}
+              onPageSizeChange={(value) => {
+                setPageSizeByTab((current) => ({ ...current, [activeTab]: value }));
+                setPageByTab((current) => ({ ...current, [activeTab]: 1 }));
+              }}
+              onExport={handleToolbarExport}
+              summaryText={`${currentRows.length} records in the current result set`}
+              isFetching={
+                activeQuery.isFetching ||
+                movedQuery.isFetching ||
+                qcrActiveQuery.isFetching ||
+                qcrMovedQuery.isFetching ||
+                qcrRejectedQuery.isFetching
+              }
+            />
+
+            {visibleTabs.includes("active") ? (
+              <TabsContent value="active">{renderActiveTable(filteredActiveRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("moved-to-qcr") ? (
+              <TabsContent value="moved-to-qcr">{renderQcrTable("moved-to-qcr", filteredQcrActiveRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("next-grn") ? (
+              <TabsContent value="next-grn">{renderQcrTable("next-grn", filteredQcrMovedRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("rejected") ? (
+              <TabsContent value="rejected">{renderQcrTable("rejected", filteredQcrRejectedRecords)}</TabsContent>
+            ) : null}
+          </div>
         </Tabs>
       ) : null}
 
       {renderDetailSheet()}
+
+      <Dialog open={Boolean(itemListPreviewRecord)} onOpenChange={(open) => !open && setItemListPreviewRecord(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{itemListPreviewRecord?.grn_no || "GRN Items"}</DialogTitle>
+            <DialogDescription>All products for the selected GRN record.</DialogDescription>
+          </DialogHeader>
+          {itemListPreviewRecord ? (
+            <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border/70">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16 text-center">S.No</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Accepted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(itemListPreviewRecord.items.length ? itemListPreviewRecord.items : [defaultItem]).map((item, index) => (
+                    <TableRow key={`${itemListPreviewRecord.id}-${item.item_id || "line"}-${index}`}>
+                      <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell>{item.product_description || "-"}</TableCell>
+                      <TableCell className="font-mono text-xs">{item.item_id || "-"}</TableCell>
+                      <TableCell className="text-right">{formatDecimal(item.quantity ?? item.total_quantity)}</TableCell>
+                      <TableCell className="text-right">{formatDecimal(item.accepted_qty)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-6xl">
@@ -2333,6 +2684,35 @@ const GRNPage = () => {
           </DialogHeader>
           {qcrDetailRecord ? (
             <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+              {qcrDetailRecord.status === "Active" ? (
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={qcrStatusMutation.isPending}
+                    onClick={() => {
+                      qcrStatusMutation.mutate(
+                        { id: qcrDetailRecord.id, action: "move_to_grn" },
+                        { onSuccess: () => setQcrDetailRecord(null) },
+                      );
+                    }}
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Approve
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setQcrDetailRecord(null);
+                      openQcrRejectDialog(qcrDetailRecord);
+                    }}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Not Approve
+                  </Button>
+                </div>
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="Status" value={qcrDetailRecord.status} />
                 <StatCard label="Unique Id" value={qcrDetailRecord.unique_id} />

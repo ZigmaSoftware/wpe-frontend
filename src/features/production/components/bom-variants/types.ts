@@ -28,15 +28,30 @@ export const createDraftComponentFromSubtype = (
   item_name: subtype.name,
   category: subtype.category_name,
   is_active: true,
+  source_active: true,
   target_weight_grams: "",
-  min_weight_grams: "195",
-  max_weight_grams: "9205",
+  min_weight_grams: "",
+  max_weight_grams: "",
   sequence: index,
   is_regrind: false,
   unit: "g",
 });
 
 export const isDraftComponentValid = (component: DraftBOMComponent) => {
-  const quantity = Number(component.target_weight_grams);
-  return Number.isFinite(quantity) && quantity > 0 && component.unit.trim().length > 0;
+  const standardWeight = Number(component.target_weight_grams);
+  const minimumWeight = Number(component.min_weight_grams);
+  const maximumWeight = Number(component.max_weight_grams);
+
+  return (
+    Number.isFinite(standardWeight) &&
+    standardWeight > 0 &&
+    Number.isFinite(minimumWeight) &&
+    minimumWeight >= 0 &&
+    Number.isFinite(maximumWeight) &&
+    maximumWeight >= 0 &&
+    minimumWeight <= standardWeight &&
+    maximumWeight >= standardWeight &&
+    minimumWeight <= maximumWeight &&
+    component.unit.trim().length > 0
+  );
 };

@@ -11,7 +11,7 @@ import ProductSubtypePanel from "@/features/wpe-masters/components/product-types
 import ProductTypesStats from "@/features/wpe-masters/components/product-types/ProductTypesStats";
 import ProductTypeCategoryForm from "@/features/wpe-masters/components/ProductTypeCategoryForm";
 import ProductTypeSubtypeForm from "@/features/wpe-masters/components/ProductTypeSubtypeForm";
-import { WPE_PRODUCT_TYPES_ROUTE, WPE_PRODUCT_TYPES_TITLE } from "@/features/wpe-masters/constants";
+import { WPE_PRODUCT_SUBTYPES_ROUTE, WPE_PRODUCT_TYPES_ROUTE, WPE_PRODUCT_TYPES_TITLE } from "@/features/wpe-masters/constants";
 import {
   useProductTypeCategoriesQuery,
   useProductTypeCategoryLookupQuery,
@@ -20,6 +20,7 @@ import {
   useProductTypeSubtypesQuery,
   useProductTypeTreeQuery,
 } from "@/features/wpe-masters/hooks/useProductTypes";
+import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import {
   productTypeCategorySchema,
   productTypeSubtypeSchema,
@@ -34,6 +35,8 @@ import type {
   ProductTypeSubtypeWritePayload,
   ProductTypeTreeCategoryRecord,
 } from "@/features/wpe-masters/types";
+import { getApiErrorMessage } from "@/lib/api-helpers";
+import { toast } from "@/components/ui/sonner";
 
 const categoryDefaultValues: ProductTypeCategoryFormValues = {
   name: "",
@@ -59,6 +62,7 @@ const toApiStatusFilter = (value: ProductTypeStatusFilterValue) => {
 const ProductTypesPage = () => {
   const navigate = useNavigate();
   const categoryDetailMatch = useMatch(`${WPE_PRODUCT_TYPES_ROUTE}/:categoryId`);
+  const subtypeLandingMatch = useMatch(WPE_PRODUCT_SUBTYPES_ROUTE);
   const permissions = useProductTypePermissions();
   const mutations = useProductTypeMutations();
 
@@ -79,6 +83,8 @@ const ProductTypesPage = () => {
   const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<ProductTypeCategoryRecord | null>(null);
   const [toggleSubtypeTarget, setToggleSubtypeTarget] = useState<ProductTypeSubtypeRecord | null>(null);
   const [deleteSubtypeTarget, setDeleteSubtypeTarget] = useState<ProductTypeSubtypeRecord | null>(null);
+  const [categoryCodePreview, setCategoryCodePreview] = useState("");
+  const [subcategoryCodePreview, setSubcategoryCodePreview] = useState("");
 
   const deferredCategorySearch = useDeferredValue(categorySearch.trim());
   const deferredSubtypeSearch = useDeferredValue(subtypeSearch.trim());
@@ -128,7 +134,8 @@ const ProductTypesPage = () => {
 
   const categoryLookupQuery = useProductTypeCategoryLookupQuery(permissions.canView);
   const hierarchyQuery = useProductTypeTreeQuery("", permissions.canView);
-  const isCategoryDetailView = Boolean(categoryDetailMatch);
+  const isCategoryDetailView = Boolean(selectedCategoryId);
+  const isSubtypeLandingView = Boolean(subtypeLandingMatch) && !isCategoryDetailView;
 
   const categoryOptions = categoryLookupQuery.data ?? [];
 
@@ -183,14 +190,21 @@ const ProductTypesPage = () => {
     hierarchyQuery.isLoading,
   ]);
 
-  const openCreateCategory = () => {
+  const openCreateCategory = async () => {
     setEditingCategory(null);
     categoryForm.reset(categoryDefaultValues);
     setCategoryDialogOpen(true);
+    try {
+      setCategoryCodePreview(await wpeMastersApi.productTypeCategories.nextCode());
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Unable to generate the next item category code."));
+      setCategoryCodePreview("");
+    }
   };
 
   const openEditCategory = (record: ProductTypeCategoryRecord) => {
     setEditingCategory(record);
+    setCategoryCodePreview(record.code);
     categoryForm.reset({
       name: record.name,
       description: record.description ?? "",
@@ -200,17 +214,24 @@ const ProductTypesPage = () => {
     setCategoryDialogOpen(true);
   };
 
-  const openCreateSubtype = () => {
+  const openCreateSubtype = async () => {
     setEditingSubtype(null);
     subtypeForm.reset({
       ...subtypeDefaultValues,
       category: selectedCategoryId ?? categoryOptions[0]?.id ?? 0,
     });
     setSubtypeDialogOpen(true);
+    try {
+      setSubcategoryCodePreview(await wpeMastersApi.productTypeSubtypes.nextCode());
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Unable to generate the next item sub category code."));
+      setSubcategoryCodePreview("");
+    }
   };
 
   const openEditSubtype = (record: ProductTypeSubtypeRecord) => {
     setEditingSubtype(record);
+    setSubcategoryCodePreview(record.code);
     subtypeForm.reset({
       category: record.category,
       name: record.name,
@@ -226,11 +247,11 @@ const ProductTypesPage = () => {
       <div className="space-y-6">
         <PageHeader
           title={WPE_PRODUCT_TYPES_TITLE}
-          description="Product type governance is limited to users with explicit WPE master access."
+          description="Item category governance is limited to users with explicit WPE master access."
         />
         <ErrorState
           title="Permission required"
-          description="You do not have access to view Product Types. Ask an administrator to grant the Product Types Master screen permission."
+          description="You do not have access to view Item Categories. Ask an administrator to grant the Product Types Master screen permission."
         />
       </div>
     );
@@ -239,11 +260,13 @@ const ProductTypesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={WPE_PRODUCT_TYPES_TITLE}
+        title={isCategoryDetailView || isSubtypeLandingView ? "Item Sub Category" : WPE_PRODUCT_TYPES_TITLE}
         description={
           isCategoryDetailView
-            ? `Manage subtypes under ${selectedCategory?.name ?? "the selected category"} in a dedicated workspace.`
-            : "Manage the master category hierarchy. Click a category to open its subtype workspace."
+            ? `Manage item sub categories under ${selectedCategory?.name ?? "the selected item category"} in a dedicated workspace.`
+            : isSubtypeLandingView
+              ? "Select an item category to open its dedicated item sub category workspace."
+              : "Manage the parent item classification hierarchy. Click an item category to open its item sub category workspace."
         }
       />
 
@@ -255,7 +278,7 @@ const ProductTypesPage = () => {
             records={subtypeQuery.data?.items ?? []}
             isLoading={subtypeQuery.isLoading}
             isError={subtypeQuery.isError}
-            errorDescription="Product type subtypes could not be loaded."
+            errorDescription="Item sub category records could not be loaded."
             search={subtypeSearch}
             onSearchChange={(value) => {
               setSubtypeSearch(value);
@@ -287,13 +310,20 @@ const ProductTypesPage = () => {
         )
       ) : (
         <>
-          <ProductTypesStats isLoading={hierarchyQuery.isLoading} summary={summary} />
+          {!isSubtypeLandingView ? <ProductTypesStats isLoading={hierarchyQuery.isLoading} summary={summary} /> : null}
           <ProductCategoryList
             records={categoryQuery.data?.items ?? []}
             isLoading={categoryQuery.isLoading}
             isError={categoryQuery.isError}
-            errorDescription="Product type categories could not be loaded."
+            errorDescription={`${isSubtypeLandingView ? "Item category selection" : "Item category"} records could not be loaded.`}
+            emptyTitle={isSubtypeLandingView ? "No item categories available" : undefined}
+            emptyDescription={
+              isSubtypeLandingView
+                ? "Create and activate an item category first, then open it to manage item sub categories."
+                : undefined
+            }
             search={categorySearch}
+            searchPlaceholder={isSubtypeLandingView ? "Search item categories to open their sub category workspace" : undefined}
             onSearchChange={(value) => {
               setCategorySearch(value);
               setCategoryPage(1);
@@ -319,7 +349,16 @@ const ProductTypesPage = () => {
             onEditCategory={permissions.canEdit ? openEditCategory : undefined}
             onToggleCategory={permissions.canEdit ? setToggleCategoryTarget : undefined}
             onDeleteCategory={permissions.canDelete ? setDeleteCategoryTarget : undefined}
-            canAdd={permissions.canAdd}
+            panelEyebrow={isSubtypeLandingView ? "Item Sub Category" : "Item Category"}
+            panelTitle={isSubtypeLandingView ? "Select an Item Category" : "Item Categories"}
+            panelDescription={
+              isSubtypeLandingView
+                ? "Choose the required item category to manage only its mapped item sub categories."
+                : "Click an item category to open its dedicated item sub category workspace."
+            }
+            typeLabel="Item Category"
+            canAdd={permissions.canAdd && !isSubtypeLandingView}
+            createLabel="Add Item Category"
           />
         </>
       )}
@@ -327,13 +366,14 @@ const ProductTypesPage = () => {
       <MasterFormDialog
         open={categoryDialogOpen}
         onOpenChange={setCategoryDialogOpen}
-        title={editingCategory ? "Edit Product Type Category" : "Create Product Type Category"}
-        description="Categories are the governed parent nodes for all product-type subtype mappings."
+        title={editingCategory ? "Edit Item Category" : "Create Item Category"}
+        description="Item categories are the governed parent nodes for all item sub category mappings."
       >
         <ProductTypeCategoryForm
+          codePreview={editingCategory?.code ?? categoryCodePreview}
           form={categoryForm}
           isSubmitting={mutations.createCategory.isPending || mutations.updateCategory.isPending}
-          submitLabel={editingCategory ? "Save Category" : "Create Category"}
+          submitLabel={editingCategory ? "Save Item Category" : "Create Item Category"}
           onSubmit={async (values) => {
             if (editingCategory) {
               await mutations.updateCategory.mutateAsync({ id: editingCategory.id, payload: values });
@@ -350,14 +390,16 @@ const ProductTypesPage = () => {
       <MasterFormDialog
         open={subtypeDialogOpen}
         onOpenChange={setSubtypeDialogOpen}
-        title={editingSubtype ? "Edit Product Type Subtype" : "Create Product Type Subtype"}
-        description="Subtypes stay normalized under a single category and become reusable lookup values across the ERP."
+        title={editingSubtype ? "Edit Item Sub Category" : "Create Item Sub Category"}
+        description="Item sub categories stay normalized under a single item category and become reusable lookup values across the ERP."
       >
         <ProductTypeSubtypeForm
+          categoryLocked={Boolean(selectedCategoryId)}
           categoryOptions={categoryOptions}
+          codePreview={editingSubtype?.code ?? subcategoryCodePreview}
           form={subtypeForm}
           isSubmitting={mutations.createSubtype.isPending || mutations.updateSubtype.isPending}
-          submitLabel={editingSubtype ? "Save Subtype" : "Create Subtype"}
+          submitLabel={editingSubtype ? "Save Item Sub Category" : "Create Item Sub Category"}
           onSubmit={async (values) => {
             if (editingSubtype) {
               await mutations.updateSubtype.mutateAsync({ id: editingSubtype.id, payload: values });
@@ -377,8 +419,8 @@ const ProductTypesPage = () => {
       <ConfirmDialog
         open={Boolean(toggleCategoryTarget)}
         onOpenChange={(open) => !open && setToggleCategoryTarget(null)}
-        title="Update category status"
-        description={`Change the status for "${toggleCategoryTarget?.name ?? "this category"}"?`}
+        title="Update item category status"
+        description={`Change the status for "${toggleCategoryTarget?.name ?? "this item category"}"?`}
         onConfirm={() => {
           if (toggleCategoryTarget) {
             mutations.toggleCategory.mutate(toggleCategoryTarget.id);
@@ -390,8 +432,8 @@ const ProductTypesPage = () => {
       <ConfirmDialog
         open={Boolean(deleteCategoryTarget)}
         onOpenChange={(open) => !open && setDeleteCategoryTarget(null)}
-        title="Delete category"
-        description={`Delete "${deleteCategoryTarget?.name ?? "this category"}"? Existing subtype references must be cleared first.`}
+        title="Delete item category"
+        description={`Delete "${deleteCategoryTarget?.name ?? "this item category"}"? Existing item sub category references must be cleared first.`}
         confirmLabel="Delete"
         onConfirm={() => {
           if (deleteCategoryTarget) {
@@ -407,8 +449,8 @@ const ProductTypesPage = () => {
       <ConfirmDialog
         open={Boolean(toggleSubtypeTarget)}
         onOpenChange={(open) => !open && setToggleSubtypeTarget(null)}
-        title="Update subtype status"
-        description={`Change the status for "${toggleSubtypeTarget?.name ?? "this subtype"}"?`}
+        title="Update item sub category status"
+        description={`Change the status for "${toggleSubtypeTarget?.name ?? "this item sub category"}"?`}
         onConfirm={() => {
           if (toggleSubtypeTarget) {
             mutations.toggleSubtype.mutate(toggleSubtypeTarget.id);
@@ -420,8 +462,8 @@ const ProductTypesPage = () => {
       <ConfirmDialog
         open={Boolean(deleteSubtypeTarget)}
         onOpenChange={(open) => !open && setDeleteSubtypeTarget(null)}
-        title="Delete subtype"
-        description={`Delete "${deleteSubtypeTarget?.name ?? "this subtype"}"?`}
+        title="Delete item sub category"
+        description={`Delete "${deleteSubtypeTarget?.name ?? "this item sub category"}"?`}
         confirmLabel="Delete"
         onConfirm={() => {
           if (deleteSubtypeTarget) {

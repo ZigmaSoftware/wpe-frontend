@@ -3,16 +3,18 @@ import type { ReactNode } from "react";
 type PageHeaderProps = {
   title: string;
   description?: string;
+  eyebrow?: string;
   actions?: ReactNode;
 };
 
-const PageHeader = ({ title, description, actions }: PageHeaderProps) => (
-  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-    <div className="space-y-1">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
-      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+const PageHeader = ({ title, description, eyebrow, actions }: PageHeaderProps) => (
+  <div className="wpe-pagehead">
+    <div className="wpe-pagehead-copy">
+      {eyebrow ? <div className="wpe-eyebrow">{eyebrow}</div> : null}
+      <h1>{title}</h1>
+      {description ? <p className="wpe-pagehead-sub">{description}</p> : null}
     </div>
-    {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+    {actions ? <div className="wpe-pagehead-actions">{actions}</div> : null}
   </div>
 );
 

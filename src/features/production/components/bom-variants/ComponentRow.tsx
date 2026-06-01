@@ -2,6 +2,7 @@ import { Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { DraftBOMComponent } from "@/features/production/components/bom-variants/types";
@@ -10,8 +11,10 @@ type ComponentRowProps = {
   component: DraftBOMComponent;
   index: number;
   hasInvalidQuantity: boolean;
-  onQuantityChange: (clientId: string, value: string) => void;
-  onUnitChange: (clientId: string, value: string) => void;
+  onStandardWeightChange: (clientId: string, value: string) => void;
+  onMinimumWeightChange: (clientId: string, value: string) => void;
+  onMaximumWeightChange: (clientId: string, value: string) => void;
+  onToggleActive: (clientId: string, value: boolean) => void;
   onRemove: (clientId: string) => void;
 };
 
@@ -19,8 +22,10 @@ const ComponentRow = ({
   component,
   index,
   hasInvalidQuantity,
-  onQuantityChange,
-  onUnitChange,
+  onStandardWeightChange,
+  onMinimumWeightChange,
+  onMaximumWeightChange,
+  onToggleActive,
   onRemove,
 }: ComponentRowProps) => (
   <TableRow>
@@ -45,26 +50,45 @@ const ComponentRow = ({
         min="0"
         step="0.001"
         value={component.target_weight_grams}
-        onChange={(event) => onQuantityChange(component.client_id, event.target.value)}
+        onChange={(event) => onStandardWeightChange(component.client_id, event.target.value)}
         className={cn("h-9 min-w-28", hasInvalidQuantity && "border-destructive focus-visible:ring-destructive")}
       />
     </TableCell>
     <TableCell>
       <Input
-        value={component.unit}
-        onChange={(event) => onUnitChange(component.client_id, event.target.value)}
-        className="h-9 min-w-20"
+        type="number"
+        min="0"
+        step="0.001"
+        value={component.min_weight_grams}
+        onChange={(event) => onMinimumWeightChange(component.client_id, event.target.value)}
+        className={cn("h-9 min-w-28", hasInvalidQuantity && "border-destructive focus-visible:ring-destructive")}
       />
     </TableCell>
     <TableCell>
-      <Badge
-        variant="outline"
-        className={cn(
-          component.is_active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700",
-        )}
-      >
-        {component.is_active ? "Active" : "Inactive"}
-      </Badge>
+      <Input
+        type="number"
+        min="0"
+        step="0.001"
+        value={component.max_weight_grams}
+        onChange={(event) => onMaximumWeightChange(component.client_id, event.target.value)}
+        className={cn("h-9 min-w-28", hasInvalidQuantity && "border-destructive focus-visible:ring-destructive")}
+      />
+    </TableCell>
+    <TableCell>
+      <div className="flex items-center gap-3">
+        <Switch
+          checked={Boolean(component.is_active)}
+          onCheckedChange={(checked) => onToggleActive(component.client_id, checked)}
+        />
+        <Badge
+          variant="outline"
+          className={cn(
+            component.is_active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700",
+          )}
+        >
+          {component.is_active ? "Active" : "Inactive"}
+        </Badge>
+      </div>
     </TableCell>
     <TableCell className="text-right">
       <Button

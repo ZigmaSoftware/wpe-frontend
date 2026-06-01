@@ -124,42 +124,42 @@ export const useProductTypeTreeQuery = (search = "", enabled = true) =>
 export const useProductTypeMutations = () => ({
   createCategory: useProductTypeMutation<ProductTypeCategoryWritePayload, unknown>({
     mutationFn: wpeMastersApi.productTypeCategories.create,
-    successMessage: "Product type category created.",
-    errorMessage: "Unable to create product type category.",
+    successMessage: "Item category created.",
+    errorMessage: "Unable to create item category.",
   }),
   updateCategory: useProductTypeMutation<{ id: number; payload: Partial<ProductTypeCategoryWritePayload> }, unknown>({
     mutationFn: ({ id, payload }) => wpeMastersApi.productTypeCategories.update(id, payload),
-    successMessage: "Product type category updated.",
-    errorMessage: "Unable to update product type category.",
+    successMessage: "Item category updated.",
+    errorMessage: "Unable to update item category.",
   }),
   toggleCategory: useProductTypeMutation<number, unknown>({
     mutationFn: wpeMastersApi.productTypeCategories.toggle,
-    successMessage: "Product type category status updated.",
-    errorMessage: "Unable to update product type category status.",
+    successMessage: "Item category status updated.",
+    errorMessage: "Unable to update item category status.",
   }),
   deleteCategory: useProductTypeMutation<number, unknown>({
     mutationFn: wpeMastersApi.productTypeCategories.delete,
-    successMessage: "Product type category deleted.",
-    errorMessage: "Unable to delete product type category.",
+    successMessage: "Item category deleted.",
+    errorMessage: "Unable to delete item category.",
   }),
   createSubtype: useProductTypeMutation<ProductTypeSubtypeWritePayload, unknown>({
     mutationFn: wpeMastersApi.productTypeSubtypes.create,
-    successMessage: "Product type subtype created.",
-    errorMessage: "Unable to create product type subtype.",
+    successMessage: "Item sub category created.",
+    errorMessage: "Unable to create item sub category.",
   }),
   updateSubtype: useProductTypeMutation<{ id: number; payload: Partial<ProductTypeSubtypeWritePayload> }, unknown>({
     mutationFn: ({ id, payload }) => wpeMastersApi.productTypeSubtypes.update(id, payload),
-    successMessage: "Product type subtype updated.",
-    errorMessage: "Unable to update product type subtype.",
+    successMessage: "Item sub category updated.",
+    errorMessage: "Unable to update item sub category.",
   }),
   toggleSubtype: useProductTypeMutation<number, unknown>({
     mutationFn: wpeMastersApi.productTypeSubtypes.toggle,
-    successMessage: "Product type subtype status updated.",
-    errorMessage: "Unable to update product type subtype status.",
+    successMessage: "Item sub category status updated.",
+    errorMessage: "Unable to update item sub category status.",
   }),
   deleteSubtype: useProductTypeMutation<number, unknown>({
     mutationFn: wpeMastersApi.productTypeSubtypes.delete,
-    successMessage: "Product type subtype deleted.",
-    errorMessage: "Unable to delete product type subtype.",
+    successMessage: "Item sub category deleted.",
+    errorMessage: "Unable to delete item sub category.",
   }),
 });

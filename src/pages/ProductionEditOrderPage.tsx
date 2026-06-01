@@ -7,6 +7,7 @@ import {
   type CreateProductionOrderPayload,
   type ProductionOrderDetail,
 } from "@/features/production/components/order-dialog/productionOrderForm";
+import { PRODUCTION_AD_WEIGHTAGE_ROUTE } from "@/features/production/utils/routes";
 import { ErrorState, LoadingState } from "@/components/QueryState";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
@@ -42,16 +43,17 @@ const ProductionEditOrderPage = () => {
     onSuccess: () => {
       toast.success("Production order updated.");
       queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
       queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["production-order-detail", id] });
-      navigate("/app/production");
+      navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE);
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to update order.")),
   });
 
   if (orderQ.isLoading || machinesQ.isLoading) {
     return (
-      <ProductionOrderPageLayout onBack={() => navigate("/app/production")}>
+      <ProductionOrderPageLayout onBack={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
         <LoadingState label="Loading production order..." />
       </ProductionOrderPageLayout>
     );
@@ -59,7 +61,7 @@ const ProductionEditOrderPage = () => {
 
   if (orderQ.isError) {
     return (
-      <ProductionOrderPageLayout onBack={() => navigate("/app/production")}>
+      <ProductionOrderPageLayout onBack={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
         <ErrorState description="Could not load production order." />
       </ProductionOrderPageLayout>
     );
@@ -70,10 +72,10 @@ const ProductionEditOrderPage = () => {
   const initialValues = mapOrderDetailToFormValues(order, machines);
 
   return (
-    <ProductionOrderPageLayout onBack={() => navigate("/app/production")}>
+    <ProductionOrderPageLayout onBack={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
       <ProductionOrderForm
         onSubmit={(values) => updateOrderMutation.mutate(values)}
-        onCancel={() => navigate("/app/production")}
+        onCancel={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}
         isSubmitting={updateOrderMutation.isPending}
         machines={machines}
         machinesLoading={machinesQ.isLoading}

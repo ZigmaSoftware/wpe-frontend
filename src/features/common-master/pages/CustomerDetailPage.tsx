@@ -310,7 +310,7 @@ const CustomerDetailPage = () => {
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => navigate("/masters/customers")}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Customers
+          Back to Customer Creations
         </Button>
         {customer ? <MasterStatusBadge active={customer.is_active} /> : null}
       </div>

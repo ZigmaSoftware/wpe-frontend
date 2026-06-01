@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -23,6 +23,7 @@ import { useTableSearchParams } from "@/features/common-master/hooks/useTableSea
 import { applyBackendErrors } from "@/features/common-master/hooks/useFormErrorMapper";
 
 const defaultValues: ContinentFormValues = {
+  code: "",
   name: "",
   status: true,
 };
@@ -44,6 +45,11 @@ const ContinentsPage = () => {
     queryFn: commonMasterApi.listContinents,
     select: (records) =>
       records.filter((record) => record.name.toLowerCase().includes(debouncedSearch.toLowerCase())),
+  });
+  const nextCodeQuery = useQuery({
+    queryKey: commonMasterKeys.nextCode("continents"),
+    queryFn: commonMasterApi.getNextContinentCode,
+    enabled: false,
   });
 
   const createMutation = useCommonMasterMutations({
@@ -70,20 +76,20 @@ const ContinentsPage = () => {
 
   const records = continentsQuery.data ?? [];
   const total = records.length;
-  const paged = useMemo(() => {
-    const start = (table.page - 1) * table.pageSize;
-    return records.slice(start, start + table.pageSize);
-  }, [records, table.page, table.pageSize]);
+  const start = (table.page - 1) * table.pageSize;
+  const paged = records.slice(start, start + table.pageSize);
 
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditing(null);
     form.reset(defaultValues);
     setDialogOpen(true);
+    const result = await nextCodeQuery.refetch();
+    form.setValue("code", result.data ?? "");
   };
 
   const openEdit = (continent: ContinentRecord) => {
     setEditing(continent);
-    form.reset({ name: continent.name, status: continent.status });
+    form.reset({ code: continent.code ?? "", name: continent.name, status: continent.status });
     setDialogOpen(true);
   };
 
@@ -104,8 +110,8 @@ const ContinentsPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Continents"
-        description="Manage active geography regions used by downstream master lookups."
+        title="Continent"
+        description="Manage continent master records."
       />
 
       <MasterToolbar
@@ -117,6 +123,7 @@ const ContinentsPage = () => {
 
       <MasterTable
         columns={[
+          { key: "code", title: "Continent Code", render: (record) => <span className="font-mono text-xs">{record.code ?? "-"}</span> },
           { key: "name", title: "Continent", render: (record) => <div className="font-medium">{record.name}</div> },
           { key: "status", title: "Status", render: (record) => <MasterStatusBadge active={record.status} /> },
           {
@@ -129,7 +136,7 @@ const ContinentsPage = () => {
         records={paged}
         isLoading={continentsQuery.isLoading}
         isError={continentsQuery.isError}
-        errorDescription="Continents could not be loaded."
+        errorDescription="Continent records could not be loaded."
         emptyTitle="No continents found"
         emptyDescription="Add the first continent to start organizing country masters."
         page={table.page}
@@ -150,10 +157,23 @@ const ContinentsPage = () => {
           <form onSubmit={onSubmit} className="space-y-4">
             <FormField
               control={form.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Continent Code*</FormLabel>
+                  <FormControl>
+                    <Input {...field} value={field.value ?? ""} readOnly placeholder="Generating..." className="bg-slate-50 text-slate-700" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>Name*</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -166,7 +186,7 @@ const ContinentsPage = () => {
               name="status"
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
-                  <FormLabel>Active status</FormLabel>
+                  <FormLabel>Active Status*</FormLabel>
                   <FormControl>
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>

@@ -8,6 +8,7 @@ import type { ProductTypeCategoryFormValues } from "@/features/wpe-masters/schem
 
 
 type ProductTypeCategoryFormProps = {
+  codePreview: string;
   form: UseFormReturn<ProductTypeCategoryFormValues>;
   isSubmitting: boolean;
   submitLabel: string;
@@ -16,6 +17,7 @@ type ProductTypeCategoryFormProps = {
 
 
 const ProductTypeCategoryForm = ({
+  codePreview,
   form,
   isSubmitting,
   submitLabel,
@@ -23,14 +25,20 @@ const ProductTypeCategoryForm = ({
 }: ProductTypeCategoryFormProps) => (
   <Form {...form}>
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <FormItem>
+        <FormLabel>Category Code*</FormLabel>
+        <FormControl>
+          <Input value={codePreview} readOnly placeholder="Generating..." className="bg-muted/40 font-mono" />
+        </FormControl>
+      </FormItem>
       <FormField
         control={form.control}
         name="name"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Category name</FormLabel>
+            <FormLabel>Category Name*</FormLabel>
             <FormControl>
-              <Input {...field} placeholder="Blend" />
+              <Input {...field} placeholder="Enter item category name" />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -41,41 +49,26 @@ const ProductTypeCategoryForm = ({
         name="description"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Description</FormLabel>
+            <FormLabel>Details</FormLabel>
             <FormControl>
-              <Textarea {...field} rows={3} placeholder="Optional description for downstream ERP users." />
+              <Textarea {...field} rows={3} placeholder="Add supporting details for downstream users." />
             </FormControl>
             <FormMessage />
           </FormItem>
         )}
       />
-      <div className="grid gap-4 md:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="sort_order"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Sort order</FormLabel>
-              <FormControl>
-                <Input type="number" min={1} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="is_active"
-          render={({ field }) => (
-            <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
-              <FormLabel>Active status</FormLabel>
-              <FormControl>
-                <Switch checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-      </div>
+      <FormField
+        control={form.control}
+        name="is_active"
+        render={({ field }) => (
+          <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
+            <FormLabel>Active Status*</FormLabel>
+            <FormControl>
+              <Switch checked={field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+          </FormItem>
+        )}
+      />
       <div className="flex justify-end">
         <Button type="submit" disabled={isSubmitting}>
           {submitLabel}

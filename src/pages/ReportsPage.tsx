@@ -17,7 +17,6 @@ const reportSections = [
       { name: "Sales Summary", description: "Summarized sales data", category: "sales" },
       { name: "Purchase Summary", description: "Summarized purchase data", category: "purchase" },
       { name: "Daily Report", description: "Day-wise transaction summary", category: "daily" },
-      { name: "Opportunity Pipeline Report (Presales)", description: "Pipeline analysis", category: "presales" },
       { name: "Purchase Request Report", description: "All purchase requests", category: "purchase" },
       { name: "Purchase Report (Invoice wise & Qty wise)", description: "See all purchase inwards", category: "purchase" },
       { name: "Indent Pipeline Report", description: "Indent tracking", category: "indents" },
@@ -29,9 +28,7 @@ const reportSections = [
     title: "Document Reports",
     icon: BarChart3,
     reports: [
-      { name: "Presales Pipeline Report", description: "PI pipeline tracking", category: "presales" },
       { name: "Sales Pipeline Report (Invoice Based)", description: "Invoice-based pipeline", category: "sales" },
-      { name: "Presales Activity Report", description: "Activity tracking", category: "presales" },
       { name: "Purchase Order Report", description: "PO analysis", category: "purchase" },
       { name: "Customer Sales Report", description: "Customer-wise sales", category: "sales" },
       { name: "Supplier Purchase Bill", description: "Supplier billing details", category: "purchase" },
@@ -105,7 +102,6 @@ const reportSections = [
     icon: Wrench,
     reports: [
       { name: "Payment Mismatch", description: "Find payment discrepancies", category: "tools" },
-      { name: "Find/Fix Wrong Transactions (Presales)", description: "Presales correction tool", category: "tools" },
       { name: "Find/Fix Wrong Transactions (Sales)", description: "Sales correction tool", category: "tools" },
       { name: "Find/Fix Wrong Transactions (Indent)", description: "Indent correction tool", category: "tools" },
       { name: "Find/Fix Wrong Transactions (Purchase)", description: "Purchase correction tool", category: "tools" },
