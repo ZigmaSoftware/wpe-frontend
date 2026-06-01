@@ -135,6 +135,7 @@ const CustomersPage = () => {
                 onView={() => navigate(`/masters/customers/${record.id}`)}
                 onToggle={() => setToggleTarget(record)}
                 onDelete={() => setDeleteTarget(record)}
+                isActive={record.is_active}
               />
             ),
           },

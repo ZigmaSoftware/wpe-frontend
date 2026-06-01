@@ -139,6 +139,7 @@ const UserScreenPermissionPage = () => {
                     onEdit={() => navigate(`/admin/user-screen-permission/${record.id}/edit`)}
                     onToggle={() => setToggleTarget(record)}
                     onDelete={() => setDeleteTarget(record)}
+                    isActive={record.is_active}
                   />
                 ),
               },

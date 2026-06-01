@@ -1079,3 +1079,4 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
 };
 
 export default BlendingPage;
+  

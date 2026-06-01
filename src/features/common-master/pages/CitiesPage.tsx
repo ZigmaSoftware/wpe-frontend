@@ -135,7 +135,7 @@ const CitiesPage = () => {
             key: "actions",
             title: "Actions",
             className: "w-[120px] text-right",
-            render: (record) => <RowActions onEdit={() => openEdit(record.id)} onToggle={() => setToggleTarget(record)} />,
+            render: (record) => <RowActions onEdit={() => openEdit(record.id)} onToggle={() => setToggleTarget(record)} isActive={record.is_active} />,
           },
         ]}
         records={result?.items ?? []}

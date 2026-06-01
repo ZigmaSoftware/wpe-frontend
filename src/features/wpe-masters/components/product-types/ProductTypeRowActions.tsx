@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import { Pencil, Power, Trash2 } from "lucide-react";
+import { Pencil, Power, PowerOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +7,7 @@ type ProductTypeRowActionsProps = {
   onEdit?: () => void;
   onToggle?: () => void;
   onDelete?: () => void;
+  isActive?: boolean;
   className?: string;
 };
 
@@ -14,6 +15,7 @@ const ProductTypeRowActions = ({
   onEdit,
   onToggle,
   onDelete,
+  isActive,
   className,
 }: ProductTypeRowActionsProps) => {
   const handleClick = (event: MouseEvent<HTMLButtonElement>, action?: () => void) => {
@@ -44,11 +46,18 @@ const ProductTypeRowActions = ({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+          className={cn(
+            "h-8 w-8 rounded-lg",
+            isActive === true
+              ? "text-red-500 hover:bg-red-50 hover:text-red-600"
+              : isActive === false
+                ? "text-green-600 hover:bg-green-50 hover:text-green-700"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+          )}
           onClick={(event) => handleClick(event, onToggle)}
-          title="Toggle status"
+          title={isActive === undefined ? "Toggle status" : isActive ? "Deactivate" : "Activate"}
         >
-          <Power className="h-4 w-4" />
+          {isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
         </Button>
       ) : null}
       {onDelete ? (

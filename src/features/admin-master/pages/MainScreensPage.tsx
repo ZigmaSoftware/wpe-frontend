@@ -88,7 +88,7 @@ const MainScreensPage = () => {
             setEditing(record);
             form.reset(record);
             setDialogOpen(true);
-          }} onToggle={() => setToggleTarget(record)} onDelete={() => setDeleteTarget(record)} /> },
+          }} onToggle={() => setToggleTarget(record)} onDelete={() => setDeleteTarget(record)} isActive={record.is_active} /> },
         ]}
         records={records}
         isLoading={query.isLoading}

@@ -219,17 +219,7 @@ const ContactFormPage = () => {
                     ? contactQuery.data?.name ? `Edit — ${contactQuery.data.name}` : "Edit Contact"
                     : "Add New Contact"}
                 </h1>
-                <p className="text-sm text-slate-500">
-                  Fields marked <span className="text-destructive">*</span> are required. Refer the{" "}
-                  <a
-                    href="https://services.gst.gov.in/services/searchtp"
-                    target="_blank" rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                  >
-                    GST Portal <ExternalLink className="h-3 w-3" />
-                  </a>{" "}
-                  to confirm address.
-                </p>
+               
               </div>
 
               {/* Status chips */}
@@ -580,7 +570,7 @@ const ContactFormPage = () => {
                           <FormLabel>State <span className="text-destructive">*</span></FormLabel>
                           <FormControl><Input placeholder="State" {...field} /></FormControl>
                           <FormMessage />
-                        </FormItem>
+                        </FormItem> 
                       )} />
                     </div>
                     <FormField control={form.control} name="billing_postal_code" render={({ field }) => (
@@ -597,12 +587,12 @@ const ContactFormPage = () => {
                         <FormMessage />
                       </FormItem>
                     )} />
-                    <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                    {/* <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
                       NOTE: To confirm the address, refer the GST Portal at{" "}
                       <a href="https://services.gst.gov.in/services/searchtp" target="_blank" rel="noreferrer" className="font-semibold underline">
                         services.gst.gov.in
                       </a>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
               </div>

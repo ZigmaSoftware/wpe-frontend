@@ -231,17 +231,7 @@ const AppLayout = () => {
           </button>
 
           <Link className="wpe-brand" to="/app/dashboard">
-            <span className="wpe-brand-mark">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M5 5h14L5 19h14" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <span className="wpe-brand-copy">
-              <span className="wpe-brand-name">
-                Zigma<span className="text-[var(--wpe-accent)]">.</span>
-              </span>
-              <span className="wpe-brand-sub">WPE ERP</span>
-            </span>
+            <img src="/zigma.png" alt="Zigma WPE ERP" className="h-9 w-auto object-contain" />
           </Link>
 
           <span className="wpe-nav-sep wpe-desktop-only" />
