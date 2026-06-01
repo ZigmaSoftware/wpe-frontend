@@ -225,6 +225,7 @@ const ItemCreationsPage = () => {
                 }}
                 onToggle={() => setToggleTarget(record)}
                 onDelete={() => setDeleteTarget(record)}
+                isActive={record.is_active}
               />
             ),
           },

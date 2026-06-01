@@ -93,7 +93,7 @@ const ScreenSectionsPage = () => {
           { key: "code", title: "Code", render: (record) => <span className="font-mono text-xs">{record.code}</span> },
           { key: "order_no", title: "Order", render: (record) => record.order_no },
           { key: "is_active", title: "Status", render: (record) => <MasterStatusBadge active={record.is_active} /> },
-          { key: "actions", title: "Actions", className: "w-[160px] text-right", render: (record) => <RowActions onEdit={() => { setEditing(record); form.reset(record); setDialogOpen(true); }} onToggle={() => setToggleTarget(record)} onDelete={() => setDeleteTarget(record)} /> },
+          { key: "actions", title: "Actions", className: "w-[160px] text-right", render: (record) => <RowActions onEdit={() => { setEditing(record); form.reset(record); setDialogOpen(true); }} onToggle={() => setToggleTarget(record)} onDelete={() => setDeleteTarget(record)} isActive={record.is_active} /> },
         ]}
         records={query.data?.items ?? []}
         isLoading={query.isLoading}

@@ -120,7 +120,7 @@ const UserScreensPage = () => {
           { key: "screen_section_name", title: "Section", render: (record) => record.screen_section_name || "-" },
           { key: "route_path", title: "Route", render: (record) => <span className="font-mono text-xs">{record.route_path || "-"}</span> },
           { key: "is_active", title: "Status", render: (record) => <MasterStatusBadge active={record.is_active} /> },
-          { key: "actions", title: "Actions", className: "w-[160px] text-right", render: (record) => <RowActions onEdit={() => { setEditing(record); form.reset({ ...record, available_actions: record.available_actions }); setDialogOpen(true); }} onToggle={() => setToggleTarget(record)} onDelete={() => setDeleteTarget(record)} /> },
+          { key: "actions", title: "Actions", className: "w-[160px] text-right", render: (record) => <RowActions onEdit={() => { setEditing(record); form.reset({ ...record, available_actions: record.available_actions }); setDialogOpen(true); }} onToggle={() => setToggleTarget(record)} onDelete={() => setDeleteTarget(record)} isActive={record.is_active} /> },
         ]}
         records={query.data?.items ?? []}
         isLoading={query.isLoading}

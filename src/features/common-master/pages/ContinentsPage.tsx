@@ -130,7 +130,7 @@ const ContinentsPage = () => {
             key: "actions",
             title: "Actions",
             className: "w-[120px] text-right",
-            render: (record) => <RowActions onEdit={() => openEdit(record)} onToggle={() => setToggleTarget(record)} />,
+            render: (record) => <RowActions onEdit={() => openEdit(record)} onToggle={() => setToggleTarget(record)} isActive={record.is_active} />,
           },
         ]}
         records={paged}

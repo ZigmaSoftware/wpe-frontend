@@ -22,6 +22,7 @@ export interface ProfileCreationRecord extends CodeMasterRecord {
   uom: "NOS" | "METER";
   packing_type: number | null;
   packing_type_name: string | null;
+  image_url?: string | null;
 }
 
 export interface ProfileCreationWritePayload extends CodeMasterWritePayload {
@@ -29,10 +30,11 @@ export interface ProfileCreationWritePayload extends CodeMasterWritePayload {
   profile_size: number;
   color: number;
   length: number | string;
-  weight_per_piece?: number | string | null;
+  weight_per_piece: number | string;
   uom: "NOS" | "METER";
   packing_type?: number | null;
   is_active?: boolean;
+  image?: File | null;
 }
 
 export interface ProfileSizeRecord extends CodeMasterRecord {

@@ -274,6 +274,7 @@ const ProductSubtypePanel = ({
                         onEdit={onEditSubtype ? () => onEditSubtype(record) : undefined}
                         onToggle={onToggleSubtype ? () => onToggleSubtype(record) : undefined}
                         onDelete={onDeleteSubtype ? () => onDeleteSubtype(record) : undefined}
+                        isActive={record.is_active}
                       />
                     </TableCell>
                   </TableRow>
