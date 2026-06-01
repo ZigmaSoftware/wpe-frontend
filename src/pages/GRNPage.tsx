@@ -26,6 +26,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
+import {
+  GRN_PROCESS_CREATE_ROUTE,
+  GRN_PROCESS_ROUTE,
+  getGrnProcessDetailRoute,
+} from "@/features/grn/utils/routes";
 import { grnApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeGrnResponse, summarizeImportResponse } from "@/lib/api-helpers";
 import type { GrnListResponse, GrnRecord, ImportResponse, QcrRecord } from "@/lib/types";
@@ -118,6 +123,7 @@ type DetailFieldProps = {
   emphasized?: boolean;
 };
 
+type GrnPageModule = "process" | "status";
 type RecordScope = "active" | "moved";
 type GrnTabValue = "active" | "moved-to-qcr" | "next-grn" | "rejected";
 type GrnTableFilterState = {
@@ -303,6 +309,21 @@ const defaultValues: GrnFormValues = {
 };
 
 const grnTabs: GrnTabValue[] = ["active", "moved-to-qcr", "next-grn", "rejected"];
+const processTabs: GrnTabValue[] = ["active", "moved-to-qcr"];
+const statusTabs: GrnTabValue[] = ["next-grn", "rejected"];
+
+const GRN_MODULE_META: Record<GrnPageModule, { title: string; description: string; defaultTab: GrnTabValue }> = {
+  process: {
+    title: "GRN Process",
+    description: "Manage active GRN records and QCR movement from one workspace.",
+    defaultTab: "active",
+  },
+  status: {
+    title: "GRN Status",
+    description: "Review completed and rejected GRN records.",
+    defaultTab: "next-grn",
+  },
+};
 
 const createDefaultTabTextState = () =>
   grnTabs.reduce<Record<GrnTabValue, string>>(
@@ -1245,14 +1266,18 @@ const EnterpriseReadField = ({
   </div>
 );
 
-const GRNPage = () => {
+type GRNPageProps = {
+  module?: GrnPageModule;
+};
+
+const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [payloadRecord, setPayloadRecord] = useState<GrnRecord | null>(null);
   const [moveTarget, setMoveTarget] = useState<GrnRecord | null>(null);
-  const [activeTab, setActiveTab] = useState<GrnTabValue>("active");
+  const [activeTab, setActiveTab] = useState<GrnTabValue>(GRN_MODULE_META[module].defaultTab);
   const [searchByTab, setSearchByTab] = useState<Record<GrnTabValue, string>>(createDefaultTabTextState);
   const [pageByTab, setPageByTab] = useState<Record<GrnTabValue, number>>(createDefaultTabPageState);
   const [pageSizeByTab, setPageSizeByTab] = useState<Record<GrnTabValue, StorePageSizeValue>>(createDefaultTabPageSizeState);
@@ -1432,6 +1457,10 @@ const GRNPage = () => {
       { onSuccess: () => closeQcrRejectDialog() },
     );
   };
+
+  useEffect(() => {
+    setActiveTab(GRN_MODULE_META[module].defaultTab);
+  }, [module]);
   const activeRecords = useMemo(() => activeQuery.data?.data ?? [], [activeQuery.data?.data]);
   const movedRecords = useMemo(() => movedQuery.data?.data ?? [], [movedQuery.data?.data]);
   const qcrActiveRecords = useMemo(() => qcrActiveQuery.data ?? [], [qcrActiveQuery.data]);
@@ -1637,6 +1666,7 @@ const GRNPage = () => {
   const currentPageSize = pageSizeByTab[activeTab];
   const currentDraftFilters = draftFiltersByTab[activeTab];
   const currentRows = rowsByTab[activeTab];
+  const visibleTabs = module === "process" ? processTabs : statusTabs;
 
   const handleToolbarExport = (format: StoreExportFormat) => {
     if (activeTab === "active") {
@@ -1987,7 +2017,7 @@ const GRNPage = () => {
                   <TableRow
                     key={record.id}
                     className={cn("cursor-pointer transition-colors hover:bg-muted/50", isSelected ? "bg-primary/5" : "")}
-                    onClick={() => navigate(`/app/grn/${record.id}`)}
+                    onClick={() => navigate(getGrnProcessDetailRoute(record.id))}
                   >
                     <TableCell className="text-center font-medium text-muted-foreground">
                       {getPageSerialNumber(pageByTab.active, pageSizeByTab.active, records.length, index)}
@@ -2042,27 +2072,31 @@ const GRNPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="GRN Management"
-        description="Active GRN with inline detail selection, guarded update controls, moved-to-QCR records, and Excel import against the GRN service."
+        title={GRN_MODULE_META[module].title}
+        description={GRN_MODULE_META[module].description}
         actions={
           <>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx,.xlsm,.xltx,.xltm"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) {
-                  importMutation.mutate(file);
-                }
-              }}
-            />
-            <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importMutation.isPending}>
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Import Excel
-            </Button>
+            {module === "process" ? (
+              <>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx,.xlsm,.xltx,.xltm"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) {
+                      importMutation.mutate(file);
+                    }
+                  }}
+                />
+                <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importMutation.isPending}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Import Excel
+                </Button>
+              </>
+            ) : null}
             <Button
               variant="outline"
               onClick={() => {
@@ -2076,10 +2110,12 @@ const GRNPage = () => {
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button onClick={() => navigate("/app/grn/new")}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create GRN
-            </Button>
+            {module === "process" ? (
+              <Button onClick={() => navigate(GRN_PROCESS_CREATE_ROUTE)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create GRN
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -2095,10 +2131,10 @@ const GRNPage = () => {
        !activeQuery.isError && !qcrActiveQuery.isError && !qcrMovedQuery.isError && !qcrRejectedQuery.isError ? (
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as GrnTabValue)} className="space-y-4">
           <TabsList>
-            <TabsTrigger value="active">Active GRN</TabsTrigger>
-            <TabsTrigger value="moved-to-qcr">Moved to QCR</TabsTrigger>
-            <TabsTrigger value="next-grn">Completed GRN</TabsTrigger>
-            <TabsTrigger value="rejected">Rejected</TabsTrigger>
+            {visibleTabs.includes("active") ? <TabsTrigger value="active">GRN Process</TabsTrigger> : null}
+            {visibleTabs.includes("moved-to-qcr") ? <TabsTrigger value="moved-to-qcr">QCR</TabsTrigger> : null}
+            {visibleTabs.includes("next-grn") ? <TabsTrigger value="next-grn">Completed GRN</TabsTrigger> : null}
+            {visibleTabs.includes("rejected") ? <TabsTrigger value="rejected">Rejected</TabsTrigger> : null}
           </TabsList>
           <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
             <StoreTableToolbar
@@ -2176,10 +2212,18 @@ const GRNPage = () => {
               }
             />
 
-            <TabsContent value="active">{renderActiveTable(filteredActiveRecords)}</TabsContent>
-            <TabsContent value="moved-to-qcr">{renderQcrTable("moved-to-qcr", filteredQcrActiveRecords)}</TabsContent>
-            <TabsContent value="next-grn">{renderQcrTable("next-grn", filteredQcrMovedRecords)}</TabsContent>
-            <TabsContent value="rejected">{renderQcrTable("rejected", filteredQcrRejectedRecords)}</TabsContent>
+            {visibleTabs.includes("active") ? (
+              <TabsContent value="active">{renderActiveTable(filteredActiveRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("moved-to-qcr") ? (
+              <TabsContent value="moved-to-qcr">{renderQcrTable("moved-to-qcr", filteredQcrActiveRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("next-grn") ? (
+              <TabsContent value="next-grn">{renderQcrTable("next-grn", filteredQcrMovedRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("rejected") ? (
+              <TabsContent value="rejected">{renderQcrTable("rejected", filteredQcrRejectedRecords)}</TabsContent>
+            ) : null}
           </div>
         </Tabs>
       ) : null}

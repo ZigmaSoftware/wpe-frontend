@@ -25,9 +25,9 @@ import { useTableSearchParams } from "@/features/common-master/hooks/useTableSea
 import { applyBackendErrors } from "@/features/common-master/hooks/useFormErrorMapper";
 
 const defaultValues: CurrencyFormValues = {
+  code: "",
   country: 0,
   name: "",
-  code: "",
   symbol: "",
   is_active: true,
 };
@@ -45,6 +45,11 @@ const CurrenciesPage = () => {
   const currenciesQuery = useQuery({
     queryKey: commonMasterKeys.currencies(table.page, table.pageSize, debouncedSearch),
     queryFn: () => commonMasterApi.listCurrencies({ page: table.page, pageSize: table.pageSize, search: debouncedSearch }),
+  });
+  const nextCodeQuery = useQuery({
+    queryKey: commonMasterKeys.nextCode("currencies"),
+    queryFn: commonMasterApi.getNextCurrencyCode,
+    enabled: false,
   });
 
   const createMutation = useCommonMasterMutations({
@@ -72,10 +77,12 @@ const CurrenciesPage = () => {
     errorMessage: "Unable to delete currency.",
   });
 
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditing(null);
     form.reset(defaultValues);
     setDialogOpen(true);
+    const result = await nextCodeQuery.refetch();
+    form.setValue("code", result.data ?? "");
   };
 
   const openEdit = (record: CurrencyRecord) => {
@@ -109,14 +116,14 @@ const CurrenciesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Currencies"
-        description="Maintain active currency masters tied to country-level commercial setup."
+        title="Currency"
+        description="Manage currency names, symbols, and country mapping."
       />
       <MasterToolbar search={table.search} onSearchChange={table.setSearch} createLabel="Add Currency" onCreate={openCreate} />
       <MasterTable
         columns={[
           { key: "name", title: "Currency", render: (record) => <div className="font-medium">{record.name}</div> },
-          { key: "code", title: "Code", render: (record) => <span className="font-mono text-xs">{record.code}</span> },
+          { key: "code", title: "Currency Code", render: (record) => <span className="font-mono text-xs">{record.code}</span> },
           { key: "symbol", title: "Symbol", render: (record) => record.symbol || "-" },
           { key: "country_name", title: "Country", render: (record) => record.country_name || "-" },
           { key: "is_active", title: "Status", render: (record) => <MasterStatusBadge active={record.is_active} /> },
@@ -136,7 +143,7 @@ const CurrenciesPage = () => {
         records={result?.items ?? []}
         isLoading={currenciesQuery.isLoading}
         isError={currenciesQuery.isError}
-        errorDescription="Currencies could not be loaded."
+        errorDescription="Currency records could not be loaded."
         emptyTitle="No currencies found"
         emptyDescription="Create the first currency to support customer, supplier, and project setup."
         page={table.page}
@@ -157,12 +164,25 @@ const CurrenciesPage = () => {
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
+                name="code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Currency Code*</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} readOnly placeholder="Generating..." className="bg-slate-50 text-slate-700" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="country"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Country</FormLabel>
+                    <FormLabel>Country*</FormLabel>
                     <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger></FormControl>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {(countriesQuery.data ?? []).map((country) => (
                           <SelectItem key={country.id} value={String(country.id)}>{country.name}</SelectItem>
@@ -174,18 +194,15 @@ const CurrenciesPage = () => {
                 )}
               />
               <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="code" render={({ field }) => (
-                <FormItem><FormLabel>Code</FormLabel><FormControl><Input {...field} className="uppercase" /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="symbol" render={({ field }) => (
-                <FormItem><FormLabel>Symbol</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Symbol*</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
               )} />
             </div>
             <FormField control={form.control} name="is_active" render={({ field }) => (
               <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
-                <FormLabel>Active status</FormLabel>
+                <FormLabel>Active Status*</FormLabel>
                 <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
               </FormItem>
             )} />

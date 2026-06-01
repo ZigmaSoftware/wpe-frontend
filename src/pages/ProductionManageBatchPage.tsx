@@ -33,6 +33,7 @@ import {
   productionFieldLabelClassName,
   productionHelperTextClassName,
 } from "@/features/production/components/order-dialog/productionOrderFormStyles";
+import { PRODUCTION_AD_WEIGHTAGE_ROUTE, getProductionEditRoute } from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type {
@@ -281,6 +282,7 @@ const ProductionManageBatchPage = () => {
     queryClient.invalidateQueries({ queryKey: ["production-batches", orderId] });
     queryClient.invalidateQueries({ queryKey: ["production-order", orderId] });
     queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
     queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
   };
 
@@ -438,7 +440,7 @@ const ProductionManageBatchPage = () => {
             type="button"
             variant="ghost"
             className="h-8 rounded-full px-2.5 text-sm font-medium text-slate-600 hover:bg-white/80 hover:text-slate-900"
-            onClick={() => navigate("/app/production")}
+            onClick={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Production
@@ -514,7 +516,7 @@ const ProductionManageBatchPage = () => {
                   title="Invalid production order"
                   description="The Manage Batch route is missing a valid order identifier."
                   action={
-                    <Button variant="outline" onClick={() => navigate("/app/production")}>
+                    <Button variant="outline" onClick={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
                       Return to Production
                     </Button>
                   }
@@ -525,7 +527,7 @@ const ProductionManageBatchPage = () => {
                 <ErrorState
                   description={getApiErrorMessage(orderQ.error, "Could not load the selected production order.")}
                   action={
-                    <Button variant="outline" onClick={() => navigate("/app/production")}>
+                    <Button variant="outline" onClick={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
                       Return to Production
                     </Button>
                   }
@@ -656,7 +658,7 @@ const ProductionManageBatchPage = () => {
                             size="sm"
                             variant="outline"
                             className="h-9 rounded-md px-3 text-xs"
-                            onClick={() => navigate(`/app/production/${orderId}/edit`)}
+                            onClick={() => navigate(getProductionEditRoute(orderId))}
                           >
                             Edit
                           </Button>

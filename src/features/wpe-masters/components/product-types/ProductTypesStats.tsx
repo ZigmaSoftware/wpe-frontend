@@ -14,13 +14,13 @@ type ProductTypesStatsProps = {
 const statItems = [
   {
     key: "categories",
-    label: "Total Categories",
+    label: "Item Categories",
     hint: "Governed parent classifications",
     icon: Layers,
   },
   {
     key: "subtypes",
-    label: "Total Subtypes",
+    label: "Item Sub Categories",
     hint: "Reusable child mappings",
     icon: Box,
   },
@@ -32,7 +32,7 @@ const statItems = [
   },
   {
     key: "activeSubtypes",
-    label: "Active Subtypes",
+    label: "Active Sub Categories",
     hint: "Live selections across modules",
     icon: PackageSearch,
   },

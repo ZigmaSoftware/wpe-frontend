@@ -659,7 +659,7 @@ const UserScreenPermissionAssignmentPage = () => {
   if (isEditMode && permissionDetailQuery.isError) {
     return (
       <ErrorState
-        description="The selected user screen permission could not be loaded."
+        description="The selected user type permission could not be loaded."
         action={
           <Button variant="outline" onClick={() => permissionDetailQuery.refetch()}>
             Retry
@@ -684,7 +684,7 @@ const UserScreenPermissionAssignmentPage = () => {
           <span className="text-slate-300">|</span>
           <span>Masters</span>
           <ChevronRight className="h-4 w-4" />
-          <span>User Screen Permission</span>
+          <span>User Type Permissions</span>
           <ChevronRight className="h-4 w-4" />
           <span className="font-medium text-slate-900">
             {isEditMode ? "Edit Assignment" : "New Assignment"}
@@ -692,7 +692,7 @@ const UserScreenPermissionAssignmentPage = () => {
         </div>
 
         <PageHeader
-          title={isEditMode ? "Edit User Screen Permission" : "Create User Screen Permission"}
+          title={isEditMode ? "Edit User Type Permissions" : "Create User Type Permissions"}
           description={
             isEditMode
               ? "Adjust screen-level permissions in one place and save the final assignment once."

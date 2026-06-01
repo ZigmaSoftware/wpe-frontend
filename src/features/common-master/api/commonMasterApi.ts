@@ -67,6 +67,11 @@ const unwrapMutation = <T>(payload: ApiMutationResponse<T> | T): T => {
   return payload as T;
 };
 
+const fetchNextCode = async (url: string) => {
+  const response = await coreApi.get<{ code: string }>(url);
+  return response.data.code;
+};
+
 const withStatus = <T extends { is_active?: boolean; status?: boolean }>(record: T) => ({
   ...record,
   status: record.status ?? Boolean(record.is_active),
@@ -106,6 +111,7 @@ export const commonMasterApi = {
     );
     return normalizeListPayload(response.data).map(toContinentRecord);
   },
+  getNextContinentCode: async () => fetchNextCode("/api/masters/continents/next-code/"),
   createContinent: async (payload: Partial<ContinentRecord>) => {
     const response = await coreApi.post<ApiMutationResponse<ContinentRecord>>("/api/masters/continents/create/", {
       ...payload,
@@ -141,11 +147,12 @@ export const commonMasterApi = {
         country_name: record.name,
         country_code: record.code,
         continent: record.continent_name ?? "-",
-        currency: "-",
+        currency: record.currency_code || record.currency_name || "-",
         status: (record.status ?? record.is_active) ? "Active" : "Inactive",
       })) satisfies CountryListRow[],
     };
   },
+  getNextCountryCode: async () => fetchNextCode("/api/masters/countries/next-code/"),
   getCountry: async (id: number) => {
     const response = await coreApi.get<CountryRecord>(`/api/masters/countries/${id}/`);
     return toCountryRecord(response.data);
@@ -186,11 +193,13 @@ export const commonMasterApi = {
     return normalized.items.map((record, index) => ({
       id: record.id,
       sno: params ? (params.page - 1) * params.pageSize + index + 1 : index + 1,
+      state_code: record.code ?? "-",
       country: record.country_name ?? "-",
       state_name: record.name,
       is_active: record.is_active,
     })) satisfies StateListRow[];
   },
+  getNextStateCode: async () => fetchNextCode("/api/masters/states/next-code/"),
   getState: async (id: number) => {
     const response = await coreApi.get<StateRecord>(`/api/masters/states/${id}/`);
     return response.data;
@@ -233,6 +242,7 @@ export const commonMasterApi = {
       items: normalized.items.map((record, index) => ({
         id: record.id,
         sno: (params.page - 1) * params.pageSize + index + 1,
+        city_code: record.code ?? "-",
         city: record.name,
         state: record.state_name ?? "-",
         country: record.country_name ?? "-",
@@ -241,6 +251,7 @@ export const commonMasterApi = {
       })) satisfies CityListRow[],
     };
   },
+  getNextCityCode: async () => fetchNextCode("/api/masters/cities/next-code/"),
   listCityRecords: async (params: TableParams) => {
     const response = await coreApi.get<DRFPaginatedResponse<CityRecord> | DatatableResponse<CityRecord>>("/api/masters/cities/", {
       params: toQueryParams(params),
@@ -290,13 +301,15 @@ export const commonMasterApi = {
       items: normalized.items.map((record, index) => ({
         id: record.id,
         sno: (params.page - 1) * params.pageSize + index + 1,
+        tax_code: record.code ?? "-",
         tax_name: record.name,
         tax_value: Number(record.value),
-        country: record.country_name ?? "Global",
+        country: record.country_name ?? "-",
         status: record.is_active,
       })) satisfies TaxListRow[],
     };
   },
+  getNextTaxCode: async () => fetchNextCode("/api/masters/taxes/next-code/"),
   getTax: async (id: number) => {
     const response = await coreApi.get<TaxRecord>(`/api/masters/taxes/${id}/`);
     return response.data;
@@ -323,6 +336,7 @@ export const commonMasterApi = {
     });
     return normalizePaginated(response.data);
   },
+  getNextCurrencyCode: async () => fetchNextCode("/api/masters/currencies/next-code/"),
   getCurrency: async (id: number) => {
     const response = await coreApi.get<CurrencyRecord>(`/api/masters/currencies/${id}/`);
     return response.data;
@@ -481,8 +495,11 @@ export const commonMasterApi = {
         sno: (params.page - 1) * params.pageSize + index + 1,
         company_name: record.name,
         company_code: record.code,
+        country: record.country_name ?? "",
         state: record.state_name ?? "",
         city: record.city_name ?? "",
+        manager_name: record.contact_person ?? "",
+        contact_number: record.mobile_no ?? "",
         pincode: record.pincode ?? "",
         latitude: record.latitude ?? "",
         longitude: record.longitude ?? "",
@@ -492,6 +509,7 @@ export const commonMasterApi = {
       })) satisfies CompanyListRow[],
     };
   },
+  getNextCompanyCode: async () => fetchNextCode("/api/masters/company/next-code/"),
   getCompany: async (id: number) => {
     const response = await coreApi.get<CompanyRecord>(`/api/masters/company/${id}/`);
     return response.data;

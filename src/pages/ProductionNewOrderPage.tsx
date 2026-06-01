@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import type { CreateProductionOrderPayload } from "@/features/production/components/order-dialog/productionOrderForm";
+import { PRODUCTION_AD_WEIGHTAGE_ROUTE } from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type { ProductionMachine } from "@/lib/types";
@@ -25,17 +26,18 @@ const ProductionNewOrderPage = () => {
     onSuccess: () => {
       toast.success("Production order created.");
       queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
       queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
-      navigate("/app/production");
+      navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE);
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to create order.")),
   });
 
   return (
-    <ProductionOrderPageLayout onBack={() => navigate("/app/production")}>
+    <ProductionOrderPageLayout onBack={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
       <ProductionOrderForm
         onSubmit={(values) => createOrderMutation.mutate(values)}
-        onCancel={() => navigate("/app/production")}
+        onCancel={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}
         isSubmitting={createOrderMutation.isPending}
         machines={machinesQ.data ?? []}
         machinesLoading={machinesQ.isLoading}

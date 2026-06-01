@@ -3,7 +3,7 @@ import SimpleMasterPage from "./SimpleMasterPage";
 
 const LocationMasterPage = () => (
   <SimpleMasterPage
-    title="Location Master"
+    title="Location"
     description="Manage locations such as warehouses, work centers, and WIP areas."
     queryKey="locations"
     api={wpeMastersApi.locations}

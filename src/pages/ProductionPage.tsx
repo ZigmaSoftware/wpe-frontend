@@ -8,8 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { coreApi } from "@/lib/api";
-import { formatDate, normalizeListResponse } from "@/lib/api-helpers";
+import { productionWorkspaceApi } from "@/features/production/api/productionWorkspaceApi";
+import {
+  PRODUCTION_NEW_ORDER_ROUTE,
+  getProductionManageBatchRoute,
+} from "@/features/production/utils/routes";
+import { formatDate } from "@/lib/api-helpers";
 import type { ProductionOrder } from "@/lib/types";
 
 const ProductionPage = () => {
@@ -27,10 +31,7 @@ const ProductionPage = () => {
 
   const ordersQ = useQuery({
     queryKey: ["production-orders"],
-    queryFn: async () => {
-      const response = await coreApi.get<unknown>("/api/production/production/");
-      return normalizeListResponse<ProductionOrder>(response.data);
-    },
+    queryFn: productionWorkspaceApi.listOrders,
   });
 
   const filteredOrders = (ordersQ.data ?? []).filter((order) => {
@@ -49,7 +50,7 @@ const ProductionPage = () => {
         title="Production"
         description="Manage production orders, batches, and weighment entries."
         actions={
-          <Button onClick={() => navigate("/app/production/neworder")}>
+          <Button onClick={() => navigate(PRODUCTION_NEW_ORDER_ROUTE)}>
             <Plus className="mr-2 h-4 w-4" />
             New Order
           </Button>
@@ -103,7 +104,7 @@ const ProductionPage = () => {
                   <TableRow
                     key={order.id}
                     className="cursor-pointer hover:bg-slate-50/80"
-                    onClick={() => navigate(`/app/production/manage-batch/${order.id}`)}
+                    onClick={() => navigate(getProductionManageBatchRoute(order.id))}
                   >
                     <TableCell className="font-mono text-xs font-medium">{order.production_id}</TableCell>
                     <TableCell className="text-muted-foreground">-</TableCell>
@@ -117,7 +118,7 @@ const ProductionPage = () => {
                           variant="outline"
                           onClick={(event) => {
                             event.stopPropagation();
-                            navigate(`/app/production/manage-batch/${order.id}`);
+                            navigate(getProductionManageBatchRoute(order.id));
                           }}
                         >
                           Manage Batch

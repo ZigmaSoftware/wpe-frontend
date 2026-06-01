@@ -5,13 +5,11 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState } from "@/components/QueryState";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { itemsInventoryApi } from "@/features/items/api/inventoryApi";
 import { itemsInventoryQueryKeys } from "@/features/items/api/queryKeys";
 import InventoryHistorySheet from "@/features/items/components/InventoryHistorySheet";
-import InventorySummaryTable from "@/features/items/components/InventorySummaryTable";
+import { BLENDING_INVENTORY_ROUTE } from "@/features/items/utils/routes";
 import {
   INVENTORY_MODULES,
   type InventoryHistoryState,
@@ -45,6 +43,8 @@ const isAccessDeniedError = (error: unknown) => axios.isAxiosError(error) && err
 
 const getPageSizeNumber = (pageSize: StorePageSizeValue, total: number) => (pageSize === "all" ? Math.max(total, 1) : Number(pageSize));
 const getPageCount = (pageSize: StorePageSizeValue, total: number) => Math.max(1, Math.ceil(total / getPageSizeNumber(pageSize, total)));
+const getToolbarPageSizeValue = (pageSize: number): StorePageSizeValue =>
+  pageSize === 10 || pageSize === 20 || pageSize === 50 || pageSize === 100 ? String(pageSize) as StorePageSizeValue : "20";
 const paginateRows = <T,>(rows: T[], page: number, pageSize: StorePageSizeValue) => {
   if (pageSize === "all") return rows;
   const pageLength = Number(pageSize);
@@ -52,9 +52,12 @@ const paginateRows = <T,>(rows: T[], page: number, pageSize: StorePageSizeValue)
   return rows.slice(start, start + pageLength);
 };
 
-const ItemsPage = () => {
+type ItemsPageProps = {
+  module?: InventoryModule;
+};
+
+const ItemsPage = ({ module = "store" }: ItemsPageProps) => {
   const navigate = useNavigate();
-  const [activeModule, setActiveModule] = useState<InventoryModule>("store");
   const [summaryState, setSummaryState] = useState<Record<InventoryModule, InventorySummaryState>>({
     store: createSummaryState(),
     blending: createSummaryState(),
@@ -71,6 +74,7 @@ const ItemsPage = () => {
   const storeSummaryQuery = useQuery({
     queryKey: ["items", "inventory", "store", "stock-summary", deferredStoreSearch],
     queryFn: () => storeApi.listStockSummary({ search: deferredStoreSearch }),
+    enabled: module === "store",
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -86,19 +90,25 @@ const ItemsPage = () => {
         pageSize: summaryState.blending.pageSize,
         search: deferredBlendingSearch,
       }),
+    enabled: module === "blending" || module === "store",
     retry: false,
     placeholderData: (previousData) => previousData,
   });
 
   useEffect(() => {
-    if (activeModule === "store" && isAccessDeniedError(storeSummaryQuery.error) && !blendingSummaryQuery.isError) {
-      setActiveModule("blending");
+    if (
+      module === "store" &&
+      isAccessDeniedError(storeSummaryQuery.error) &&
+      blendingSummaryQuery.isFetched &&
+      !blendingSummaryQuery.isError
+    ) {
+      navigate(BLENDING_INVENTORY_ROUTE, { replace: true });
     }
-  }, [activeModule, blendingSummaryQuery.isError, storeSummaryQuery.error]);
+  }, [blendingSummaryQuery.isError, blendingSummaryQuery.isFetched, module, navigate, storeSummaryQuery.error]);
 
   const historyQuery = useQuery({
     enabled: Boolean(historyTarget),
-    queryKey: itemsInventoryQueryKeys.history(historyTarget?.module ?? activeModule, historyTarget?.row.item_id ?? null, {
+    queryKey: itemsInventoryQueryKeys.history(historyTarget?.module ?? module, historyTarget?.row.item_id ?? null, {
       ...historyState,
       deferredSearch: deferredHistorySearch,
     }),
@@ -166,6 +176,33 @@ const ItemsPage = () => {
       });
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Unable to export store inventory."));
+    }
+  };
+
+  const handleBlendingExport = async (format: StoreExportFormat) => {
+    try {
+      const columns: StoreExportColumn<InventorySummaryRow>[] = [
+        { label: "Item Code", value: (row) => row.item_code },
+        { label: "Item Name", value: (row) => row.item_name },
+        { label: "Current Stock", value: (row) => formatDecimal(row.current_stock) },
+        { label: "Unit", value: (row) => row.unit },
+        { label: "Total Inward", value: (row) => formatDecimal(row.total_inward) },
+        { label: "Total Outward", value: (row) => formatDecimal(row.total_outward) },
+        { label: "Last Updated", value: (row) => formatDateTime(row.last_updated) },
+      ];
+      const rows = await itemsInventoryApi.listAllSummary("blending", {
+        search: deferredBlendingSearch,
+      });
+
+      exportTableData({
+        title: "Blending Inventory",
+        filename: "items-blending-inventory",
+        rows,
+        columns,
+        format,
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Unable to export blending inventory."));
     }
   };
 
@@ -293,78 +330,159 @@ const ItemsPage = () => {
     const query = summaryQueries.blending;
     const state = summaryState.blending;
     const accessDenied = isAccessDeniedError(query.error);
+    const rows = query.data?.items ?? [];
+    const total = query.data?.total ?? 0;
+
+    if (query.isLoading) {
+      return (
+        <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <StoreTableToolbar
+            searchValue={state.search}
+            onSearchChange={(value) =>
+              updateSummaryState("blending", (current) => ({
+                ...current,
+                search: value,
+                page: 1,
+              }))
+            }
+            pageSize={getToolbarPageSizeValue(state.pageSize)}
+            onPageSizeChange={(value) =>
+              updateSummaryState("blending", (current) => ({
+                ...current,
+                pageSize: value === "all" ? 100 : Number(value),
+                page: 1,
+              }))
+            }
+            pageSizeOptions={["10", "20", "50", "100"]}
+            onExport={(format) => {
+              void handleBlendingExport(format);
+            }}
+            summaryText="Loading blending inventory..."
+            isFetching
+          />
+          <div className="py-8 text-sm text-muted-foreground">Loading blending inventory...</div>
+        </div>
+      );
+    }
+
+    if (query.isError) {
+      return (
+        <ErrorState description={accessDenied ? config.accessDescription : getApiErrorMessage(query.error, "Unable to load blending inventory.")} />
+      );
+    }
 
     return (
-      <InventorySummaryTable
-        rows={query.data?.items ?? []}
-        isLoading={query.isLoading}
-        isError={query.isError}
-        errorDescription={
-          accessDenied ? config.accessDescription : getApiErrorMessage(query.error, `Unable to load ${config.label.toLowerCase()}.`)
-        }
-        emptyTitle={config.emptyTitle}
-        emptyDescription={config.emptyDescription}
-        page={state.page}
-        pageSize={state.pageSize}
-        total={query.data?.total ?? 0}
-        onPageChange={(page) =>
-          updateSummaryState("blending", (current) => ({
-            ...current,
-            page,
-          }))
-        }
-        onPageSizeChange={(pageSize) =>
-          updateSummaryState("blending", (current) => ({
-            ...current,
-            pageSize,
-            page: 1,
-          }))
-        }
-        onRetry={() => {
-          void query.refetch();
-        }}
-        onRowClick={(row) => openHistory("blending", row)}
-      />
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <StoreTableToolbar
+          searchValue={state.search}
+          onSearchChange={(value) =>
+            updateSummaryState("blending", (current) => ({
+              ...current,
+              search: value,
+              page: 1,
+            }))
+          }
+          pageSize={getToolbarPageSizeValue(state.pageSize)}
+          onPageSizeChange={(value) =>
+            updateSummaryState("blending", (current) => ({
+              ...current,
+              pageSize: value === "all" ? 100 : Number(value),
+              page: 1,
+            }))
+          }
+          pageSizeOptions={["10", "20", "50", "100"]}
+          onExport={(format) => {
+            void handleBlendingExport(format);
+          }}
+          summaryText={`${total} blending rows available`}
+          isFetching={query.isFetching}
+        />
+
+        {rows.length ? (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                  <TableRow className="hover:bg-card">
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-right">Current Stock</TableHead>
+                    <TableHead className="hidden md:table-cell">Unit</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Total Inward</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">Total Outward</TableHead>
+                    <TableHead className="hidden xl:table-cell">Last Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => (
+                    <TableRow
+                      key={`${row.item_id}-${row.item_code}`}
+                      tabIndex={0}
+                      role="button"
+                      className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => openHistory("blending", row)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openHistory("blending", row);
+                        }
+                      }}
+                    >
+                      <TableCell>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-card-foreground">{row.item_name}</div>
+                            <div className="truncate font-mono text-xs text-muted-foreground">{row.item_code}</div>
+                            <div className="mt-1 space-y-1 text-xs text-muted-foreground md:hidden">
+                              <div>Unit: {row.unit}</div>
+                              <div>Updated: {formatDateTime(row.last_updated)}</div>
+                            </div>
+                          </div>
+                          <ArrowUpRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-card-foreground">{formatDecimal(row.current_stock)}</TableCell>
+                      <TableCell className="hidden md:table-cell">{row.unit}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-right">{formatDecimal(row.total_inward)}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-right">{formatDecimal(row.total_outward)}</TableCell>
+                      <TableCell className="hidden xl:table-cell">{formatDateTime(row.last_updated)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <StoreTablePagination
+              page={state.page}
+              pageSize={state.pageSize}
+              total={total}
+              onPageChange={(page) =>
+                updateSummaryState("blending", (current) => ({
+                  ...current,
+                  page,
+                }))
+              }
+            />
+          </div>
+        ) : (
+          <EmptyState title={config.emptyTitle} description={config.emptyDescription} />
+        )}
+      </div>
     );
   };
 
-  const activeConfig = INVENTORY_MODULES[activeModule];
+  const activeConfig = INVENTORY_MODULES[module];
+  const isStoreModule = module === "store";
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Items Inventory"
-        description="Inventory monitoring only. Item master management, imports, and direct movement posting have been removed from this workspace."
+        title={activeConfig.label}
+        description={
+          isStoreModule
+            ? "Monitor store inventory balances, search stock rows, export the current stock view, and drill into store stock movement."
+            : "Monitor blending inventory balances, search stock rows, export the current stock view, and inspect inventory movement history."
+        }
       />
-
-      <Tabs value={activeModule} onValueChange={(value) => setActiveModule(value as InventoryModule)} className="space-y-4">
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <TabsList className="h-auto flex-wrap bg-slate-100/80 p-1">
-            {(Object.entries(INVENTORY_MODULES) as Array<[InventoryModule, (typeof INVENTORY_MODULES)[InventoryModule]]>).map(
-              ([module, config]) => (
-                <TabsTrigger key={module} value={module} className="gap-2">
-                  <span>{config.label}</span>
-                  <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                    {module === "store" ? storeRows.length : summaryQueries[module].data?.total ?? 0}
-                  </span>
-                </TabsTrigger>
-              ),
-            )}
-          </TabsList>
-          <div className="mt-4 text-sm text-muted-foreground">
-            {activeModule === "store"
-              ? "Store inventory now follows the same compact table controls and interactions as Store Stock."
-              : `${summaryQueries.blending.data?.total ?? 0} monitored item rows in the ${activeConfig.label.toLowerCase()} view.`}
-          </div>
-        </div>
-
-        <TabsContent value="store" className="space-y-0">
-          {renderStoreInventory()}
-        </TabsContent>
-        <TabsContent value="blending" className="space-y-0">
-          {renderBlendingTab()}
-        </TabsContent>
-      </Tabs>
+      {isStoreModule ? renderStoreInventory() : renderBlendingTab()}
 
       <InventoryHistorySheet
         open={Boolean(historyTarget)}

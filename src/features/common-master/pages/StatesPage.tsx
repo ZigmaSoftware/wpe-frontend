@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -16,7 +16,7 @@ import MasterTable from "@/features/common-master/components/MasterTable";
 import MasterToolbar from "@/features/common-master/components/MasterToolbar";
 import RowActions from "@/features/common-master/components/RowActions";
 import { stateSchema, type StateFormValues } from "@/features/common-master/schemas";
-import type { CountryRecord, StateListRow } from "@/features/common-master/types";
+import type { StateListRow } from "@/features/common-master/types";
 import { useCommonMasterMutations } from "@/features/common-master/hooks/useCommonMasterMutations";
 import { useCountryOptions } from "@/features/common-master/hooks/useLookupOptions";
 import { useDebouncedValue } from "@/features/common-master/hooks/useDebouncedValue";
@@ -24,6 +24,7 @@ import { useTableSearchParams } from "@/features/common-master/hooks/useTableSea
 import { applyBackendErrors } from "@/features/common-master/hooks/useFormErrorMapper";
 
 const defaultValues: StateFormValues = {
+  code: "",
   country: 0,
   name: "",
   is_active: true,
@@ -39,7 +40,7 @@ const StatesPage = () => {
 
   const countryOptionsQuery = useCountryOptions();
   const statesQuery = useQuery({
-    queryKey: ["common-masters", "states", debouncedSearch],
+    queryKey: ["common-masters", "states", debouncedSearch, countryFilter],
     queryFn: commonMasterApi.listStates,
     select: (rows) =>
       rows.filter((row) => {
@@ -49,6 +50,11 @@ const StatesPage = () => {
         const matchesCountry = countryFilter === "all" || row.country === countryFilter;
         return matchesSearch && matchesCountry;
       }),
+  });
+  const nextCodeQuery = useQuery({
+    queryKey: ["common-masters", "next-code", "states"],
+    queryFn: commonMasterApi.getNextStateCode,
+    enabled: false,
   });
 
   const createMutation = useCommonMasterMutations({
@@ -64,21 +70,15 @@ const StatesPage = () => {
     errorMessage: "Unable to update state status.",
   });
 
-  const countryByName = useMemo(() => {
-    const index = new Map<string, CountryRecord>();
-    (countryOptionsQuery.data ?? []).forEach((country) => index.set(country.name, country as unknown as CountryRecord));
-    return index;
-  }, [countryOptionsQuery.data]);
-
   const records = statesQuery.data ?? [];
-  const paged = useMemo(() => {
-    const start = (table.page - 1) * table.pageSize;
-    return records.slice(start, start + table.pageSize);
-  }, [records, table.page, table.pageSize]);
+  const start = (table.page - 1) * table.pageSize;
+  const paged = records.slice(start, start + table.pageSize);
 
-  const openCreate = () => {
+  const openCreate = async () => {
     form.reset(defaultValues);
     setDialogOpen(true);
+    const result = await nextCodeQuery.refetch();
+    form.setValue("code", result.data ?? "");
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -94,8 +94,8 @@ const StatesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="States"
-        description="Maintain state masters with country dependency for city and address flows."
+        title="State"
+        description="Manage states mapped to countries."
       />
       <MasterToolbar
         search={table.search}
@@ -116,6 +116,7 @@ const StatesPage = () => {
       />
       <MasterTable
         columns={[
+          { key: "state_code", title: "State Code", render: (record) => <span className="font-mono text-xs">{record.state_code}</span> },
           { key: "state_name", title: "State", render: (record) => <div className="font-medium">{record.state_name}</div> },
           { key: "country", title: "Country", render: (record) => record.country },
           { key: "status", title: "Status", render: (record) => <MasterStatusBadge active={record.is_active} /> },
@@ -129,7 +130,7 @@ const StatesPage = () => {
         records={paged}
         isLoading={statesQuery.isLoading}
         isError={statesQuery.isError}
-        errorDescription="States could not be loaded."
+        errorDescription="State records could not be loaded."
         emptyTitle="No states found"
         emptyDescription="Create states after your country master is ready."
         page={table.page}
@@ -144,12 +145,25 @@ const StatesPage = () => {
           <form onSubmit={onSubmit} className="space-y-4">
             <FormField
               control={form.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State Code*</FormLabel>
+                  <FormControl>
+                    <Input {...field} value={field.value ?? ""} readOnly placeholder="Generating..." className="bg-slate-50 text-slate-700" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="country"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Country</FormLabel>
+                  <FormLabel>Country*</FormLabel>
                   <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {(countryOptionsQuery.data ?? []).map((country) => (
                         <SelectItem key={country.id} value={String(country.id)}>{country.name}</SelectItem>
@@ -158,17 +172,17 @@ const StatesPage = () => {
                   </Select>
                   <FormMessage />
                 </FormItem>
-              )}
-            />
-            <FormField control={form.control} name="name" render={({ field }) => (
-              <FormItem><FormLabel>State name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                )}
+              />
+              <FormField control={form.control} name="name" render={({ field }) => (
+              <FormItem><FormLabel>State Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField
               control={form.control}
               name="is_active"
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
-                  <FormLabel>Active status</FormLabel>
+                  <FormLabel>Active Status*</FormLabel>
                   <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                 </FormItem>
               )}

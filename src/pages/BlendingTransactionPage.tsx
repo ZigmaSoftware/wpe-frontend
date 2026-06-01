@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { blendingApi } from "@/features/blending/api/blendingApi";
+import { BLENDING_TRANSACTIONS_ROUTE } from "@/features/blending/utils/routes";
 import StoreTablePagination from "@/features/store/components/StoreTablePagination";
 import StoreTableToolbar, { type StoreExportFormat, type StorePageSizeValue } from "@/features/store/components/StoreTableToolbar";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
@@ -109,7 +110,7 @@ const BlendingTransactionPage = () => {
         description="Review the products issued through this store request transaction."
         actions={
           <Button asChild variant="outline">
-            <Link to="/app/blending">Back to Blending</Link>
+            <Link to={BLENDING_TRANSACTIONS_ROUTE}>Back to Blending Transactions</Link>
           </Button>
         }
       />

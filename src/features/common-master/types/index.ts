@@ -64,6 +64,9 @@ export type CountryRecord = {
   continent_name?: string;
   name: string;
   code: string;
+  currency?: number | null;
+  currency_name?: string | null;
+  currency_code?: string | null;
   is_active?: boolean;
   status: boolean;
   created_at?: string;
@@ -84,6 +87,7 @@ export type StateRecord = {
   id: number;
   unique_id?: string;
   name: string;
+  code?: string | null;
   country: number;
   country_name?: string;
   is_active: boolean;
@@ -93,6 +97,7 @@ export type StateRecord = {
 export type StateListRow = {
   id: number;
   sno: number;
+  state_code: string;
   country: string;
   state_name: string;
   is_active: boolean;
@@ -111,6 +116,7 @@ export type CityRecord = {
   state: number;
   state_name?: string;
   name: string;
+  code?: string | null;
   pincode?: string | null;
   city_type?: number | null;
   city_type_name?: string;
@@ -121,6 +127,7 @@ export type CityRecord = {
 export type CityListRow = {
   id: number;
   sno: number;
+  city_code: string;
   city: string;
   state: string;
   country: string;
@@ -134,6 +141,7 @@ export type TaxRecord = {
   country?: number | null;
   country_name?: string;
   name: string;
+  code?: string | null;
   value: string | number;
   is_active: boolean;
   created_at?: string;
@@ -142,6 +150,7 @@ export type TaxRecord = {
 export type TaxListRow = {
   id: number;
   sno: number;
+  tax_code: string;
   tax_name: string;
   tax_value: number;
   country: string;
@@ -357,6 +366,9 @@ export type CompanyRecord = {
   unique_id?: string;
   name: string;
   code: string;
+  gst_number?: string | null;
+  pan_number?: string | null;
+  address?: string | null;
   country?: number | null;
   country_name?: string;
   state?: number | null;
@@ -364,6 +376,9 @@ export type CompanyRecord = {
   city?: number | null;
   city_name?: string;
   pincode?: string | null;
+  contact_person?: string | null;
+  mobile_no?: string | null;
+  email?: string | null;
   latitude?: string | number | null;
   longitude?: string | number | null;
   logo?: File | string | null;
@@ -379,8 +394,11 @@ export type CompanyListRow = {
   sno: number;
   company_name: string;
   company_code: string;
+  country: string;
   state: string;
   city: string;
+  manager_name: string;
+  contact_number: string;
   pincode: string;
   latitude: string | number | null;
   longitude: string | number | null;

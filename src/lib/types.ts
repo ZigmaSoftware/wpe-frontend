@@ -391,6 +391,7 @@ export type BOMVariantComponent = {
   item_name: string;
   category: string;
   is_active: boolean | null;
+  source_active?: boolean | null;
   target_weight_grams: string;
   min_weight_grams: string;
   max_weight_grams: string;
@@ -406,6 +407,12 @@ export type BOMVariant = {
   product_item: number | null;
   product_item_name: string | null;
   revision: string;
+  batch_size?: string | null;
+  batch_uom?: string;
+  status?: "DRAFT" | "APPROVED" | "INACTIVE";
+  approved_by?: number | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
   is_active: boolean;
   notes: string;
   component_count?: number;
@@ -498,6 +505,22 @@ export type ProductionOrder = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ProductionStageRecord = {
+  id: number;
+  order_id: number;
+  production_id: string;
+  stage: "BL" | "GL" | "PR";
+  production_type: string;
+  batch_no: string | null;
+  production_date: string;
+  shift: string;
+  line_no: string;
+  start_date_time: string | null;
+  end_date_time: string | null;
+  plan_id: string | null;
+  status: string;
 };
 
 export type ImportResponse = {
