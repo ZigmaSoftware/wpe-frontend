@@ -248,6 +248,7 @@ const CodeMasterPage = <
                 onEdit={() => openEdit(record)}
                 onToggle={() => setToggleTarget(record)}
                 onDelete={allowDelete ? () => setDeleteTarget(record) : undefined}
+                isActive={record.is_active}
               />
             ),
           },

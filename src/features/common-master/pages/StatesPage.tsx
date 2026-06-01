@@ -124,7 +124,7 @@ const StatesPage = () => {
             key: "actions",
             title: "Actions",
             className: "w-[120px] text-right",
-            render: (record) => <RowActions onToggle={() => setToggleTarget(record)} />,
+            render: (record) => <RowActions onToggle={() => setToggleTarget(record)} isActive={record.is_active} />,
           },
         ]}
         records={paged}

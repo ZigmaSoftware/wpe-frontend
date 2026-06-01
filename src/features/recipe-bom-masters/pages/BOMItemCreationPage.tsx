@@ -392,6 +392,7 @@ const BOMItemCreationPage = () => {
                   setDialogOpen(true);
                 }}
                 onToggle={() => setToggleTarget(record)}
+                isActive={record.is_active}
               />
             ),
           },

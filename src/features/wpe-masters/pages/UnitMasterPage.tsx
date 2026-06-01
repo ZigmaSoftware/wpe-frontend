@@ -158,6 +158,7 @@ const UnitMasterPage = () => {
                 }}
                 onToggle={() => setToggleTarget(record)}
                 onDelete={() => setDeleteTarget(record)}
+                isActive={record.is_active}
               />
             ),
           },

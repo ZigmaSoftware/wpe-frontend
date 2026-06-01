@@ -136,6 +136,7 @@ const CurrenciesPage = () => {
                 onEdit={() => openEdit(record)}
                 onToggle={() => setToggleTarget(record)}
                 onDelete={() => setDeleteTarget(record)}
+                isActive={record.is_active}
               />
             ),
           },

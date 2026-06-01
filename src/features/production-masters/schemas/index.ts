@@ -25,10 +25,12 @@ export const profileCreationSchema = z.object({
   profile_size: z.coerce.number().min(1, "Profile size is required."),
   color: z.coerce.number().min(1, "Color is required."),
   length: numericRequired("Length", 0.001),
-  weight_per_piece: numericOptional("Weight per piece"),
+  weight_per_piece: numericRequired("Weight per piece", 0.001),
   uom: z.enum(["NOS", "METER"], { required_error: "UOM is required." }),
   packing_type: z.coerce.number().nullable().optional(),
   is_active: z.boolean().default(true),
+  image: z.instanceof(File).nullable().optional(),
+  image_url: z.string().optional(),
 });
 
 export const profileSizeSchema = baseCodeSchema.extend({

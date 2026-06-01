@@ -218,6 +218,7 @@ const ProductCategoryList = ({
                             onEdit={onEditCategory ? () => onEditCategory(record) : undefined}
                             onToggle={onToggleCategory ? () => onToggleCategory(record) : undefined}
                             onDelete={onDeleteCategory ? () => onDeleteCategory(record) : undefined}
+                            isActive={record.is_active}
                           />
                         </TableCell>
                       </TableRow>

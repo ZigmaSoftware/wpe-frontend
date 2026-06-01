@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import ProfileImageField from "@/features/production-masters/components/ProfileImageField";
 import {
   Select,
   SelectContent,
@@ -21,10 +22,12 @@ const defaultValues: ProfileCreationFormValues = {
   profile_size: 0,
   color: 0,
   length: 0,
-  weight_per_piece: undefined,
+  weight_per_piece: 0,
   uom: "NOS",
   packing_type: null,
   is_active: true,
+  image: null,
+  image_url: "",
 };
 
 const ProfileCreationsPage = () => {
@@ -60,10 +63,12 @@ const ProfileCreationsPage = () => {
         profile_size: record.profile_size,
         color: record.color,
         length: Number(record.length),
-        weight_per_piece: record.weight_per_piece ? Number(record.weight_per_piece) : undefined,
+        weight_per_piece: record.weight_per_piece ? Number(record.weight_per_piece) : 0,
         uom: record.uom,
         packing_type: record.packing_type,
         is_active: record.is_active,
+        image: null,
+        image_url: record.image_url ?? "",
       })}
       mapFormToPayload={(values) => ({
         name: values.name,
@@ -71,10 +76,11 @@ const ProfileCreationsPage = () => {
         profile_size: values.profile_size,
         color: values.color,
         length: values.length,
-        weight_per_piece: values.weight_per_piece ?? null,
+        weight_per_piece: values.weight_per_piece,
         uom: values.uom,
         packing_type: values.packing_type || null,
         is_active: values.is_active,
+        image: values.image,
       })}
       codeLabel="Product Code*"
       nameLabel="Product Name*"
@@ -183,7 +189,7 @@ const ProfileCreationsPage = () => {
             name="weight_per_piece"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Weight Per Piece</FormLabel>
+                <FormLabel>Weight Per Piece*</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -241,6 +247,26 @@ const ProfileCreationsPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="image"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Product Image</FormLabel>
+                <FormControl>
+                  <ProfileImageField
+                    value={field.value}
+                    existingUrl={form.watch("image_url")}
+                    onChange={(file) => {
+                      field.onChange(file);
+                      if (!file) form.setValue("image_url", "");
+                    }}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

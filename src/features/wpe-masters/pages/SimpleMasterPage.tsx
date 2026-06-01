@@ -110,6 +110,7 @@ const SimpleMasterPage = ({ title, description, queryKey, api }: Props) => {
                 onEdit={() => { setEditing(r); form.reset({ name: r.name, is_active: r.is_active }); setDialogOpen(true); }}
                 onToggle={() => setToggleTarget(r)}
                 onDelete={() => setDeleteTarget(r)}
+                isActive={r.is_active}
               />
             ),
           },

@@ -31,6 +31,21 @@ import type {
 
 const BASE = "/api/production";
 
+function buildProfileFormData(payload: Record<string, unknown>): FormData {
+  const fd = new FormData();
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === "image_url") continue;
+    if (value instanceof File) {
+      fd.append(key, value);
+    } else if (value === null || value === undefined) {
+      // omit — don't clear existing files
+    } else {
+      fd.append(key, String(value));
+    }
+  }
+  return fd;
+}
+
 const toParams = ({ page, pageSize, search, ordering, ...rest }: TableParams) => ({
   page,
   page_size: pageSize,
@@ -71,7 +86,13 @@ const codeMasterResource = <TRecord extends CodeMasterRecord, TPayload extends C
 });
 
 export const productionMastersApi = {
-  profileCreations: codeMasterResource<ProfileCreationRecord, ProfileCreationWritePayload>("profile-creations"),
+  profileCreations: {
+    ...codeMasterResource<ProfileCreationRecord, ProfileCreationWritePayload>("profile-creations"),
+    create: (payload: ProfileCreationWritePayload) =>
+      coreApi.post<ProfileCreationRecord>(`${BASE}/profile-creations/`, buildProfileFormData(payload as unknown as Record<string, unknown>)).then((r) => r.data),
+    update: (id: number, payload: Partial<ProfileCreationWritePayload>) =>
+      coreApi.put<ProfileCreationRecord>(`${BASE}/profile-creations/${id}/`, buildProfileFormData(payload as unknown as Record<string, unknown>)).then((r) => r.data),
+  },
   profileSizes: codeMasterResource<ProfileSizeRecord, ProfileSizeWritePayload>("profile-sizes"),
   colorCreations: codeMasterResource<ColorCreationRecord, ColorCreationWritePayload>("color-creations"),
   machineCreations: codeMasterResource<MachineCreationRecord, MachineCreationWritePayload>("machine-creations"),
