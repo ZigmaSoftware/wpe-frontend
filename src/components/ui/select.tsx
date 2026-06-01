@@ -17,14 +17,14 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-9 w-full items-center justify-between rounded-[7px] border border-input bg-card px-3 py-2 text-[13px] text-foreground shadow-[0_1px_2px_rgba(16,24,40,0.04)] ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/15 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "flex h-10 w-full items-center justify-between rounded-[9px] border border-input bg-card px-3 py-2 text-[14px] text-foreground shadow-[0_1px_2px_rgba(16,24,40,0.04)] ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/15 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       className,
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      <ChevronDown className="h-[18px] w-[18px] opacity-50" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -96,7 +96,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={cn("font-display py-2 pl-8 pr-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-muted-foreground", className)}
+    className={cn("font-display py-2 pl-8 pr-3 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground", className)}
     {...props}
   />
 ));
@@ -109,14 +109,14 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-[5px] py-2 pl-8 pr-3 text-[12.5px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-secondary focus:text-foreground",
+      "relative flex w-full cursor-default select-none items-center rounded-[7px] py-2 pl-8 pr-3 text-[13.5px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-secondary focus:text-foreground",
       className,
     )}
     {...props}
   >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+    <span className="absolute left-3 flex h-4 w-4 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
+        <Check className="h-[18px] w-[18px]" />
       </SelectPrimitive.ItemIndicator>
     </span>
 

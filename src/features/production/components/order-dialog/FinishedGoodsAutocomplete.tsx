@@ -181,7 +181,7 @@ const FinishedGoodsAutocomplete = ({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className={cn("relative rounded-xl", open && "ring-2 ring-[#2d6cdf]/15 ring-offset-2 ring-offset-white")}>
+      <div className={cn("relative rounded-[10px]", open && "ring-1 ring-[#2d6cdf]/20 ring-offset-1 ring-offset-white")}>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
         <Input
           id={inputId}
@@ -205,7 +205,7 @@ const FinishedGoodsAutocomplete = ({
           aria-controls={listId}
           aria-expanded={open}
           aria-invalid={error ? "true" : "false"}
-          className={cn(productionInputClassName, "pl-10 pr-20", error && "border-destructive")}
+          className={cn(productionInputClassName, "pl-9 pr-16", error && "border-destructive")}
         />
         <div className="absolute inset-y-0 right-2 flex items-center gap-1">
           {searchQuery.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-300" /> : null}
@@ -233,7 +233,7 @@ const FinishedGoodsAutocomplete = ({
         <div
           id={listId}
           role="listbox"
-          className="absolute top-[calc(100%+0.35rem)] z-50 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_42px_-28px_rgba(15,23,42,0.4)]"
+          className="absolute top-[calc(100%+0.3rem)] z-50 w-full overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_18px_42px_-28px_rgba(15,23,42,0.4)]"
         >
           <div className="max-h-72 overflow-y-auto py-1">
             {debouncedSearch.length < 2 ? (
@@ -265,7 +265,7 @@ const FinishedGoodsAutocomplete = ({
                   role="option"
                   aria-selected={active}
                   className={cn(
-                    "flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors",
+                    "flex w-full flex-col gap-1 px-3 py-2 text-left transition-colors",
                     active ? "bg-[#f5f8ff]" : "hover:bg-slate-50",
                   )}
                   onMouseDown={() => handleSelect(item)}
@@ -283,7 +283,7 @@ const FinishedGoodsAutocomplete = ({
         </div>
       ) : null}
 
-      <div className={cn("mt-2", error ? "text-destructive" : productionHelperTextClassName)}>{helperMessage}</div>
+      <div className={cn("mt-1.5", error ? "text-destructive text-xs leading-5" : productionHelperTextClassName)}>{helperMessage}</div>
     </div>
   );
 };

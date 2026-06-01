@@ -9,6 +9,7 @@ import ProductionShiftSelector from "./ProductionShiftSelector";
 import type { NamedOption, ProductionOrderFormValues } from "./productionOrderForm";
 import {
   productionFieldLabelClassName,
+  productionFieldGridClassName,
   productionHelperTextClassName,
   productionInputClassName,
 } from "./productionOrderFormStyles";
@@ -40,8 +41,8 @@ const ProductionResourcesSection = ({
     tone="blue"
     icon={CalendarDays}
   >
-    <div className="grid gap-4">
-      <div className="grid gap-4">
+    <div className="space-y-3">
+      <div className="space-y-3">
         <FormField
           control={form.control}
           name="resources.production_date"
@@ -71,7 +72,7 @@ const ProductionResourcesSection = ({
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={productionFieldGridClassName}>
         <FormField
           control={form.control}
           name="resources.production_facility"
@@ -163,6 +164,7 @@ const ProductionResourcesSection = ({
                   {inchargeOptions.map((option) => (
                     <SelectItem key={option.id} value={option.id}>
                       {option.name}
+                      {option.description ? ` (${option.description})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

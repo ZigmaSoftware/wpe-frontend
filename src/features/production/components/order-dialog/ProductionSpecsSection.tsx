@@ -7,6 +7,7 @@ import type { ProductionOrderFormValues } from "./productionOrderForm";
 import {
   productionCompactInputClassName,
   productionFieldLabelClassName,
+  productionFieldGridClassName,
   productionInputClassName,
 } from "./productionOrderFormStyles";
 
@@ -21,7 +22,7 @@ const ProductionSpecsSection = ({ form }: ProductionSpecsSectionProps) => (
     tone="gold"
     icon={SlidersHorizontal}
   >
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className={productionFieldGridClassName}>
       <FormField
         control={form.control}
         name="custom_specs.material_type"

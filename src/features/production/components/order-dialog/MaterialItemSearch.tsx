@@ -71,8 +71,8 @@ const MaterialItemSearch = ({ onSelect, existingItems }: MaterialItemSearchProps
   };
 
   return (
-    <div className="space-y-2">
-      <label className={productionFieldLabelClassName}>Add an item</label>
+    <div className="space-y-1.5">
+      <label className={productionFieldLabelClassName}>Add an Item</label>
       <div className="relative">
         <ComponentSearchInput
           value={query}

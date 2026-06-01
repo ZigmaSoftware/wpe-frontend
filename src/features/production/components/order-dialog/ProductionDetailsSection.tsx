@@ -7,6 +7,7 @@ import type { ProductionOrderFormValues } from "./productionOrderForm";
 import {
   productionFieldLabelClassName,
   productionReadOnlyInputClassName,
+  productionTripleFieldGridClassName,
 } from "./productionOrderFormStyles";
 
 type ProductionDetailsSectionProps = {
@@ -20,7 +21,7 @@ const ProductionDetailsSection = ({ form }: ProductionDetailsSectionProps) => (
     tone="emerald"
     icon={Zap}
   >
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className={productionTripleFieldGridClassName}>
       <FormField
         control={form.control}
         name="details.batch_auto"

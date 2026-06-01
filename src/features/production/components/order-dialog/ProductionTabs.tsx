@@ -29,12 +29,12 @@ const ProductionTabs = ({ value, onValueChange }: ProductionTabsProps) => (
           value={tab.value}
           onClick={() => onValueChange(tab.value)}
           className={cn(
-            "relative min-w-fit rounded-none border-b-2 border-transparent px-3 py-2.5 text-[13px] font-semibold text-slate-500 shadow-none transition-colors hover:text-slate-800 data-[state=active]:border-[#ff6b00] data-[state=active]:bg-transparent data-[state=active]:text-[#ff6b00] data-[state=active]:shadow-none",
+            "relative min-w-fit rounded-none border-b-2 border-transparent px-2.5 py-2 text-[12px] font-semibold text-slate-500 shadow-none transition-colors hover:text-slate-800 data-[state=active]:border-[#ff6b00] data-[state=active]:bg-transparent data-[state=active]:text-[#ff6b00] data-[state=active]:shadow-none",
             value === tab.value && "after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-[#ff6b00]",
           )}
         >
           <span className="inline-flex items-center gap-2 whitespace-nowrap">
-            <Icon className="h-3.5 w-3.5" />
+            <Icon className="h-3.25 w-3.25" />
             {tab.label}
           </span>
         </TabsTrigger>

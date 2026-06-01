@@ -15,13 +15,11 @@ export const PRODUCTION_ORDER_TABS = [
 export type ProductionDialogTab = (typeof PRODUCTION_ORDER_TABS)[number]["value"];
 
 export const ORDER_STATUS_VALUES = ["PLANNED", "IN_PROGRESS", "PLAN_COMPLETED", "CLOSED"] as const;
-export const PRODUCTION_TYPE_VALUES = ["RECYCLING_PRODUCTION", "BLENDING_PRODUCTION", "COMPOUNDING"] as const;
 export const WORKFLOW_STAGE_VALUES = ["AD", "BL", "GL"] as const;
 export const SHIFT_VALUES = ["SHIFT_1", "SHIFT_2", "SHIFT_3"] as const;
 export const MATERIAL_SOURCE_TYPE_VALUES = ["ITEM", "PRODUCT_SUBTYPE"] as const;
 
 export type ProductionOrderStatusValue = (typeof ORDER_STATUS_VALUES)[number];
-export type ProductionTypeValue = (typeof PRODUCTION_TYPE_VALUES)[number];
 export type WorkflowStageValue = (typeof WORKFLOW_STAGE_VALUES)[number];
 export type ProductionShiftValue = (typeof SHIFT_VALUES)[number];
 export type MaterialSourceTypeValue = (typeof MATERIAL_SOURCE_TYPE_VALUES)[number];
@@ -39,17 +37,18 @@ export type NamedOption = {
   description?: string;
 };
 
+export type ProductionTypeOption = {
+  id: string;
+  value: string;
+  label: string;
+  description?: string;
+};
+
 export const ORDER_STATUS_OPTIONS: Array<{ value: ProductionOrderStatusValue; label: string; description: string }> = [
   { value: "PLANNED", label: "Planned", description: "Created and queued for execution." },
   { value: "IN_PROGRESS", label: "In Progress", description: "Order is already on the shop floor." },
   { value: "PLAN_COMPLETED", label: "Plan Completed", description: "Ready for closure review." },
   { value: "CLOSED", label: "Closed", description: "Closed production order." },
-];
-
-export const PRODUCTION_TYPE_OPTIONS: Array<{ value: ProductionTypeValue; label: string; description: string }> = [
-  { value: "RECYCLING_PRODUCTION", label: "Recycling Production", description: "WPE recycling workflow." },
-  { value: "BLENDING_PRODUCTION", label: "Blending Production", description: "Blend and compound preparation." },
-  { value: "COMPOUNDING", label: "Compounding", description: "Compounding production route." },
 ];
 
 export const WORKFLOW_STAGE_OPTIONS: Array<{ value: WorkflowStageValue; label: string; description: string }> = [
@@ -137,7 +136,7 @@ export const productionOrderFormSchema = z
   .object({
     production_id: z.string().trim().min(1, "Production ID is required"),
     status: z.enum(ORDER_STATUS_VALUES),
-    production_type: z.enum(PRODUCTION_TYPE_VALUES),
+    production_type: z.string().trim().min(1, "Production type is required"),
     stage: z.enum(WORKFLOW_STAGE_VALUES),
     next_workflow_stage: z.enum(WORKFLOW_STAGE_VALUES),
     finished_goods: finishedGoodsSchema.nullable().default(null),
@@ -262,7 +261,8 @@ export type ProductionMaterialComputedRow = ProductionOrderMaterialRowForm & {
 
 export type CreateProductionOrderPayload = {
   production_id: string;
-  production_type: ProductionTypeValue;
+  production_for?: string;
+  production_type: string;
   status: ProductionOrderStatusValue;
   production_date: string;
   shift: string;
@@ -351,7 +351,7 @@ export const createProductionOrderDefaultValues = (): ProductionOrderFormValues 
   return {
     production_id: "",
     status: "PLANNED",
-    production_type: "RECYCLING_PRODUCTION",
+    production_type: "",
     stage: "AD",
     next_workflow_stage: "BL",
     finished_goods: null,
@@ -515,8 +515,10 @@ export type MaterialPlanItem = {
 export type ProductionOrderDetail = {
   id: number;
   production_id: string;
+  production_for?: string | null;
   production_type?: string;
   status?: string;
+  batch_number?: string | null;
   production_date?: string;
   shift?: string;
   planned_quantity?: string;
@@ -564,13 +566,18 @@ export const mapOrderDetailToFormValues = (
     ...defaults,
     production_id: order.production_id,
     status: (order.status as ProductionOrderStatusValue) ?? "PLANNED",
-    production_type: (order.production_type as ProductionTypeValue) ?? "RECYCLING_PRODUCTION",
+    production_for: order.production_for?.trim() || "",
+    production_type: order.production_type?.trim() || defaults.production_type,
     plan_rows: [{ length_mts: "", qty_mts: qty > 0 ? qty.toFixed(3) : "", packets: "" }],
     resources: {
       ...defaults.resources,
       production_date: order.production_date ?? defaults.resources.production_date,
       shift: shiftValue,
       line_machine_id: machine ? String(machine.id) : "",
+    },
+    details: {
+      ...defaults.details,
+      batch_auto: order.batch_number?.trim() || defaults.details.batch_auto,
     },
     materials: { selected_bom_variant_id: "", bom_multiplier: "1", rows: materialRows },
   };
@@ -589,7 +596,8 @@ export const toProductionOrderPayload = (
 
   return {
     production_id: values.production_id.trim(),
-    production_type: values.production_type,
+    production_for: values.production_for.trim(),
+    production_type: values.production_type.trim(),
     status: values.status,
     production_date: values.resources.production_date,
     shift: getShiftOption(values.resources.shift).apiLabel,
