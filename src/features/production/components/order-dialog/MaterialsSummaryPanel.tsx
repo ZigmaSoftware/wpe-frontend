@@ -69,7 +69,7 @@ const MaterialsSummaryPanel = ({
                     {finishedGoods.unit ? ` · ${finishedGoods.unit}` : ""}
                   </div>
                 </div>
-              </div>
+              </div>  
             ) : (
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400">

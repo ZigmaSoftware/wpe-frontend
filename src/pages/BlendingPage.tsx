@@ -1059,3 +1059,4 @@ const BlendingPage = () => {
 };
 
 export default BlendingPage;
+  
