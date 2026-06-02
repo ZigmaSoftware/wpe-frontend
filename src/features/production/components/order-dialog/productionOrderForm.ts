@@ -141,7 +141,7 @@ export const productionOrderFormSchema = z
     next_workflow_stage: z.enum(WORKFLOW_STAGE_VALUES),
     finished_goods: finishedGoodsSchema.nullable().default(null),
     plan_rows: z.array(planRowSchema).min(1, "Add at least one plan row"),
-    production_for: z.string().trim().default(""),
+    production_for: z.string().trim().min(1, "Production For is required"),
     notes: z.string().trim().max(2000, "Notes must be 2000 characters or fewer").default(""),
     base_order: z.object({
       base_plan_id: z.string().default(""),

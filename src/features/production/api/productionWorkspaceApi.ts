@@ -2,7 +2,7 @@ import { coreApi } from "@/lib/api";
 import { normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
 import type { ApiPaginatedResult, ApiSuccessEnvelope, ProductionOrder, ProductionStageRecord } from "@/lib/types";
 
-export type ProductionStageValue = "BL" | "GL" | "PR";
+export type ProductionStageValue = "AD" | "BL" | "GL" | "PR";
 
 export type ProductionStageListParams = {
   stage: ProductionStageValue;

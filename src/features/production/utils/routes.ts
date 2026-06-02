@@ -1,3 +1,4 @@
+import type { ProductionStageValue } from "@/features/production/api/productionWorkspaceApi";
 import { Blend, Box, Layers, Scale, type LucideIcon } from "lucide-react";
 
 export const PRODUCTION_ROUTE = "/app/production";
@@ -8,8 +9,22 @@ export const PRODUCTION_PR_PRODUCTION_ROUTE = `${PRODUCTION_ROUTE}/pr-production
 export const PRODUCTION_NEW_ORDER_ROUTE = `${PRODUCTION_ROUTE}/neworder`;
 export const PRODUCTION_MANAGE_BATCH_ROUTE_PREFIX = `${PRODUCTION_ROUTE}/manage-batch`;
 
-export const getProductionManageBatchRoute = (orderId: number | string) =>
-  `${PRODUCTION_MANAGE_BATCH_ROUTE_PREFIX}/${orderId}`;
+export const getProductionStageRoute = (stage: ProductionStageValue) => {
+  switch (stage) {
+    case "AD":
+      return PRODUCTION_AD_WEIGHTAGE_ROUTE;
+    case "BL":
+      return PRODUCTION_BL_BLENDING_ROUTE;
+    case "GL":
+      return PRODUCTION_GL_GRANULATION_ROUTE;
+    case "PR":
+    default:
+      return PRODUCTION_PR_PRODUCTION_ROUTE;
+  }
+};
+
+export const getProductionManageBatchRoute = (orderId: number | string, stage?: ProductionStageValue) =>
+  `${PRODUCTION_MANAGE_BATCH_ROUTE_PREFIX}/${orderId}${stage ? `?stage=${stage}` : ""}`;
 export const getProductionEditRoute = (orderId: number | string) => `${PRODUCTION_ROUTE}/${orderId}/edit`;
 
 export type ProductionWorkspaceModuleDefinition = {
