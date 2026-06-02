@@ -465,6 +465,7 @@ export type ProductionBatch = {
   id: number;
   batch_no: string;
   display_batch_no?: string | null;
+  display_status?: string | null;
   production_order: number;
   bom_variant: number | null;
   bom_variant_name: string | null;

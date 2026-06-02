@@ -111,6 +111,7 @@ const getExportColumns = (
   stage: ProductionStageValue,
   orderLookup: Map<number, ProductionOrder>,
 ): StoreExportColumn<ProductionStageRecord>[] => {
+  const showsBatchCount = stage !== "PR";
   const getProductionName = (row: ProductionStageRecord) => {
     const matchedOrder = orderLookup.get(row.order_id);
     if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
@@ -122,14 +123,8 @@ const getExportColumns = (
 
   const columns: StoreExportColumn<ProductionStageRecord>[] = [
     { label: "Prd ID", value: (row) => row.production_id || "-" },
-    { label: "Production Name", value: (row) => {
-      const matchedOrder = orderLookup.get(row.order_id);
-      if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
-        return matchedOrder.production_for;
-      }
-      return STAGE_PAGE_META[stage].label;
-    } },
-    { label: "No.of Batch", value: (row) => (stage === "AD" ? String(row.batch_count ?? 0) : row.display_batch_no || row.batch_no || "-") },
+    { label: "Production Name", value: (row) => getProductionName(row) },
+    { label: "No.of Batch", value: (row) => (showsBatchCount ? String(row.batch_count ?? 0) : row.display_batch_no || row.batch_no || "-") },
     { label: "BOM Varient", value: () => "-" },
     { label: "Started Date", value: (row) => formatDate(row.start_date_time || row.production_date) },
     { label: "Ended Date", value: (row) => formatDate(row.end_date_time) },
@@ -141,6 +136,7 @@ const getExportColumns = (
 const ProductionStageList = ({ stage, headerTitle, headerDescription }: ProductionStageListProps) => {
   const navigate = useNavigate();
   const meta = STAGE_PAGE_META[stage];
+  const showsBatchCount = stage !== "PR";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -197,7 +193,7 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
       return matchedOrder.production_for;
     }
 
-    return meta.label;
+    return formatProductionListLabel(row.production_type);
   };
 
   const handleExport = (format: StoreExportFormat) => {
@@ -293,7 +289,7 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
                       >
                         <TableCell className="font-mono text-xs font-medium">{row.production_id || "-"}</TableCell>
                         <TableCell className="font-medium">{getProductionName(row)}</TableCell>
-                        <TableCell>{stage === "AD" ? row.batch_count ?? 0 : row.display_batch_no || row.batch_no || "-"}</TableCell>
+                        <TableCell>{showsBatchCount ? row.batch_count ?? 0 : row.display_batch_no || row.batch_no || "-"}</TableCell>
                         <TableCell className="text-muted-foreground">-</TableCell>
                         <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
                         <TableCell>{formatDate(row.end_date_time)}</TableCell>

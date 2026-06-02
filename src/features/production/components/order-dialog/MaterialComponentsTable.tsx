@@ -25,25 +25,25 @@ const MaterialComponentsTable = ({ form, rows, emptyState }: MaterialComponentsT
   }
 
   return (
-    <div className="overflow-hidden rounded-[22px] border border-slate-200/90 bg-white">
+    <div className="overflow-hidden rounded-[22px] border border-slate-200/90 bg-white shadow-[0_18px_42px_-38px_rgba(15,23,42,0.3)]">
       <ScrollArea className="w-full">
-        <div className="min-w-[1420px]">
+        <div className="min-w-[1460px]">
           <Table>
             <TableHeader className="bg-[#f8fbff]">
               <TableRow className="hover:bg-[#f8fbff]">
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Sl.</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Item #</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Item Name</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Material Code</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Material Name</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Source</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">1U Qty</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Unit</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">BOM</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Required Qty</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Received</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Running</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Issued Qty</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Balance</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Requested</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Rate</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Material Amount</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Unit</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Status</TableHead>
+                <TableHead className="text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -55,6 +55,12 @@ const MaterialComponentsTable = ({ form, rows, emptyState }: MaterialComponentsT
         </div>
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
+      <div className="flex items-center justify-between border-t border-slate-200/80 px-4 py-3 text-sm text-slate-500">
+        <span>
+          Showing 1 to {rows.length} of {rows.length} item{rows.length === 1 ? "" : "s"}
+        </span>
+        <span>{rows.length} rows</span>
+      </div>
     </div>
   );
 };

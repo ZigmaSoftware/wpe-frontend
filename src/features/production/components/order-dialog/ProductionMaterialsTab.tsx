@@ -157,6 +157,10 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
     return null;
   }, [bomComponentsQuery.data?.components?.length, bomComponentsQuery.isSuccess, bomVariantId, bomVariantsQuery.data, bomVariantsQuery.isSuccess, calculations.computedRows.length, finishedGoods]);
 
+  const completedRowCount = calculations.computedRows.filter((row) => row.remaining_quantity <= 0 && row.required_quantity > 0).length;
+  const completionPercent =
+    calculations.computedRows.length > 0 ? (completedRowCount / calculations.computedRows.length) * 100 : 0;
+
   return (
     <div className="space-y-4">
       <FormField
@@ -168,13 +172,16 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
             productionQty={calculations.productionQty}
             bomMultiplierField={field}
             bomMultiplierError={bomMultiplierError}
+            onRecalculate={() => {
+              void form.trigger(["materials.selected_bom_variant_id", "materials.bom_multiplier", "materials.rows"]);
+            }}
           />
         )}
       />
 
       <ProductionSectionCard
         title="Materials Planning"
-        description="Select BOM variant, add manual items, and review material requirements before final order creation."
+        description="Add manual items and review material requirements before final order creation."
         tone="violet"
         icon={Boxes}
       >
@@ -221,6 +228,7 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
             amount={calculations.totals.amount}
             bomDerivedCount={calculations.bomDerivedCount}
             manualCount={calculations.manualCount}
+            completionPercent={completionPercent}
           />
 
           <MaterialComponentsTable form={form} rows={calculations.computedRows} emptyState={emptyState} />

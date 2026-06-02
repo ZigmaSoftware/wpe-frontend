@@ -11,7 +11,6 @@ import ProductionNotesSection from "./ProductionNotesSection";
 import ProductionPlanTable from "./ProductionPlanTable";
 import ProductionResourcesSection from "./ProductionResourcesSection";
 import ProductionSectionCard from "./ProductionSectionCard";
-import ProductionSpecsSection from "./ProductionSpecsSection";
 import {
   ORDER_STATUS_OPTIONS,
   WORKFLOW_STAGE_OPTIONS,
@@ -69,8 +68,8 @@ const ProductionGeneralTab = ({
   <div className="space-y-5">
     <div className="grid gap-5 xl:grid-cols-2">
       <ProductionSectionCard
-        title="Production"
-        description="Set the production order control fields and finished goods target."
+        title="Production Overview"
+        description="Define the basic details for this production order."
         tone="amber"
         icon={Factory}
       >
@@ -191,6 +190,7 @@ const ProductionGeneralTab = ({
                     onChange={(value) => field.onChange(value)}
                     error={fieldState.error?.message}
                   />
+                  <p className="mt-2 text-[12px] text-slate-500">Search by item code or item name.</p>
                   <FormMessage />
                 </FormItem>
               )}
@@ -210,19 +210,19 @@ const ProductionGeneralTab = ({
       />
     </div>
 
-    <ProductionPlanTable
-      form={form}
-      sidebar={
-        <ProductionBaseOrderSection form={form} embedded title="Basic Order Details" description="Readonly linkage fields populated for plan, customer, and order integration." />
-      }
-    />
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      <ProductionPlanTable form={form} />
+      <ProductionBaseOrderSection
+        form={form}
+        title="Base Order Details"
+        description="Link this production order to a base plan, customer, and sales order."
+      />
+    </div>
 
     <div className={productionSectionColumnsClassName}>
       <ProductionNotesSection form={form} />
-      <ProductionSpecsSection form={form} />
+      <ProductionDetailsSection form={form} />
     </div>
-
-    <ProductionDetailsSection form={form} />
   </div>
   );
 };
