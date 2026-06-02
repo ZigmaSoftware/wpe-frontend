@@ -375,7 +375,12 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
 
   const canSubmitAdditiveRequest =
     watchedItems.length > 0 &&
-    watchedItems.every((item, index) => Boolean(item.item_id && item.quantity && Number(item.quantity) > 0 && selectedAdditiveItems[index])) &&
+    watchedItems.every((item, index) => {
+      const selectedItem = selectedAdditiveItems[index];
+      const qty = Number(item.quantity);
+      const available = Number(selectedItem?.quantity ?? 0);
+      return Boolean(item.item_id && item.quantity && qty > 0 && selectedItem && qty <= available);
+    }) &&
     !hasDuplicateSelectedItems &&
     Boolean(watchedRequestedForName.trim()) &&
     Boolean(watchedRequestReason.trim()) &&
@@ -887,13 +892,16 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                       <TableBody>
                         {itemsFieldArray.fields.map((itemField, index) => {
                           const selectedItem = selectedAdditiveItems[index];
+                          const available = Number(selectedItem?.quantity ?? 0);
+                          const enteredQty = Number(watchedItems[index]?.quantity || 0);
+                          const exceedsStock = enteredQty > 0 && enteredQty > available;
                           return (
                             <TableRow key={itemField.id}>
                               <TableCell>
                                 <div className="font-medium">{selectedItem?.item_name || "-"}</div>
                                 <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
                                   <span className="font-mono">{selectedItem?.item_code || "-"}</span>
-                                  <span>
+                                  <span className={exceedsStock ? "font-semibold text-destructive" : ""}>
                                     {formatDecimal(selectedItem?.quantity || "0")} {selectedItem?.unit || ""} available
                                   </span>
                                 </div>
@@ -905,9 +913,18 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormControl>
-                                        <Input {...field} placeholder="0.000" />
+                                        <Input
+                                          {...field}
+                                          placeholder="0.000"
+                                          className={exceedsStock ? "border-destructive focus-visible:ring-destructive" : ""}
+                                        />
                                       </FormControl>
                                       <FormMessage />
+                                      {exceedsStock ? (
+                                        <p className="text-xs text-destructive">
+                                          Exceeds available stock ({formatDecimal(String(available))} {selectedItem?.unit})
+                                        </p>
+                                      ) : null}
                                     </FormItem>
                                   )}
                                 />
