@@ -262,26 +262,32 @@ const ProductionOrderForm = ({
       ? "Some reference lookups could not be loaded. The form stays usable, but some selections may be limited."
       : null;
 
+  const resolvedTitle = formTitle ?? "New Production Order";
+  const resolvedSubmitLabel = submitLabel ?? "Create Production Order";
+
   return (
     <div className="flex min-h-full flex-col">
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((values) => onSubmit(toProductionOrderPayload(values, machines)))}
-          className="flex min-h-full flex-col bg-[#eef3f9]"
+          className="flex min-h-full flex-col"
         >
           <Tabs
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as ProductionDialogTab)}
-            className="flex min-h-full flex-col"
+            className="flex min-h-full flex-col gap-4"
           >
-            <div className="border-b border-slate-200/80 bg-white">
-              <div className="px-4 py-2.5 text-left sm:px-5 lg:px-6 lg:py-3">
-                <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-end">
-                  <div className="space-y-1">
-                    <h1 className="text-[1.2rem] font-semibold leading-tight tracking-[-0.02em] text-slate-950 sm:text-[1.35rem]">
-                      {formTitle ?? "New Production Order"}
-                    </h1>
-                  </div>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px] xl:items-start">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#ffd9c1] bg-[#fff3eb] text-[#ff6b00] shadow-[0_18px_32px_-28px_rgba(255,107,0,0.7)]">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <div className="space-y-1">
+                  <h1 className="text-[2.35rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
+                    {resolvedTitle}
+                  </h1>
+                </div>
+              </div>
 
                   <div className={productionMetricCardClassName}>
                     <FormField
@@ -322,12 +328,11 @@ const ProductionOrderForm = ({
                 </div>
               </div>
 
-              <div className="px-4 pb-0 sm:px-5 lg:px-6">
-                <ProductionTabs value={activeTab} onValueChange={setActiveTab} />
-              </div>
+            <div className="rounded-[24px] border border-slate-200/90 bg-white px-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:px-5 lg:px-6">
+              <ProductionTabs value={activeTab} onValueChange={setActiveTab} />
             </div>
 
-            <div className="flex-1 px-4 py-3.5 sm:px-5 lg:px-6">
+            <div className="flex-1">
               <TabsContent value="general" className="mt-0 outline-none">
                 <ProductionGeneralTab
                   form={form}
@@ -374,34 +379,31 @@ const ProductionOrderForm = ({
               </TabsContent>
             </div>
 
-            <div className="border-t border-slate-200/80 bg-white/95 px-4 py-2.5 backdrop-blur sm:px-5 lg:px-6">
-              <div className="flex justify-end">
-                <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 rounded-full border-slate-200 bg-white px-4 text-slate-700 hover:bg-slate-50"
-                    onClick={onCancel}
-                    disabled={isSubmitting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="h-9 rounded-full bg-[linear-gradient(135deg,#ff8f1f_0%,#ff6b00_100%)] px-4 text-white shadow-[0_12px_24px_-16px_rgba(255,107,0,0.9)] hover:opacity-95"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {submitLabel ? `${submitLabel}...` : "Creating Order..."}
-                      </>
-                    ) : (
-                      submitLabel ?? "Create Order"
-                    )}
-                  </Button>
-                </div>
-              </div>
+            <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200/90 bg-white px-4 py-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:px-6">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-2xl border-slate-200 bg-white px-6 text-[15px] font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={onCancel}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                className="h-11 rounded-2xl bg-[linear-gradient(135deg,#ff8f1f_0%,#ff6b00_100%)] px-6 text-[15px] font-semibold text-white shadow-[0_22px_34px_-24px_rgba(255,107,0,0.95)] hover:opacity-95"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {`${resolvedSubmitLabel}...`}
+                  </>
+                ) : (
+                  resolvedSubmitLabel
+                )}
+              </Button>
             </div>
           </Tabs>
         </form>

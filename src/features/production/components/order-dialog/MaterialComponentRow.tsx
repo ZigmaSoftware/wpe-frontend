@@ -1,4 +1,5 @@
 import type { UseFieldArrayRemove, UseFormReturn } from "react-hook-form";
+import { Eye, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
@@ -6,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import {
   formatNumberInputValue,
+  parseNumericInput,
   type ProductionMaterialComputedRow,
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
@@ -18,23 +20,34 @@ type MaterialComponentRowProps = {
   remove: UseFieldArrayRemove;
 };
 
-const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRowProps) => (
-  <TableRow className="align-top hover:bg-slate-50/60">
-    <TableCell className="font-medium text-slate-500">{index + 1}</TableCell>
-    <TableCell className="font-mono text-xs text-slate-600">{row.item_code}</TableCell>
-    <TableCell className="min-w-[220px]">
-      <div className="space-y-1">
-        <div className="font-medium text-slate-900">{row.item_name}</div>
-        <div className="flex flex-wrap gap-2">
-          {row.is_bom_derived ? <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">BOM</Badge> : null}
-          {row.is_manual ? <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">Manual</Badge> : null}
-          {row.source_type === "PRODUCT_SUBTYPE" ? (
-            <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">Subtype</Badge>
-          ) : null}
+const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRowProps) => {
+  const receivedQuantity = parseNumericInput(row.received_quantity);
+  const status =
+    row.remaining_quantity <= 0 && row.required_quantity > 0
+      ? { label: "Fulfilled", className: "border-emerald-200 bg-emerald-50 text-emerald-700" }
+      : receivedQuantity > 0
+        ? { label: "Partial", className: "border-lime-200 bg-lime-50 text-lime-700" }
+        : { label: "Pending", className: "border-slate-200 bg-slate-100 text-slate-600" };
+
+  return (
+    <TableRow className="align-top hover:bg-slate-50/60">
+      <TableCell className="font-mono text-xs font-semibold text-[#2563eb]">{row.item_code}</TableCell>
+      <TableCell className="min-w-[220px]">
+        <div className="space-y-1">
+          <div className="font-medium text-slate-900">{row.item_name}</div>
+          <div className="text-xs text-slate-400">
+            Per unit {formatNumberInputValue(parseNumericInput(row.per_unit_quantity), 3, 3)}
+          </div>
         </div>
-      </div>
-    </TableCell>
-    <TableCell className="min-w-[120px]">
+      </TableCell>
+      <TableCell>
+        {row.is_bom_derived ? (
+          <Badge variant="outline" className="rounded-full border-sky-200 bg-sky-50 px-2.5 text-sky-700">BOM</Badge>
+        ) : (
+          <Badge variant="outline" className="rounded-full border-violet-200 bg-violet-50 px-2.5 text-violet-700">Manual</Badge>
+        )}
+      </TableCell>
+      <TableCell className="min-w-[110px]">
       <FormField
         control={form.control}
         name={`materials.rows.${index}.per_unit_quantity` as const}
@@ -53,8 +66,6 @@ const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRow
         )}
       />
     </TableCell>
-    <TableCell className="min-w-[96px] text-slate-600">{row.unit}</TableCell>
-    <TableCell className="min-w-[120px] text-right font-medium text-slate-900">{formatNumberInputValue(row.bom_quantity, 3, 3)}</TableCell>
     <TableCell className="min-w-[120px] text-right font-medium text-slate-900">{formatNumberInputValue(row.required_quantity, 3, 3)}</TableCell>
     <TableCell className="min-w-[120px]">
       <FormField
@@ -100,16 +111,34 @@ const MaterialComponentRow = ({ index, row, form, remove }: MaterialComponentRow
       />
     </TableCell>
     <TableCell className="min-w-[140px] text-right font-semibold text-slate-950">{formatNumberInputValue(row.amount, 2, 2)}</TableCell>
-    <TableCell className="min-w-[100px] text-right">
-      {row.is_manual ? (
-        <Button type="button" variant="ghost" className="h-8 rounded-lg px-3 text-red-600 hover:text-red-700" onClick={() => remove(index)}>
-          Remove
+    <TableCell className="min-w-[90px] text-slate-600">{row.unit}</TableCell>
+    <TableCell>
+      <Badge variant="outline" className={`rounded-full px-2.5 ${status.className}`}>
+        {status.label}
+      </Badge>
+    </TableCell>
+    <TableCell className="min-w-[110px] text-right">
+      <div className="flex items-center justify-end gap-1">
+        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-slate-500 hover:bg-slate-100">
+          <Eye className="h-4 w-4" />
         </Button>
-      ) : (
-        <span className="text-xs text-slate-400">BOM row</span>
-      )}
+        {row.is_manual ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-xl text-[#ff6b00] hover:bg-[#fff3eb] hover:text-[#ff6b00]"
+            onClick={() => remove(index)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        ) : (
+          <span className="text-xs text-slate-400">-</span>
+        )}
+      </div>
     </TableCell>
   </TableRow>
-);
+  );
+};
 
 export default MaterialComponentRow;

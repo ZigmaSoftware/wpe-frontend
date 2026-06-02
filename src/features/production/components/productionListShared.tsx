@@ -22,6 +22,24 @@ export const PRODUCTION_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Draft",
 };
 
+export const WORKFLOW_STAGE_BADGE_CLASSES: Record<string, string> = {
+  PL: "bg-slate-100 text-slate-700",
+  AD: "bg-orange-100 text-orange-700",
+  BL: "bg-blue-100 text-blue-700",
+  GL: "bg-emerald-100 text-emerald-700",
+  PR: "bg-violet-100 text-violet-700",
+  COMPLETED: "bg-teal-100 text-teal-700",
+};
+
+export const WORKFLOW_STAGE_LABELS: Record<string, string> = {
+  PL: "PL",
+  AD: "AD",
+  BL: "BL",
+  GL: "GL",
+  PR: "PR",
+  COMPLETED: "Completed",
+};
+
 export const formatProductionListLabel = (value?: string | null) => {
   if (!value) {
     return "-";
@@ -55,5 +73,15 @@ export const ProductionStatusBadge = ({ status }: { status: string }) => (
     }`}
   >
     {formatProductionListLabel(status)}
+  </span>
+);
+
+export const WorkflowStageBadge = ({ status }: { status: string }) => (
+  <span
+    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+      WORKFLOW_STAGE_BADGE_CLASSES[status] ?? "bg-slate-100 text-slate-700"
+    }`}
+  >
+    {WORKFLOW_STAGE_LABELS[status] ?? status}
   </span>
 );

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Columns2, PanelLeftOpen, PanelRightOpen, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,12 @@ import {
   productionFieldLabelClassName,
   productionHelperTextClassName,
 } from "@/features/production/components/order-dialog/productionOrderFormStyles";
-import { PRODUCTION_AD_WEIGHTAGE_ROUTE, getProductionEditRoute } from "@/features/production/utils/routes";
+import {
+  PRODUCTION_AD_WEIGHTAGE_ROUTE,
+  getProductionEditRoute,
+  getProductionManageBatchRoute,
+  getProductionStageRoute,
+} from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type {
@@ -76,6 +81,12 @@ const STAGE_META: Record<
     accentClassName: "border-[#c6f1d9] bg-[#ecfdf5] text-[#059669]",
     mutedClassName: "border-[#d8f7e6] bg-[#f4fdf8] text-[#2b8a63]",
   },
+};
+
+const STAGE_PRODUCTION_TYPE_LABELS: Record<ProductionBatch["stage"], string> = {
+  AD: "WPE Additive Production",
+  BL: "WPE Blend Production",
+  GL: "WPE Granulated Blend Production",
 };
 
 const dialogContentClassName =
@@ -170,9 +181,15 @@ const ProductionManageBatchPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { orderId: orderIdParam } = useParams();
+  const [searchParams] = useSearchParams();
 
   const orderId = Number(orderIdParam);
   const hasValidOrderId = Number.isInteger(orderId) && orderId > 0;
+  const routeStage = searchParams.get("stage")?.toUpperCase() ?? "";
+  const activeStageFilter = STAGES.includes(routeStage as ProductionBatch["stage"])
+    ? (routeStage as ProductionBatch["stage"])
+    : null;
+  const backRoute = activeStageFilter ? getProductionStageRoute(activeStageFilter) : PRODUCTION_AD_WEIGHTAGE_ROUTE;
 
   const [detailTab, setDetailTab] = useState<"general" | "movement" | "transactions" | "summary">("general");
   const [viewMode, setViewMode] = useState<BatchSplitView>("split");
@@ -224,9 +241,11 @@ const ProductionManageBatchPage = () => {
   });
 
   const batchesQ = useQuery({
-    queryKey: ["production-batches", orderId],
+    queryKey: ["production-batches", orderId, activeStageFilter ?? "all"],
     queryFn: async () => {
-      const response = await coreApi.get<unknown>(`/api/production/orders/${orderId}/batches/`);
+      const response = await coreApi.get<unknown>(`/api/production/orders/${orderId}/batches/`, {
+        params: { stage: activeStageFilter ?? undefined },
+      });
       return normalizeListResponse<ProductionBatchExt>(response.data);
     },
     enabled: hasValidOrderId,
@@ -302,10 +321,15 @@ const ProductionManageBatchPage = () => {
   const confirmBatchMutation = useMutation({
     mutationFn: (batch: ProductionBatchExt) =>
       coreApi.post(`/api/production/orders/${orderId}/batches/${batch.id}/confirm/`),
-    onSuccess: () => {
+    onSuccess: (_, batch) => {
       toast.success("Batch confirmed and completed.");
       setWeightEntryOpen(false);
       invalidateProductionContext();
+      if (batch.stage === "AD") {
+        navigate(getProductionManageBatchRoute(orderId, "BL"));
+      } else if (batch.stage === "BL") {
+        navigate(getProductionManageBatchRoute(orderId, "GL"));
+      }
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to confirm batch.")),
   });
@@ -369,15 +393,23 @@ const ProductionManageBatchPage = () => {
 
   const allBatches = batchesQ.data ?? [];
   const order = orderQ.data;
+  const resolveDisplayBatchNo = (batch?: ProductionBatchExt | null) =>
+    batch?.display_batch_no?.trim() || batch?.batch_no || order?.batch_number?.trim() || "Not assigned";
+  const resolveBatchStatusLabel = (batch?: ProductionBatchExt | null) =>
+    batch?.display_status?.trim() || batch?.status || "-";
+  const resolveStageProductionType = (stage?: ProductionBatch["stage"] | null) =>
+    (stage ? STAGE_PRODUCTION_TYPE_LABELS[stage] : null) || order?.production_type || "-";
   const selectedBatch = allBatches.find((batch) => batch.id === selectedBatchId) ?? null;
   const displayedBatch = selectedBatch ?? allBatches[0] ?? null;
+  const displayedStage = displayedBatch?.stage ?? activeStageFilter ?? null;
   const productionFor = (() => {
     if (!order) return "-";
     const mapped = (order as unknown as Record<string, unknown>).production_for;
     if (typeof mapped === "string" && mapped.trim().length > 0) return mapped;
-    return order.production_type || "-";
+    return resolveStageProductionType(displayedStage);
   })();
   const displayedStageMeta = displayedBatch ? STAGE_META[displayedBatch.stage] : null;
+  const displayedProductionType = resolveStageProductionType(displayedStage);
   const aggregateWeight = allBatches.reduce((total, batch) => total + (batch.total_weight_grams ?? 0), 0);
   const aggregateOkCount = allBatches.reduce(
     (total, batch) => total + (batch.weight_entries ?? []).filter((entry) => entry.is_valid === true).length,
@@ -397,12 +429,13 @@ const ProductionManageBatchPage = () => {
   const createBatchDefaultStage: ProductionBatch["stage"] =
     displayedBatch?.stage ?? "AD";
   const detailSubtitle = displayedBatch
-    ? `${displayedBatch.batch_no} • ${displayedBatch.stage} — ${displayedStageMeta?.label}`
+    ? `${resolveDisplayBatchNo(displayedBatch)} • ${displayedBatch.stage} — ${displayedStageMeta?.label}`
     : "No batches created for this production order yet";
   const detailMachine = displayedBatch?.machine_name || order?.line_name || "-";
   const detailPlanId = displayedBatch?.production_order ?? orderId;
-  const detailBatchValue = displayedBatch?.batch_no
-    ?? (order?.batch_number || (allBatches.length > 0 ? `${allBatches.length} linked batch${allBatches.length === 1 ? "" : "es"}` : "-"));
+  const detailBatchValue = displayedBatch
+    ? resolveDisplayBatchNo(displayedBatch)
+    : order?.batch_number || (allBatches.length > 0 ? `${allBatches.length} linked batch${allBatches.length === 1 ? "" : "es"}` : "-");
   const splitLayoutClassName =
     viewMode === "left"
       ? "xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]"
@@ -418,7 +451,7 @@ const ProductionManageBatchPage = () => {
             type="button"
             variant="ghost"
             className="h-8 rounded-full px-2.5 text-sm font-medium text-slate-600 hover:bg-white/80 hover:text-slate-900"
-            onClick={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}
+            onClick={() => navigate(backRoute)}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Production
@@ -443,13 +476,13 @@ const ProductionManageBatchPage = () => {
                   {order ? (
                     <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                       <span className="inline-flex items-center rounded-full bg-[#fff7ed] px-2 py-0.5 font-medium text-[#f97316]">
-                        {order.production_type}
+                        {displayedProductionType}
                       </span>
                       <span className="inline-flex items-center rounded-full bg-[#eef4ff] px-2 py-0.5 font-medium text-[#2d6cdf]">
                         Shift: {order.shift}
                       </span>
                       <span className="inline-flex items-center rounded-full bg-[#ecfdf5] px-2 py-0.5 font-medium text-[#059669]">
-                        Batch No: {order.batch_number || "Not assigned"}
+                        Batch No: {resolveDisplayBatchNo(displayedBatch)}
                       </span>
                     </div>
                   ) : null}
@@ -547,7 +580,11 @@ const ProductionManageBatchPage = () => {
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h2 className="text-[15px] font-semibold leading-tight text-slate-950">Production / Batch List</h2>
-                            <p className="mt-1 text-[11px] text-slate-500">Select a batch from the list to review its details.</p>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              {activeStageFilter
+                                ? `Select a ${activeStageFilter} batch from the list to review its details.`
+                                : "Select a batch from the list to review its details."}
+                            </p>
                           </div>
                           <span className="inline-flex min-w-8 items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                             {allBatches.length}
@@ -561,10 +598,10 @@ const ProductionManageBatchPage = () => {
                         </div>
                       ) : (
                         <div className="max-h-[720px] overflow-auto">
-                          <Table>
+                            <Table>
                             <TableHeader className="bg-slate-50/90">
                               <TableRow>
-                                <TableHead>S.No</TableHead>
+                                <TableHead>Prd ID</TableHead>
                                 <TableHead>Batch ID</TableHead>
                                 <TableHead>Production Status</TableHead>
                                 <TableHead>Start Date Time</TableHead>
@@ -572,7 +609,7 @@ const ProductionManageBatchPage = () => {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {allBatches.map((batch, index) => {
+                              {allBatches.map((batch) => {
                                 const isSelected = displayedBatch?.id === batch.id;
                                 const stageMeta = STAGE_META[batch.stage];
 
@@ -583,16 +620,16 @@ const ProductionManageBatchPage = () => {
                                     onClick={() => setSelectedBatchId(batch.id)}
                                   >
                                     <TableCell className="align-top font-mono text-[12px] text-slate-600">
-                                      {index + 1}
+                                      {order?.production_id ?? "-"}
                                     </TableCell>
                                     <TableCell className="align-top">
-                                      <div className="text-[12px] font-semibold text-slate-900">{batch.batch_no}</div>
+                                      <div className="text-[12px] font-semibold text-slate-900">{resolveDisplayBatchNo(batch)}</div>
                                       <div className="mt-1 text-[11px] text-slate-500">
                                         {batch.stage} — {stageMeta.label}
                                       </div>
                                     </TableCell>
                                     <TableCell>
-                                      <StatusBadge status={batch.status} classes={BATCH_STATUS_CLASSES} />
+                                      <StatusBadge status={resolveBatchStatusLabel(batch)} classes={BATCH_STATUS_CLASSES} />
                                     </TableCell>
                                     <TableCell className="text-[12px] text-slate-600">{formatDateTime(batch.started_at)}</TableCell>
                                     <TableCell className="text-[12px] text-slate-600">{formatDateTime(batch.completed_at)}</TableCell>
@@ -656,7 +693,7 @@ const ProductionManageBatchPage = () => {
                               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5">
                                 <div className="flex items-center gap-2 text-[12px] text-slate-600">
                                   <span>Batch Status:</span>
-                                  <StatusBadge status={displayedBatch.status} classes={BATCH_STATUS_CLASSES} />
+                                  <StatusBadge status={resolveBatchStatusLabel(displayedBatch)} classes={BATCH_STATUS_CLASSES} />
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   {displayedBatch.status === "PENDING" ? (
@@ -699,7 +736,7 @@ const ProductionManageBatchPage = () => {
                                     <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Finished Goods / Production For</div>
                                     <div className="border-b border-slate-200/70 px-3 py-2 font-medium text-slate-900">{productionFor}</div>
                                     <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Production Type</div>
-                                    <div className="border-b border-slate-200/70 px-3 py-2">{order?.production_type || "-"}</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{displayedProductionType}</div>
                                     <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Production Status</div>
                                     <div className="border-b border-slate-200/70 px-3 py-2">{order?.status?.replace(/_/g, " ") || "-"}</div>
                                     <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Batch</div>
@@ -896,11 +933,11 @@ const ProductionManageBatchPage = () => {
         <DialogContent className={`max-w-4xl ${dialogContentClassName}`}>
           <DialogHeader className={dialogHeaderClassName}>
             <DialogTitle className="text-xl font-semibold text-slate-950">
-              Weight Entries — {selectedBatch?.batch_no}
+              Weight Entries — {resolveDisplayBatchNo(selectedBatch)}
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500">
               Stage: {selectedBatch?.stage} · BOM: {selectedBatch?.bom_variant_name ?? "None"} · Status:{" "}
-              {selectedBatch ? <StatusBadge status={selectedBatch.status} classes={BATCH_STATUS_CLASSES} /> : "--"}
+              {selectedBatch ? <StatusBadge status={resolveBatchStatusLabel(selectedBatch)} classes={BATCH_STATUS_CLASSES} /> : "--"}
             </DialogDescription>
           </DialogHeader>
 
@@ -1002,7 +1039,7 @@ const ProductionManageBatchPage = () => {
         <DialogContent className={`max-w-3xl ${dialogContentClassName}`}>
           <DialogHeader className={dialogHeaderClassName}>
             <DialogTitle className="text-xl font-semibold text-slate-950">
-              Regrind Material — {selectedBatch?.batch_no}
+              Regrind Material — {resolveDisplayBatchNo(selectedBatch)}
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500">
               Add LDPE/HDPE regrind material entries for this batch.

@@ -21,33 +21,27 @@ type ProductionSectionCardProps = {
 
 const toneClasses = {
   amber: {
-    accent: "before:bg-[#ff6b00]",
-    iconWrap: "bg-[#fff3e8]",
+    iconWrap: "bg-[#fff4eb] text-[#ff6b00]",
     icon: "text-[#ff6b00]",
   },
   blue: {
-    accent: "before:bg-[#2d6cdf]",
-    iconWrap: "bg-[#eef4ff]",
+    iconWrap: "bg-[#eef4ff] text-[#2d6cdf]",
     icon: "text-[#2d6cdf]",
   },
   violet: {
-    accent: "before:bg-[#8b5cf6]",
-    iconWrap: "bg-[#f4efff]",
+    iconWrap: "bg-[#f4efff] text-[#8b5cf6]",
     icon: "text-[#8b5cf6]",
   },
   slate: {
-    accent: "before:bg-[#94a3b8]",
-    iconWrap: "bg-slate-100",
+    iconWrap: "bg-slate-100 text-slate-500",
     icon: "text-slate-500",
   },
   gold: {
-    accent: "before:bg-[#f2b200]",
-    iconWrap: "bg-[#fff8e1]",
+    iconWrap: "bg-[#fff8e1] text-[#c98a00]",
     icon: "text-[#c98a00]",
   },
   emerald: {
-    accent: "before:bg-[#10b981]",
-    iconWrap: "bg-[#eafaf4]",
+    iconWrap: "bg-[#eafaf4] text-[#059669]",
     icon: "text-[#059669]",
   },
 } as const;
@@ -65,21 +59,24 @@ const ProductionSectionCard = ({
   <Card
     className={cn(
       productionCardBaseClassName,
-      "before:absolute before:left-0 before:top-3 before:h-9 before:w-[3px] before:rounded-full",
-      toneClasses[tone].accent,
       className,
     )}
   >
     <CardHeader className={productionCardHeaderClassName}>
-      <div className="flex min-w-0 items-start gap-2.5">
+      <div className="flex min-w-0 items-start gap-3.5">
         {Icon ? (
-          <div className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md", toneClasses[tone].iconWrap)}>
-            <Icon className={cn("h-3.5 w-3.5", toneClasses[tone].icon)} />
+          <div
+            className={cn(
+              "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]",
+              toneClasses[tone].iconWrap,
+            )}
+          >
+            <Icon className={cn("h-5 w-5", toneClasses[tone].icon)} />
           </div>
         ) : null}
         <div className="min-w-0 space-y-1">
-          <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-800">{title}</div>
-          {description ? <p className="text-[12px] leading-5 text-slate-500">{description}</p> : null}
+          <div className="text-[1.05rem] font-semibold tracking-[-0.02em] text-slate-950">{title}</div>
+          {description ? <p className="text-[13px] leading-5 text-slate-500">{description}</p> : null}
         </div>
       </div>
       {action}

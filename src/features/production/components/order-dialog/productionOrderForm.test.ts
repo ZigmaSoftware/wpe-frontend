@@ -93,6 +93,23 @@ describe("productionOrderForm create flow", () => {
     ]);
   });
 
+  it("defaults stage fields to dash and keeps them optional in the form schema", () => {
+    const values = createProductionOrderDefaultValues();
+
+    expect(values.stage).toBe("-");
+    expect(values.next_workflow_stage).toBe("-");
+
+    values.production_id = "PROD-002";
+    values.production_for = "HSN - 600";
+    values.production_type = "WPE Additive Production";
+    values.plan_rows = [{ length_mts: "10.000", qty_mts: "5.000", packets: "2" }];
+    values.resources.production_facility = "10";
+    values.resources.work_center = "20";
+    values.resources.shift_incharge = "30";
+
+    expect(() => productionOrderFormSchema.parse(values)).not.toThrow();
+  });
+
   it("includes all lookup users in the shift incharge options", () => {
     const options = buildInchargeOptions([
       createUserFixture({ id: 1, name: "Dimple", username: "kiran" }),

@@ -482,8 +482,9 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
           const nextBlBatch = normalizeListResponse<ProductionBatch>(nextBatchResponse.data)
             .sort((left, right) => right.id - left.id)
             .find((batch) => batch.status !== "COMPLETED");
-          if (nextBlBatch?.batch_no?.trim()) {
-            nextBatchAutoValue = nextBlBatch.batch_no.trim();
+          const nextBatchDisplayNo = nextBlBatch?.display_batch_no?.trim() || nextBlBatch?.batch_no?.trim();
+          if (nextBatchDisplayNo) {
+            nextBatchAutoValue = nextBatchDisplayNo;
           }
 
           activeBatchIdRef.current = null;

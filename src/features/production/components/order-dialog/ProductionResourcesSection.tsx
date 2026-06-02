@@ -36,13 +36,13 @@ const ProductionResourcesSection = ({
   lookupError,
 }: ProductionResourcesSectionProps) => (
   <ProductionSectionCard
-    title="Date & Time & Resources"
-    description="Assign the production schedule, shift, and operational resources."
+    title="Schedule & Resources"
+    description="Assign when and where this production will take place."
     tone="blue"
     icon={CalendarDays}
   >
-    <div className="space-y-3">
-      <div className="space-y-3">
+    <div className="space-y-4">
+      <div className="space-y-4">
         <FormField
           control={form.control}
           name="resources.production_date"

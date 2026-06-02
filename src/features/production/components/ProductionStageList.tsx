@@ -25,13 +25,15 @@ import {
 } from "@/features/production/utils/routes";
 import {
   formatProductionListLabel,
-  ProductionStatusBadge,
+  WorkflowStageBadge,
 } from "@/features/production/components/productionListShared";
 import { formatDate } from "@/lib/api-helpers";
 import type { ProductionOrder, ProductionStageRecord } from "@/lib/types";
 
 type ProductionStageListProps = {
   stage: ProductionStageValue;
+  headerTitle?: string;
+  headerDescription?: string;
 };
 
 const STAGE_PAGE_META: Record<
@@ -42,6 +44,13 @@ const STAGE_PAGE_META: Record<
     filename: string;
   }
 > = {
+  AD: {
+    label: "AD - Weightage",
+    description: "Manage additive-stage production orders and their batch workflow.",
+    pageDescription: "Manage additive-stage production orders and review their current workflow stage.",
+    emptyDescription: "No AD - Weightage records found.",
+    filename: "production-ad-weightage",
+  },
   BL: {
     label: "BL - Blending",
     description: "Review blending-stage production batches and their live statuses.",
@@ -66,6 +75,13 @@ const STAGE_PAGE_META: Record<
 };
 
 const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; label: string }>> = {
+  AD: [
+    { value: "all", label: "All Statuses" },
+    { value: "PLANNED", label: "Planned" },
+    { value: "IN_PROGRESS", label: "In Progress" },
+    { value: "PLAN_COMPLETED", label: "Completed" },
+    { value: "CLOSED", label: "Closed" },
+  ],
   BL: [
     { value: "all", label: "All Statuses" },
     { value: "PENDING", label: "Pending" },
@@ -92,8 +108,10 @@ const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; 
 const resolvePageSize = (value: StorePageSizeValue) => (value === "all" ? 200 : Number(value));
 
 const getExportColumns = (
+  stage: ProductionStageValue,
   orderLookup: Map<number, ProductionOrder>,
 ): StoreExportColumn<ProductionStageRecord>[] => {
+  const showsBatchCount = stage !== "PR";
   const getProductionName = (row: ProductionStageRecord) => {
     const matchedOrder = orderLookup.get(row.order_id);
     if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
@@ -106,18 +124,19 @@ const getExportColumns = (
   const columns: StoreExportColumn<ProductionStageRecord>[] = [
     { label: "Prd ID", value: (row) => row.production_id || "-" },
     { label: "Production Name", value: (row) => getProductionName(row) },
-    { label: "No.of Batch", value: (row) => row.batch_no || "-" },
+    { label: "No.of Batch", value: (row) => (showsBatchCount ? String(row.batch_count ?? 0) : row.display_batch_no || row.batch_no || "-") },
     { label: "BOM Varient", value: () => "-" },
     { label: "Started Date", value: (row) => formatDate(row.start_date_time || row.production_date) },
     { label: "Ended Date", value: (row) => formatDate(row.end_date_time) },
-    { label: "Production Status", value: (row) => formatProductionListLabel(row.status) },
+    { label: "Production Status", value: (row) => row.workflow_status || "-" },
   ];
   return columns;
 };
 
-const ProductionStageList = ({ stage }: ProductionStageListProps) => {
+const ProductionStageList = ({ stage, headerTitle, headerDescription }: ProductionStageListProps) => {
   const navigate = useNavigate();
   const meta = STAGE_PAGE_META[stage];
+  const showsBatchCount = stage !== "PR";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -179,10 +198,10 @@ const ProductionStageList = ({ stage }: ProductionStageListProps) => {
 
   const handleExport = (format: StoreExportFormat) => {
     exportTableData({
-      title: meta.label,
+      title: headerTitle || meta.label,
       filename: meta.filename,
       rows,
-      columns: getExportColumns(ordersById),
+      columns: getExportColumns(stage, ordersById),
       format,
     });
   };
@@ -190,8 +209,8 @@ const ProductionStageList = ({ stage }: ProductionStageListProps) => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={meta.label}
-        description={meta.pageDescription}
+        title={headerTitle || meta.label}
+        description={headerDescription || meta.pageDescription}
         actions={
           <Button onClick={() => navigate(PRODUCTION_NEW_ORDER_ROUTE)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -266,16 +285,16 @@ const ProductionStageList = ({ stage }: ProductionStageListProps) => {
                       <TableRow
                         key={`${stage}-${row.id}`}
                         className="cursor-pointer hover:bg-slate-50/80"
-                        onClick={() => navigate(getProductionManageBatchRoute(row.order_id))}
+                        onClick={() => navigate(getProductionManageBatchRoute(row.order_id, stage === "PR" ? undefined : stage))}
                       >
                         <TableCell className="font-mono text-xs font-medium">{row.production_id || "-"}</TableCell>
                         <TableCell className="font-medium">{getProductionName(row)}</TableCell>
-                        <TableCell>{row.batch_no || "-"}</TableCell>
+                        <TableCell>{showsBatchCount ? row.batch_count ?? 0 : row.display_batch_no || row.batch_no || "-"}</TableCell>
                         <TableCell className="text-muted-foreground">-</TableCell>
                         <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
                         <TableCell>{formatDate(row.end_date_time)}</TableCell>
                         <TableCell>
-                          <ProductionStatusBadge status={row.status} />
+                          <WorkflowStageBadge status={row.workflow_status} />
                         </TableCell>
                       </TableRow>
                     ))}

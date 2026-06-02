@@ -464,6 +464,8 @@ export type RegrindEntry = {
 export type ProductionBatch = {
   id: number;
   batch_no: string;
+  display_batch_no?: string | null;
+  display_status?: string | null;
   production_order: number;
   bom_variant: number | null;
   bom_variant_name: string | null;
@@ -543,9 +545,11 @@ export type ProductionStageRecord = {
   id: number;
   order_id: number;
   production_id: string;
-  stage: "BL" | "GL" | "PR";
+  stage: "AD" | "BL" | "GL" | "PR";
   production_type: string;
   batch_no: string | null;
+  display_batch_no: string | null;
+  batch_count: number;
   production_date: string;
   shift: string;
   line_no: string;
@@ -553,6 +557,7 @@ export type ProductionStageRecord = {
   end_date_time: string | null;
   plan_id: string | null;
   status: string;
+  workflow_status: string;
 };
 
 export type ImportResponse = {

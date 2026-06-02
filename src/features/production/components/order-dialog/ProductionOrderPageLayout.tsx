@@ -13,13 +13,13 @@ const ProductionOrderPageLayout = ({
   onBack,
   backLabel = "Back to Production",
 }: ProductionOrderPageLayoutProps) => (
-  <div className="-m-4 min-h-full bg-[#eef3f8] px-3 py-2 lg:-m-6 lg:px-4 lg:py-3">
-    <div className="flex min-h-full w-full flex-col gap-2">
+  <div className="-m-4 min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.96),_rgba(244,248,252,0.98)_28%,_rgba(239,244,250,1)_100%)] px-4 py-3 lg:-m-6 lg:px-6 lg:py-4">
+    <div className="flex min-h-full w-full flex-col gap-4">
       <div className="flex items-center">
         <Button
           type="button"
           variant="ghost"
-          className="h-8 rounded-full px-2.5 text-sm font-medium text-slate-600 hover:bg-white/80 hover:text-slate-900"
+          className="h-auto rounded-none px-0 text-sm font-semibold text-slate-600 hover:bg-transparent hover:text-slate-950"
           onClick={onBack}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
