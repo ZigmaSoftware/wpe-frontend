@@ -591,6 +591,7 @@ export const toProductionOrderPayload = (
   const plannedQuantity = getProductionQuantity(values.plan_rows);
   const planId = values.base_order.base_plan_id.trim();
   const bomMultiplier = parseNumericInput(values.materials.bom_multiplier) || 1;
+  const batchNumber = values.details.batch_auto.trim();
   const computedMaterialRows = values.materials.rows.map((row) => computeMaterialRow(row, plannedQuantity, bomMultiplier));
   const materialCost = computedMaterialRows.reduce((sum, row) => sum + row.amount, 0);
 
@@ -604,7 +605,10 @@ export const toProductionOrderPayload = (
     planned_quantity: plannedQuantity.toFixed(3),
     planned_weight: "0.000",
     start_date_time: buildActualStartDateTimeValue(values.resources.production_date, values.resources.shift),
-    batch_number: "",
+    batch_number:
+      batchNumber && batchNumber.toLowerCase() !== "generated on save"
+        ? batchNumber
+        : "",
     line_name: selectedMachine?.name ?? "",
     line_number: selectedMachine?.machine_code ?? "",
     material_cost: materialCost.toFixed(2),

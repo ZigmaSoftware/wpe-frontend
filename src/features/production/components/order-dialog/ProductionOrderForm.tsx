@@ -45,6 +45,7 @@ type ProductionOrderFormProps = {
 };
 
 const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
+const REQUIRED_PRODUCTION_TYPE_OPTIONS = [DEFAULT_PRODUCTION_TYPE, "WPE Blend Production"] as const;
 
 const mapNamedOptions = (items: LookupItem[]) =>
   items.map((item) => ({
@@ -71,16 +72,34 @@ const formatProductionTypeLabel = (value: string) => {
 };
 
 const mapProductionTypeOptions = (items: LookupItem[]): ProductionTypeOption[] =>
-  items
-    .filter((item) => {
-      const name = item.name.trim();
-      return name.length > 0 && name.toLowerCase() !== "all";
-    })
-    .map((item) => ({
-      id: String(item.id),
-      value: item.name,
-      label: item.name,
-    }));
+  {
+    const options = items
+      .filter((item) => {
+        const name = item.name.trim();
+        return name.length > 0 && name.toLowerCase() !== "all";
+      })
+      .map((item) => ({
+        id: String(item.id),
+        value: item.name,
+        label: item.name,
+      }));
+
+    const knownValues = new Set(options.map((option) => option.value.trim().toLowerCase()));
+    REQUIRED_PRODUCTION_TYPE_OPTIONS.forEach((requiredValue) => {
+      if (knownValues.has(requiredValue.toLowerCase())) {
+        return;
+      }
+
+      options.push({
+        id: `fallback-production-type-${requiredValue.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        value: requiredValue,
+        label: requiredValue,
+        description: "Fallback production type",
+      });
+    });
+
+    return options;
+  };
 
 const buildFacilityOptions = (locations: LookupItem[]) => {
   const nonWorkCenterLocations = locations.filter((location) => !/work center/i.test(location.name));

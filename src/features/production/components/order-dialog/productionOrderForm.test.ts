@@ -41,6 +41,7 @@ describe("productionOrderForm create flow", () => {
     values.resources.line_machine_id = String(machineFixture.id);
     values.resources.shift_incharge = "30";
     values.materials.bom_multiplier = "2";
+    values.details.batch_auto = "BATCH-00000042";
     values.materials.rows = [
       {
         client_id: "manual-1",
@@ -74,6 +75,7 @@ describe("productionOrderForm create flow", () => {
     expect(payload.shift).toBe("Shift 1 (6:00 am - 2:00 pm)");
     expect(payload.line_name).toBe("Line 7");
     expect(payload.line_number).toBe("LN-07");
+    expect(payload.batch_number).toBe("BATCH-00000042");
     expect(payload.material_cost).toBe("195.00");
     expect(payload.total_cost).toBe("195.00");
     expect(payload.materials).toEqual([

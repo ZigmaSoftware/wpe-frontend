@@ -6,6 +6,10 @@ import {
   formatOutputDetailDateTime,
   formatOutputTime,
   getMissingRequiredOutputComponents,
+  mapBatchWeightEntryToOutputComponent,
+  mapBomVariantComponentToOutputComponent,
+  mapPersistedOutputCaptureRecord,
+  resolveOutputCaptureComponents,
   type OutputCaptureComponent,
   type OutputComponentCapture,
 } from "./productionOutputCapture";
@@ -48,6 +52,128 @@ const buildCaptureMap = () =>
   ]);
 
 describe("productionOutputCapture helpers", () => {
+  it("prefers active batch entries over BOM and material rows", () => {
+    const components = resolveOutputCaptureComponents({
+      batchEntries: [
+        {
+          id: 5,
+          batch: 3,
+          bom_component: 12,
+          item: 8,
+          source_type: "ITEM",
+          item_code: "GI000007",
+          item_name: "Blend Resin 12a1b6ce",
+          category: "Raw Material",
+          target_weight_grams: "4.500",
+          min_weight_grams: "4.400",
+          max_weight_grams: "4.600",
+          entered_weight_grams: null,
+          is_valid: null,
+          validation_notes: "",
+          source: "MANUAL",
+          entered_by: null,
+          entered_by_username: null,
+          entered_at: "2026-06-02T04:19:16.812391Z",
+        },
+      ],
+      bomComponents: [
+        {
+          id: 99,
+          item: 8,
+          product_subtype: null,
+          source_type: "ITEM",
+          item_code: "GI000006",
+          item_name: "Wrong BOM Component",
+          category: "Raw Material",
+          is_active: true,
+          target_weight_grams: "1.000",
+          min_weight_grams: "0.900",
+          max_weight_grams: "1.100",
+          sequence: 1,
+          is_regrind: false,
+          unit: "kgs",
+        },
+      ],
+      materials: [
+        {
+          client_id: "edit-1",
+          bom_component: 44,
+          item_code: "GI000005",
+          item_name: "Wrong Material Row",
+          per_unit_quantity: "3.000",
+          sequence: 1,
+        },
+      ],
+    });
+
+    expect(components).toEqual([
+      expect.objectContaining({
+        id: "12",
+        bomComponentId: 12,
+        itemCode: "GI000007",
+        itemName: "Blend Resin 12a1b6ce",
+        plannedWeightKg: 4.5,
+        minWeightKg: 4.4,
+        maxWeightKg: 4.6,
+      }),
+    ]);
+  });
+
+  it("uses BOM component bounds when no active batch exists", () => {
+    const component = mapBomVariantComponentToOutputComponent({
+      id: 12,
+      item: 8,
+      product_subtype: null,
+      source_type: "ITEM",
+      item_code: "GI000007",
+      item_name: "Blend Resin 12a1b6ce",
+      category: "Raw Material",
+      is_active: true,
+      target_weight_grams: "4.500",
+      min_weight_grams: "4.400",
+      max_weight_grams: "4.600",
+      sequence: 2,
+      is_regrind: false,
+      unit: "kgs",
+    });
+
+    expect(component).toEqual(
+      expect.objectContaining({
+        id: "12",
+        bomComponentId: 12,
+        plannedWeightKg: 4.5,
+        minWeightKg: 4.4,
+        maxWeightKg: 4.6,
+        sequence: 2,
+      }),
+    );
+  });
+
+  it("maps batch entries into stable capture components", () => {
+    const component = mapBatchWeightEntryToOutputComponent(
+      {
+        bom_component: 12,
+        item_code: "GI000007",
+        item_name: "Blend Resin 12a1b6ce",
+        target_weight_grams: "4.500",
+        min_weight_grams: "4.400",
+        max_weight_grams: "4.600",
+      },
+      0,
+    );
+
+    expect(component).toEqual(
+      expect.objectContaining({
+        id: "12",
+        bomComponentId: 12,
+        plannedWeightKg: 4.5,
+        minWeightKg: 4.4,
+        maxWeightKg: 4.6,
+        sequence: 1,
+      }),
+    );
+  });
+
   it("reports missing required recipe components before final capture", () => {
     const partialCaptureMap = new Map<string, OutputComponentCapture>([
       [
@@ -100,5 +226,58 @@ describe("productionOutputCapture helpers", () => {
     expect(formatOutputDate(record.capturedAt)).toBe("21/05/2026");
     expect(formatOutputTime(record.capturedAt)).toBe("07:10 pm");
     expect(formatOutputDetailDateTime(record.details[0].capturedAt)).toBe("21/05/2026 06:57 pm");
+  });
+
+  it("maps persisted output captures into the UI record shape", () => {
+    const record = mapPersistedOutputCaptureRecord({
+      id: 7,
+      production_order: 2,
+      source_batch: 11,
+      source_batch_no: "BATCH-00000011",
+      sequence: 3,
+      scancode_id: "BIN-BATCH00000011/ITEM-OUT003/REF-20260601123000",
+      recipe_no: "BOM-AD-001",
+      quantity_kg: "77.900",
+      weight_kg: "77.900",
+      binlot: "BATCH-00000011",
+      session_key: "cmp-1",
+      captured_at: "2026-06-01T12:30:00Z",
+      component_columns: [
+        { id: 101, label: "Wood Powder" },
+        { id: 102, label: "HDPE Chips (White)" },
+      ],
+      details: [
+        {
+          component_id: 101,
+          item_code: "WGO:2001",
+          item_name: "Wood Powder",
+          weight_kg: "55.000",
+          captured_at: "2026-06-01T12:20:00Z",
+        },
+        {
+          component_id: 102,
+          item_code: "HDP:2020",
+          item_name: "HDPE Chips (White)",
+          weight_kg: "22.900",
+          captured_at: "2026-06-01T12:22:00Z",
+        },
+      ],
+      created_at: "2026-06-01T12:30:00Z",
+      updated_at: "2026-06-01T12:30:00Z",
+    });
+
+    expect(record.id).toBe("persisted-output-7");
+    expect(record.sourceBatchId).toBe(11);
+    expect(record.componentColumns).toEqual([
+      { id: "101", label: "Wood Powder" },
+      { id: "102", label: "HDPE Chips (White)" },
+    ]);
+    expect(record.details[0]).toEqual(
+      expect.objectContaining({
+        componentId: "101",
+        itemCode: "WGO:2001",
+        weightKg: "55.000",
+      }),
+    );
   });
 });
