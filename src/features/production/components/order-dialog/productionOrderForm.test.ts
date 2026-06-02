@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { LookupItem } from "@/features/wpe-masters/types";
 import type { ProductionMachine } from "@/lib/types";
+import { buildInchargeOptions } from "./ProductionOrderForm";
 import {
   createProductionOrderDefaultValues,
   productionOrderFormSchema,
@@ -19,17 +21,27 @@ const machineFixture: ProductionMachine = {
   updated_at: "2026-01-01T00:00:00Z",
 };
 
+const createUserFixture = (overrides: Partial<LookupItem>): LookupItem => ({
+  id: 1,
+  name: "User One",
+  username: "user1",
+  ...overrides,
+});
+
 describe("productionOrderForm create flow", () => {
   it("validates the minimum ERP payload and preserves field names", () => {
     const values = createProductionOrderDefaultValues();
 
     values.production_id = "PROD-001";
+    values.production_for = "HSN - 500";
+    values.production_type = "Brushing Production";
     values.plan_rows = [{ length_mts: "12.500", qty_mts: "20.000", packets: "4" }];
     values.resources.production_facility = "10";
     values.resources.work_center = "20";
     values.resources.line_machine_id = String(machineFixture.id);
     values.resources.shift_incharge = "30";
     values.materials.bom_multiplier = "2";
+    values.details.batch_auto = "BATCH-00000042";
     values.materials.rows = [
       {
         client_id: "manual-1",
@@ -56,12 +68,14 @@ describe("productionOrderForm create flow", () => {
     const payload = toProductionOrderPayload(parsed, [machineFixture]);
 
     expect(payload.production_id).toBe("PROD-001");
+    expect(payload.production_for).toBe("HSN - 500");
     expect(payload.production_type).toBe(values.production_type);
     expect(payload.status).toBe(values.status);
     expect(payload.planned_quantity).toBe("20.000");
     expect(payload.shift).toBe("Shift 1 (6:00 am - 2:00 pm)");
     expect(payload.line_name).toBe("Line 7");
     expect(payload.line_number).toBe("LN-07");
+    expect(payload.batch_number).toBe("BATCH-00000042");
     expect(payload.material_cost).toBe("195.00");
     expect(payload.total_cost).toBe("195.00");
     expect(payload.materials).toEqual([
@@ -76,6 +90,20 @@ describe("productionOrderForm create flow", () => {
         request_quantity: "25.000",
         amount: "195.00",
       }),
+    ]);
+  });
+
+  it("includes all lookup users in the shift incharge options", () => {
+    const options = buildInchargeOptions([
+      createUserFixture({ id: 1, name: "Dimple", username: "kiran" }),
+      createUserFixture({ id: 2, name: "Operator", username: "operator1" }),
+      createUserFixture({ id: 3, name: "", username: "fallback-user" }),
+    ]);
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: "1", name: "Dimple", description: "kiran" }),
+      expect.objectContaining({ id: "3", name: "fallback-user", description: "fallback-user" }),
+      expect.objectContaining({ id: "2", name: "Operator", description: "operator1" }),
     ]);
   });
 });

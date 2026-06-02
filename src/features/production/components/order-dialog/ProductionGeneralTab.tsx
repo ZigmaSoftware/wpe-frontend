@@ -14,23 +14,27 @@ import ProductionSectionCard from "./ProductionSectionCard";
 import ProductionSpecsSection from "./ProductionSpecsSection";
 import {
   ORDER_STATUS_OPTIONS,
-  PRODUCTION_TYPE_OPTIONS,
   WORKFLOW_STAGE_OPTIONS,
   type NamedOption,
   type ProductionItemOption,
+  type ProductionTypeOption,
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
 import {
   productionFieldLabelClassName,
+  productionFieldGridClassName,
   productionInputClassName,
+  productionSectionColumnsClassName,
 } from "./productionOrderFormStyles";
 
 type ProductionGeneralTabProps = {
   form: UseFormReturn<ProductionOrderFormValues>;
+  productionTypeOptions: ProductionTypeOption[];
   facilityOptions: NamedOption[];
   workCenterOptions: NamedOption[];
   inchargeOptions: NamedOption[];
   machines: ProductionMachine[];
+  productionTypesLoading?: boolean;
   machinesLoading?: boolean;
   lookupsLoading?: boolean;
   lookupError?: string | null;
@@ -38,10 +42,12 @@ type ProductionGeneralTabProps = {
 
 const ProductionGeneralTab = ({
   form,
+  productionTypeOptions,
   facilityOptions,
   workCenterOptions,
   inchargeOptions,
   machines,
+  productionTypesLoading = false,
   machinesLoading = false,
   lookupsLoading = false,
   lookupError,
@@ -68,7 +74,7 @@ const ProductionGeneralTab = ({
         tone="amber"
         icon={Factory}
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className={productionFieldGridClassName}>
           <FormField
             control={form.control}
             name="status"
@@ -103,15 +109,19 @@ const ProductionGeneralTab = ({
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className={productionInputClassName}>
-                      <SelectValue placeholder="Select production type" />
+                      <SelectValue placeholder={productionTypesLoading ? "Loading production types..." : "Select production type"} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {PRODUCTION_TYPE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
+                    {productionTypeOptions.length > 0 ? (
+                      productionTypeOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">No production types available.</div>
+                    )}
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -207,7 +217,7 @@ const ProductionGeneralTab = ({
       }
     />
 
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className={productionSectionColumnsClassName}>
       <ProductionNotesSection form={form} />
       <ProductionSpecsSection form={form} />
     </div>

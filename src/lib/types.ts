@@ -482,6 +482,38 @@ export type ProductionBatch = {
   updated_at: string;
 };
 
+export type ProductionOutputCaptureDetail = {
+  component_id: number;
+  item_code: string;
+  item_name: string;
+  weight_kg: string;
+  captured_at: string;
+};
+
+export type ProductionOutputCaptureColumn = {
+  id: number;
+  label: string;
+};
+
+export type ProductionOutputCapture = {
+  id: number;
+  production_order: number;
+  source_batch: number;
+  source_batch_no: string;
+  sequence: number;
+  scancode_id: string;
+  recipe_no: string;
+  quantity_kg: string;
+  weight_kg: string;
+  binlot: string;
+  session_key: string;
+  captured_at: string;
+  component_columns: ProductionOutputCaptureColumn[];
+  details: ProductionOutputCaptureDetail[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type ProductionOrder = {
   id: number;
   production_id: string;

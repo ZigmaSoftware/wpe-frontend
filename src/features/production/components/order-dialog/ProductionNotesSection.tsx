@@ -8,6 +8,7 @@ import type { ProductionOrderFormValues } from "./productionOrderForm";
 import {
   productionFieldLabelClassName,
   productionInputClassName,
+  productionTextareaClassName,
 } from "./productionOrderFormStyles";
 
 type ProductionNotesSectionProps = {
@@ -24,7 +25,7 @@ const ProductionNotesSection = ({ form }: ProductionNotesSectionProps) => {
       tone="slate"
       icon={NotebookText}
     >
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         <FormField
           control={form.control}
           name="production_for"
@@ -51,7 +52,7 @@ const ProductionNotesSection = ({ form }: ProductionNotesSectionProps) => {
                 rows={4}
                 maxLength={2000}
                 placeholder="Add production notes, special instructions, or planning remarks."
-                className="min-h-[152px] rounded-xl border-slate-200/90 bg-white text-[15px] text-slate-900 placeholder:text-slate-500 focus-visible:border-[#2d6cdf] focus-visible:ring-[#2d6cdf]/20"
+                className={productionTextareaClassName}
               />
               <FormMessage />
             </FormItem>
