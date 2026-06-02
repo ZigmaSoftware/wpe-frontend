@@ -15,7 +15,7 @@ export const PRODUCTION_ORDER_TABS = [
 export type ProductionDialogTab = (typeof PRODUCTION_ORDER_TABS)[number]["value"];
 
 export const ORDER_STATUS_VALUES = ["PLANNED", "IN_PROGRESS", "PLAN_COMPLETED", "CLOSED"] as const;
-export const WORKFLOW_STAGE_VALUES = ["AD", "BL", "GL"] as const;
+export const WORKFLOW_STAGE_VALUES = ["-", "AD", "BL", "GL"] as const;
 export const SHIFT_VALUES = ["SHIFT_1", "SHIFT_2", "SHIFT_3"] as const;
 export const MATERIAL_SOURCE_TYPE_VALUES = ["ITEM", "PRODUCT_SUBTYPE"] as const;
 
@@ -23,6 +23,8 @@ export type ProductionOrderStatusValue = (typeof ORDER_STATUS_VALUES)[number];
 export type WorkflowStageValue = (typeof WORKFLOW_STAGE_VALUES)[number];
 export type ProductionShiftValue = (typeof SHIFT_VALUES)[number];
 export type MaterialSourceTypeValue = (typeof MATERIAL_SOURCE_TYPE_VALUES)[number];
+
+export const DEFAULT_WORKFLOW_STAGE_VALUE: WorkflowStageValue = "-";
 
 export type ProductionItemOption = {
   id: number;
@@ -55,6 +57,7 @@ export const ORDER_STATUS_OPTIONS: Array<{ value: ProductionOrderStatusValue; la
 ];
 
 export const WORKFLOW_STAGE_OPTIONS: Array<{ value: WorkflowStageValue; label: string; description: string }> = [
+  { value: "-", label: "-", description: "No workflow stage selected." },
   { value: "AD", label: "AD · Material Prep", description: "Additive and raw mix preparation." },
   { value: "BL", label: "BL · Blending", description: "Blend setup and processing." },
   { value: "GL", label: "GL · Granulation", description: "Granulation and downstream conversion." },
@@ -358,8 +361,8 @@ export const createProductionOrderDefaultValues = (): ProductionOrderFormValues 
     production_id: "",
     status: "PLANNED",
     production_type: "",
-    stage: "AD",
-    next_workflow_stage: "BL",
+    stage: DEFAULT_WORKFLOW_STAGE_VALUE,
+    next_workflow_stage: DEFAULT_WORKFLOW_STAGE_VALUE,
     finished_goods: null,
     plan_rows: [createEmptyPlanRow()],
     production_for: "",

@@ -133,11 +133,11 @@ const ProductionGeneralTab = ({
             name="stage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className={productionFieldLabelClassName}>Stage*</FormLabel>
+                <FormLabel className={productionFieldLabelClassName}>Stage</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className={productionInputClassName}>
-                      <SelectValue placeholder="Select stage" />
+                      <SelectValue placeholder="-" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -158,11 +158,11 @@ const ProductionGeneralTab = ({
             name="next_workflow_stage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className={productionFieldLabelClassName}>Next Workflow Stage*</FormLabel>
+                <FormLabel className={productionFieldLabelClassName}>Next Workflow Stage</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className={productionInputClassName}>
-                      <SelectValue placeholder="Select next stage" />
+                      <SelectValue placeholder="-" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
