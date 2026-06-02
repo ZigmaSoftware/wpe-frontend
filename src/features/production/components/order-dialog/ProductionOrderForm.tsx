@@ -291,43 +291,43 @@ const ProductionOrderForm = ({
                 </div>
               </div>
 
-              <div className={productionMetricCardClassName}>
-                <FormField
-                  control={form.control}
-                  name="production_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>Production ID*</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Input
-                            {...field}
-                            placeholder={isCreateMode && nextCodeQuery.isLoading ? "Generating..." : "Enter production order ID"}
-                            className={productionCompactInputClassName}
-                            disabled={isCreateMode && nextCodeQuery.isLoading}
-                          />
-                          {isCreateMode ? (
-                            <button
-                              type="button"
-                              title="Regenerate ID"
-                              className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
-                              onClick={() => {
-                                nextCodeQuery.refetch().then((result) => {
-                                  if (result.data) form.setValue("production_id", result.data, { shouldDirty: true });
-                                });
-                              }}
-                            >
-                              <RefreshCw className={`h-3.5 w-3.5 ${nextCodeQuery.isLoading ? "animate-spin" : ""}`} />
-                            </button>
-                          ) : null}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <div className={productionMetricCardClassName}>
+                    <FormField
+                      control={form.control}
+                      name="production_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className={productionFieldLabelClassName}>Production ID*</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input
+                                {...field}
+                                placeholder={isCreateMode && nextCodeQuery.isLoading ? "Generating..." : "Enter production order ID"}
+                                className={productionCompactInputClassName}
+                                disabled={isCreateMode && nextCodeQuery.isLoading}
+                              />
+                              {isCreateMode ? (
+                                <button
+                                  type="button"
+                                  title="Regenerate ID"
+                                  className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
+                                  onClick={() => {
+                                    nextCodeQuery.refetch().then((result) => {
+                                      if (result.data) form.setValue("production_id", result.data, { shouldDirty: true });
+                                    });
+                                  }}
+                                >
+                                  <RefreshCw className={`h-3.5 w-3.5 ${nextCodeQuery.isLoading ? "animate-spin" : ""}`} />
+                                </button>
+                              ) : null}
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
               </div>
-            </div>
 
             <div className="rounded-[24px] border border-slate-200/90 bg-white px-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:px-5 lg:px-6">
               <ProductionTabs value={activeTab} onValueChange={setActiveTab} />
