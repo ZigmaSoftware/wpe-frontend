@@ -20,7 +20,7 @@ import StoreTableToolbar, {
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import {
   getProductionManageBatchRoute,
-  PRODUCTION_NEW_ORDER_ROUTE,
+  getProductionNewOrderRoute,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
 import {
@@ -106,6 +106,11 @@ const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; 
 };
 
 const resolvePageSize = (value: StorePageSizeValue) => (value === "all" ? 200 : Number(value));
+
+const STAGE_CREATE_LABELS: Partial<Record<ProductionStageValue, string>> = {
+  AD: "New AD",
+  BL: "New BL",
+};
 
 const getExportColumns = (
   stage: ProductionStageValue,
@@ -212,9 +217,9 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
         title={headerTitle || meta.label}
         description={headerDescription || meta.pageDescription}
         actions={
-          <Button onClick={() => navigate(PRODUCTION_NEW_ORDER_ROUTE)}>
+          <Button onClick={() => navigate(getProductionNewOrderRoute(stage))}>
             <Plus className="mr-2 h-4 w-4" />
-            New Order
+            {STAGE_CREATE_LABELS[stage] ?? "New Order"}
           </Button>
         }
       />

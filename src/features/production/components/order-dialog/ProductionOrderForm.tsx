@@ -43,6 +43,7 @@ type ProductionOrderFormProps = {
   initialValues?: ProductionOrderFormValues;
   formTitle?: string;
   submitLabel?: string;
+  defaultProductionType?: string;
 };
 
 const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
@@ -136,6 +137,7 @@ const ProductionOrderForm = ({
   initialValues,
   formTitle,
   submitLabel,
+  defaultProductionType = DEFAULT_PRODUCTION_TYPE,
 }: ProductionOrderFormProps) => {
   const [activeTab, setActiveTab] = useState<ProductionDialogTab>("general");
   const form = useForm<ProductionOrderFormValues>({
@@ -234,9 +236,9 @@ const ProductionOrderForm = ({
   const defaultProductionTypeOption = useMemo(
     () =>
       productionTypeOptions.find(
-        (option) => option.value.trim().toLowerCase() === DEFAULT_PRODUCTION_TYPE.toLowerCase(),
+        (option) => option.value.trim().toLowerCase() === defaultProductionType.toLowerCase(),
       ) ?? productionTypeOptions[0],
-    [productionTypeOptions],
+    [defaultProductionType, productionTypeOptions],
   );
 
   useEffect(() => {

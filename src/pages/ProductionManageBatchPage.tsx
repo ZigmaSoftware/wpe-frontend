@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Columns2, PanelLeftOpen, PanelRightOpen, Search } from "lucide-react";
+import { ArrowLeft, Columns2, PanelLeftOpen, PanelRightOpen, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -426,8 +426,7 @@ const ProductionManageBatchPage = () => {
   const rejectedCount = displayedBatch
     ? (displayedBatch.weight_entries ?? []).filter((entry) => entry.is_valid === false).length
     : aggregateRejectedCount;
-  const createBatchDefaultStage: ProductionBatch["stage"] =
-    displayedBatch?.stage ?? "AD";
+  const currentManageStage: ProductionBatch["stage"] = activeStageFilter ?? displayedStage ?? "AD";
   const detailSubtitle = displayedBatch
     ? `${resolveDisplayBatchNo(displayedBatch)} • ${displayedBatch.stage} — ${displayedStageMeta?.label}`
     : "No batches created for this production order yet";
@@ -442,6 +441,22 @@ const ProductionManageBatchPage = () => {
       : viewMode === "right"
         ? "xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
         : "xl:grid-cols-2";
+  const headerActionLabel =
+    currentManageStage === "AD" ? "Batch" : currentManageStage === "BL" ? "Bin Assign" : "Edit";
+  const handleHeaderAction = () => {
+    if (currentManageStage === "AD") {
+      batchForm.reset({
+        stage: currentManageStage,
+        bom_variant: null,
+        machine: null,
+        notes: "",
+      });
+      setCreateBatchOpen(true);
+      return;
+    }
+
+    navigate(getProductionEditRoute(orderId));
+  };
 
   return (
     <div className="-m-4 min-h-full bg-[#eef3f8] py-2 lg:-m-6 lg:py-3">
@@ -664,9 +679,12 @@ const ProductionManageBatchPage = () => {
                               size="sm"
                               variant="outline"
                               className="h-9 rounded-md px-3 text-xs"
-                              onClick={() => navigate(getProductionEditRoute(orderId))}
+                              onClick={handleHeaderAction}
                             >
-                              Edit
+                              {currentManageStage === "AD" || currentManageStage === "BL" ? (
+                                <Plus className="mr-2 h-3.5 w-3.5" />
+                              ) : null}
+                              {headerActionLabel}
                             </Button>
                           </div>
                         </div>
@@ -705,24 +723,6 @@ const ProductionManageBatchPage = () => {
                                     >
                                       Start
                                     </Button>
-                                  ) : null}
-                                  {displayedBatch.status === "IN_PROGRESS" ? (
-                                    <>
-                                      <Button size="sm" variant="outline" className="h-8 rounded-md px-2.5 text-xs" onClick={() => openWeightEntry(displayedBatch)}>
-                                        Weigh
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="h-8 rounded-md px-2.5 text-xs" onClick={() => openRegrind(displayedBatch)}>
-                                        Regrind
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        className="h-8 rounded-md bg-green-600 px-2.5 text-xs text-white hover:bg-green-700"
-                                        onClick={() => confirmBatchMutation.mutate(displayedBatch)}
-                                        disabled={confirmBatchMutation.isPending}
-                                      >
-                                        Confirm
-                                      </Button>
-                                    </>
                                   ) : null}
                                 </div>
                               </div>
