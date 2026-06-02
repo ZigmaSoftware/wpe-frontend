@@ -21,11 +21,11 @@ const ProductionNotesSection = ({ form }: ProductionNotesSectionProps) => {
   return (
     <ProductionSectionCard
       title="Notes"
-      description="Operational context for production, planning, and handover."
-      tone="slate"
+      description="Add context, purpose, or special instructions for this production order."
+      tone="blue"
       icon={NotebookText}
     >
-      <div className="grid gap-3">
+      <div className="grid gap-4 md:grid-cols-[0.95fr_1.05fr]">
         <FormField
           control={form.control}
           name="production_for"
@@ -45,11 +45,11 @@ const ProductionNotesSection = ({ form }: ProductionNotesSectionProps) => {
             <FormItem>
               <div className="flex items-center justify-between gap-3">
                 <FormLabel className={productionFieldLabelClassName}>Notes</FormLabel>
-                <span className="text-xs text-slate-400">{notesValue.length}/2000</span>
+                <span className="text-xs text-slate-400">{notesValue.length} / 2000</span>
               </div>
               <Textarea
                 {...field}
-                rows={4}
+                rows={3}
                 maxLength={2000}
                 placeholder="Add production notes, special instructions, or planning remarks."
                 className={productionTextareaClassName}
