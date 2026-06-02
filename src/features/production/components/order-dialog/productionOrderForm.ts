@@ -29,6 +29,9 @@ export type ProductionItemOption = {
   item_code: string;
   item_name: string;
   unit?: string;
+  _source?: "profile";
+  _profile_length?: string | null;
+  _profile_weight?: string | null;
 };
 
 export type NamedOption = {
@@ -104,6 +107,9 @@ const finishedGoodsSchema = z.object({
   item_code: z.string(),
   item_name: z.string(),
   unit: z.string().optional(),
+  _source: z.literal("profile").optional(),
+  _profile_length: z.string().nullable().optional(),
+  _profile_weight: z.string().nullable().optional(),
 });
 
 const planRowSchema = z.object({

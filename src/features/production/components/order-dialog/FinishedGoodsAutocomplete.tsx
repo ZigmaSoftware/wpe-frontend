@@ -3,6 +3,8 @@ import { Loader2, Search, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { productionMastersApi } from "@/features/production-masters/api/productionMastersApi";
+import type { ProfileCreationRecord } from "@/features/production-masters/types";
 import { coreApi } from "@/lib/api";
 import { normalizeListResponse } from "@/lib/api-helpers";
 import { cn } from "@/lib/utils";
@@ -11,6 +13,16 @@ import {
   productionHelperTextClassName,
   productionInputClassName,
 } from "./productionOrderFormStyles";
+
+const mapProfileToOption = (profile: ProfileCreationRecord): ProductionItemOption => ({
+  id: profile.id,
+  item_code: profile.code ?? profile.name,
+  item_name: profile.name,
+  unit: profile.uom,
+  _source: "profile",
+  _profile_length: profile.length ?? null,
+  _profile_weight: profile.weight_per_piece ?? null,
+});
 
 type FinishedGoodsAutocompleteProps = {
   value: ProductionItemOption | null;
@@ -91,18 +103,43 @@ const FinishedGoodsAutocomplete = ({
     },
   });
 
+  const profileSearchQuery = useQuery({
+    queryKey: ["production-profile-search", debouncedSearch],
+    enabled: open && debouncedSearch.length >= 2,
+    queryFn: async () => {
+      const result = await productionMastersApi.profileCreations.list({
+        page: 1,
+        pageSize: 20,
+        search: debouncedSearch,
+      });
+      return result.items;
+    },
+  });
+
   const suggestions = useMemo(() => {
     const query = debouncedSearch || searchTerm;
     if (!query.trim()) {
       return [];
     }
 
-    return (searchQuery.data ?? []).filter((item) =>
+    const q = query.trim().toLowerCase();
+
+    const itemResults = (searchQuery.data ?? []).filter((item) =>
       [item.item_name, item.item_code, item.unit]
         .filter((candidate): candidate is string => Boolean(candidate))
-        .some((candidate) => candidate.toLowerCase().includes(query.trim().toLowerCase())),
+        .some((candidate) => candidate.toLowerCase().includes(q)),
     );
-  }, [debouncedSearch, searchQuery.data, searchTerm]);
+
+    const profileResults = (profileSearchQuery.data ?? [])
+      .filter((p) =>
+        [p.name, p.code, p.profile_type_name, p.profile_size_name, p.color_name]
+          .filter((candidate): candidate is string => Boolean(candidate))
+          .some((candidate) => candidate.toLowerCase().includes(q)),
+      )
+      .map(mapProfileToOption);
+
+    return [...profileResults, ...itemResults];
+  }, [debouncedSearch, searchQuery.data, profileSearchQuery.data, searchTerm]);
 
   useEffect(() => {
     if (!open) {
@@ -120,9 +157,11 @@ const FinishedGoodsAutocomplete = ({
     optionRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
   }, [highlightedIndex]);
 
+  const isSearching = searchQuery.isLoading || profileSearchQuery.isLoading;
+
   const helperMessage =
     error ??
-    (open && debouncedSearch.length >= 2 && !searchQuery.isLoading && suggestions.length === 0
+    (open && debouncedSearch.length >= 2 && !isSearching && suggestions.length === 0
       ? "No matching finished goods found."
       : searchTerm.trim().length > 0 && !value && !open
         ? "Select a finished goods item from the suggestion list."
@@ -208,7 +247,7 @@ const FinishedGoodsAutocomplete = ({
           className={cn(productionInputClassName, "pl-9 pr-16", error && "border-destructive")}
         />
         <div className="absolute inset-y-0 right-2 flex items-center gap-1">
-          {searchQuery.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-300" /> : null}
+          {isSearching ? <Loader2 className="h-4 w-4 animate-spin text-slate-300" /> : null}
           {searchTerm ? (
             <Button
               type="button"
@@ -240,24 +279,25 @@ const FinishedGoodsAutocomplete = ({
               <div className="px-3 py-3 text-sm text-slate-500">Type at least 2 characters to search finished goods.</div>
             ) : null}
 
-            {debouncedSearch.length >= 2 && searchQuery.isLoading ? (
+            {debouncedSearch.length >= 2 && isSearching ? (
               <div className="flex items-center gap-2 px-3 py-3 text-sm text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Searching products...
               </div>
             ) : null}
 
-            {debouncedSearch.length >= 2 && !searchQuery.isLoading && suggestions.length === 0 ? (
+            {debouncedSearch.length >= 2 && !isSearching && suggestions.length === 0 ? (
               <div className="px-3 py-3 text-sm text-slate-500">No finished goods matched your search.</div>
             ) : null}
 
             {suggestions.map((item, index) => {
               const query = debouncedSearch || searchTerm;
               const active = index === highlightedIndex;
+              const isProfile = item._source === "profile";
 
               return (
                 <button
-                  key={item.id}
+                  key={`${isProfile ? "profile" : "item"}-${item.id}`}
                   ref={(node) => {
                     optionRefs.current[index] = node;
                   }}
@@ -271,10 +311,19 @@ const FinishedGoodsAutocomplete = ({
                   onMouseDown={() => handleSelect(item)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                 >
-                  <span className="font-medium text-slate-900">{highlightText(item.item_name, query)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-900">{highlightText(item.item_name, query)}</span>
+                    {isProfile ? (
+                      <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-600">
+                        Profile
+                      </span>
+                    ) : null}
+                  </div>
                   <span className="text-xs text-slate-500">
                     {highlightText(item.item_code, query)}
                     {item.unit ? ` · ${item.unit}` : ""}
+                    {isProfile && item._profile_length ? ` · ${item._profile_length} m` : ""}
+                    {isProfile && item._profile_weight ? ` · ${item._profile_weight} kg/pc` : ""}
                   </span>
                 </button>
               );
