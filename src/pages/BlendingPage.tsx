@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FlaskConical, Plus, Trash2 } from "lucide-react";
+import { FlaskConical, Printer, Plus, Trash2 } from "lucide-react";
 import { useDeferredValue, useEffect, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
@@ -42,6 +42,7 @@ import StoreTableToolbar, {
   type StorePageSizeValue,
 } from "@/features/store/components/StoreTableToolbar";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
+import { printStoreRequest } from "@/features/blending/utils/printSR";
 import { getPageCount, getPageSerialNumber, paginateRows } from "@/features/store/utils/table";
 import { toast } from "@/components/ui/sonner";
 import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
@@ -626,6 +627,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                     <TableHead>Requested Date</TableHead>
                     <TableHead>Approved By</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="w-20 text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -652,6 +654,16 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                         <TableCell>{formatDateTime(request.requested_at)}</TableCell>
                         <TableCell>{request.approved_by_username || "-"}</TableCell>
                         <TableCell className={statusClassName(request.status)}>{request.status}</TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            title="Print SR"
+                            onClick={() => printStoreRequest(request)}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}

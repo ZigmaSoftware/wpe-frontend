@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Factory } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -44,7 +45,21 @@ const ProductionGeneralTab = ({
   machinesLoading = false,
   lookupsLoading = false,
   lookupError,
-}: ProductionGeneralTabProps) => (
+}: ProductionGeneralTabProps) => {
+  const finishedGoods = form.watch("finished_goods");
+
+  useEffect(() => {
+    if (finishedGoods?._source === "profile") {
+      if (finishedGoods._profile_length) {
+        form.setValue("plan_rows.0.length_mts", finishedGoods._profile_length, { shouldDirty: true });
+      }
+      if (finishedGoods._profile_weight) {
+        form.setValue("plan_rows.0.qty_mts", finishedGoods._profile_weight, { shouldDirty: true });
+      }
+    }
+  }, [finishedGoods, form]);
+
+  return (
   <div className="space-y-5">
     <div className="grid gap-5 xl:grid-cols-2">
       <ProductionSectionCard
@@ -199,6 +214,7 @@ const ProductionGeneralTab = ({
 
     <ProductionDetailsSection form={form} />
   </div>
-);
+  );
+};
 
 export default ProductionGeneralTab;
