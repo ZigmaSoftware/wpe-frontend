@@ -1,10 +1,91 @@
+import type { BOMVariantComponent, BatchWeightEntry, ProductionOutputCapture } from "@/lib/types";
+
 export type OutputCaptureComponent = {
   id: string;
+  bomComponentId?: number | null;
   itemCode: string;
   itemName: string;
   plannedWeightKg: number;
+  minWeightKg?: number;
+  maxWeightKg?: number;
   toleranceKg?: number;
   sequence: number;
+};
+
+export type OutputCaptureMaterialSeed = {
+  client_id: string;
+  bom_component?: number | null;
+  item_code: string;
+  item_name: string;
+  per_unit_quantity: string;
+  tolerance_kg?: string;
+  sequence: number;
+};
+
+const parseOutputWeightValue = (value?: string | null) => {
+  const numeric = Number(value ?? "");
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+export const mapBatchWeightEntryToOutputComponent = (
+  entry: Pick<
+    BatchWeightEntry,
+    "bom_component" | "item_code" | "item_name" | "target_weight_grams" | "min_weight_grams" | "max_weight_grams"
+  >,
+  index: number,
+): OutputCaptureComponent => ({
+  id: String(entry.bom_component),
+  bomComponentId: entry.bom_component,
+  itemCode: entry.item_code,
+  itemName: entry.item_name || entry.item_code,
+  plannedWeightKg: parseOutputWeightValue(entry.target_weight_grams),
+  minWeightKg: parseOutputWeightValue(entry.min_weight_grams),
+  maxWeightKg: parseOutputWeightValue(entry.max_weight_grams),
+  sequence: index + 1,
+});
+
+export const mapBomVariantComponentToOutputComponent = (component: BOMVariantComponent): OutputCaptureComponent => ({
+  id: String(component.id),
+  bomComponentId: component.id,
+  itemCode: component.item_code,
+  itemName: component.item_name || component.item_code,
+  plannedWeightKg: parseOutputWeightValue(component.target_weight_grams),
+  minWeightKg: parseOutputWeightValue(component.min_weight_grams),
+  maxWeightKg: parseOutputWeightValue(component.max_weight_grams),
+  sequence: component.sequence,
+});
+
+export const resolveOutputCaptureComponents = ({
+  batchEntries,
+  bomComponents,
+  materials,
+}: {
+  batchEntries?: BatchWeightEntry[] | null;
+  bomComponents?: BOMVariantComponent[] | null;
+  materials: OutputCaptureMaterialSeed[];
+}): OutputCaptureComponent[] => {
+  if (batchEntries?.length) {
+    return batchEntries.map(mapBatchWeightEntryToOutputComponent);
+  }
+
+  if (bomComponents?.length) {
+    return [...bomComponents]
+      .sort((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
+      .map(mapBomVariantComponentToOutputComponent);
+  }
+
+  return [...materials]
+    .sort((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
+    .map((material, index) => ({
+      id: material.bom_component ? String(material.bom_component) : material.client_id,
+      bomComponentId: material.bom_component ?? null,
+      itemCode: material.item_code,
+      itemName: material.item_name || material.item_code,
+      plannedWeightKg: parseOutputWeightValue(material.per_unit_quantity),
+      toleranceKg:
+        material.tolerance_kg !== undefined ? parseOutputWeightValue(material.tolerance_kg) : undefined,
+      sequence: material.sequence ?? index + 1,
+    }));
 };
 
 export type OutputComponentCapture = {
@@ -30,6 +111,8 @@ export type CapturedOutputRecord = {
   qty: string;
   weightKg: string;
   binlot: string;
+  sourceBatchId?: number | null;
+  sequence?: number | null;
   componentColumns: Array<{
     id: string;
     label: string;
@@ -189,3 +272,27 @@ export const buildCapturedOutputRecord = ({
     }),
   };
 };
+
+export const mapPersistedOutputCaptureRecord = (capture: ProductionOutputCapture): CapturedOutputRecord => ({
+  id: `persisted-output-${capture.id}`,
+  sessionKey: capture.session_key,
+  scancodeId: capture.scancode_id,
+  recipeNo: capture.recipe_no || "—",
+  capturedAt: capture.captured_at,
+  qty: capture.quantity_kg,
+  weightKg: capture.weight_kg,
+  binlot: capture.binlot.trim() || capture.source_batch_no.trim() || "-",
+  sourceBatchId: capture.source_batch,
+  sequence: capture.sequence,
+  componentColumns: capture.component_columns.map((column) => ({
+    id: String(column.id),
+    label: column.label,
+  })),
+  details: capture.details.map((detail) => ({
+    componentId: String(detail.component_id),
+    itemCode: detail.item_code,
+    itemName: detail.item_name,
+    weightKg: detail.weight_kg,
+    capturedAt: detail.captured_at,
+  })),
+});

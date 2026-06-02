@@ -1,9 +1,14 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { CheckCircle2, ChevronDown, ChevronRight, PackageCheck, Scale } from "lucide-react";
+import { useParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { useScannerInput } from "@/hooks/useScannerInput";
 import { useWeightStream } from "@/hooks/useWeightStream";
+import { coreApi } from "@/lib/api";
+import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
+import type { BatchWeightEntry, ProductionBatch, ProductionOutputCapture } from "@/lib/types";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
   areAllRequiredOutputComponentsCaptured,
@@ -13,6 +18,8 @@ import {
   formatOutputTime,
   getMissingRequiredOutputComponents,
   getRequiredOutputComponents,
+  mapPersistedOutputCaptureRecord,
+  resolveOutputCaptureComponents,
   type CapturedOutputRecord,
   type OutputCaptureComponent,
   type OutputComponentCapture,
@@ -21,6 +28,8 @@ import type { ProductionOrderFormValues } from "./productionOrderForm";
 import { useBomComponents } from "./useBomComponents";
 
 const TOLERANCE_PERCENT = 0.5;
+const DEFAULT_BATCH_AUTO_VALUE = "Generated on save";
+const NEXT_PRODUCTION_TYPE_AFTER_AD = "WPE Blend Production";
 
 type DemoMaterial = {
   client_id: string;
@@ -53,36 +62,41 @@ const parseNumericValue = (value?: string | null) => {
   return Number.isFinite(numeric) ? numeric : 0;
 };
 
+const normalizeComparableToken = (value?: string | null) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCaptureComponent) => {
+  if (component.bomComponentId) {
+    const matchedByComponentId = batch.weight_entries.find((entry) => entry.bom_component === component.bomComponentId);
+    if (matchedByComponentId) {
+      return matchedByComponentId;
+    }
+  }
+
+  const componentCode = normalizeComparableToken(component.itemCode);
+  const componentName = normalizeComparableToken(component.itemName);
+
+  return (
+    batch.weight_entries.find((entry) => {
+      const entryCode = normalizeComparableToken(entry.item_code);
+      const entryName = normalizeComparableToken(entry.item_name);
+      return entryCode === componentCode || entryName === componentName;
+    }) ?? null
+  );
+};
+
 const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
+  const queryClient = useQueryClient();
+  const { id: orderIdParam } = useParams<{ id?: string }>();
   const formMaterials = form.watch("materials.rows");
   const selectedBomVariantId = form.watch("materials.selected_bom_variant_id");
   const productionId = form.watch("production_id");
   const batchAuto = form.watch("details.batch_auto");
 
   const materials: OutputMaterialRow[] = formMaterials.length > 0 ? formMaterials : DEMO_MATERIALS;
-  const outputComponents = useMemo<OutputCaptureComponent[]>(
-    () =>
-      [...materials]
-        .sort((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
-        .map((material, index) => ({
-          id: material.client_id,
-          itemCode: material.item_code,
-          itemName: material.item_name || material.item_code,
-          plannedWeightKg: parseNumericValue(material.per_unit_quantity),
-          toleranceKg:
-            "tolerance_kg" in material && material.tolerance_kg !== undefined
-              ? parseNumericValue(material.tolerance_kg)
-              : undefined,
-          sequence: material.sequence ?? index + 1,
-        })),
-    [materials],
-  );
-
-  const requiredComponents = useMemo(
-    () => getRequiredOutputComponents(outputComponents),
-    [outputComponents],
-  );
-
   const bomVariantId = useMemo(() => {
     if (selectedBomVariantId) {
       return Number(selectedBomVariantId);
@@ -98,13 +112,76 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
     batchAuto.trim() && batchAuto.trim().toLowerCase() !== "generated on save"
       ? batchAuto.trim()
       : "-";
+  const persistedOrderId = Number.isInteger(Number(orderIdParam)) && Number(orderIdParam) > 0 ? Number(orderIdParam) : null;
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [capturedWeights, setCapturedWeights] = useState<Map<string, OutputComponentCapture>>(new Map());
   const [capturedOutputs, setCapturedOutputs] = useState<CapturedOutputRecord[]>([]);
   const [expandedOutputIds, setExpandedOutputIds] = useState<Record<string, boolean>>({});
+  const [isSyncingCapture, setIsSyncingCapture] = useState(false);
+  const [isFinalizingCapture, setIsFinalizingCapture] = useState(false);
   const capturedSessionKeysRef = useRef(new Set<string>());
+  const activeBatchIdRef = useRef<number | null>(null);
   const { processScan } = useScannerInput();
+
+  const adBatchesQuery = useQuery({
+    queryKey: ["production-output-batches", persistedOrderId],
+    enabled: persistedOrderId !== null,
+    queryFn: async () => {
+      const response = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
+        params: { stage: "AD" },
+      });
+      return normalizeListResponse<ProductionBatch>(response.data);
+    },
+  });
+
+  const adBatches = useMemo(
+    () => [...(adBatchesQuery.data ?? [])].sort((left, right) => right.id - left.id),
+    [adBatchesQuery.data],
+  );
+  const outputCapturesQuery = useQuery({
+    queryKey: ["production-output-captures", persistedOrderId],
+    enabled: persistedOrderId !== null,
+    queryFn: async () => {
+      const response = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/output-captures/`);
+      return normalizeListResponse<ProductionOutputCapture>(response.data).map(mapPersistedOutputCaptureRecord);
+    },
+  });
+
+  const activeAdBatch = useMemo(
+    () => adBatches.find((batch) => batch.status !== "COMPLETED") ?? null,
+    [adBatches],
+  );
+  const outputComponents = useMemo<OutputCaptureComponent[]>(
+    () =>
+      resolveOutputCaptureComponents({
+        batchEntries: activeAdBatch?.weight_entries,
+        bomComponents: bomVariantQuery.data?.components,
+        materials,
+      }),
+    [activeAdBatch?.weight_entries, bomVariantQuery.data?.components, materials],
+  );
+  const requiredComponents = useMemo(
+    () => getRequiredOutputComponents(outputComponents),
+    [outputComponents],
+  );
+  const persistedCapturedOutputs = outputCapturesQuery.data ?? [];
+  const visibleCapturedOutputs =
+    persistedOrderId !== null
+      ? persistedCapturedOutputs.length > 0
+        ? persistedCapturedOutputs
+        : capturedOutputs
+      : capturedOutputs;
+
+  useEffect(() => {
+    if (activeAdBatch?.id) {
+      activeBatchIdRef.current = activeAdBatch.id;
+    }
+  }, [activeAdBatch?.id]);
+
+  useEffect(() => {
+    capturedSessionKeysRef.current = new Set(visibleCapturedOutputs.map((record) => record.sessionKey));
+  }, [visibleCapturedOutputs]);
 
   useEffect(() => {
     setActiveIndex((current) => {
@@ -127,22 +204,78 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
     });
   }, [outputComponents]);
 
+  useEffect(() => {
+    if (!activeAdBatch) {
+      return;
+    }
+
+    setCapturedWeights(() => {
+      const next = new Map<string, OutputComponentCapture>();
+
+      outputComponents.forEach((component) => {
+        const matchedEntry = findMatchingBatchEntry(activeAdBatch, component);
+        if (!matchedEntry?.entered_weight_grams) {
+          return;
+        }
+
+        next.set(component.id, {
+          componentId: component.id,
+          weightKg: parseNumericValue(matchedEntry.entered_weight_grams),
+          capturedAt: new Date(matchedEntry.entered_at),
+        });
+      });
+
+      return next;
+    });
+  }, [activeAdBatch, outputComponents]);
+
+  useEffect(() => {
+    if (!outputComponents.length) {
+      return;
+    }
+
+    const firstPendingIndex = outputComponents.findIndex((component) => !capturedWeights.has(component.id));
+    if (firstPendingIndex >= 0) {
+      setActiveIndex(firstPendingIndex);
+    }
+  }, [capturedWeights, outputComponents]);
+
+  useEffect(() => {
+    if (!activeAdBatch?.batch_no) {
+      return;
+    }
+
+    form.setValue("details.batch_auto", activeAdBatch.batch_no, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: false,
+    });
+  }, [activeAdBatch?.batch_no, form]);
+
   const activeComponent = outputComponents[activeIndex] ?? null;
   const stdWeight = activeComponent?.plannedWeightKg ?? 0;
   const displayStdWeight = Math.abs(stdWeight);
-  const toleranceKg = activeComponent?.toleranceKg ?? 0;
-  const minWeight =
+  const fallbackToleranceKg = activeComponent?.toleranceKg ?? 0;
+  const fallbackMinWeight =
     displayStdWeight > 0
-      ? toleranceKg > 0
-        ? +(displayStdWeight - toleranceKg).toFixed(3)
+      ? fallbackToleranceKg > 0
+        ? +(displayStdWeight - fallbackToleranceKg).toFixed(3)
         : +(displayStdWeight * (1 - TOLERANCE_PERCENT / 100)).toFixed(3)
       : 0;
-  const maxWeight =
+  const fallbackMaxWeight =
     displayStdWeight > 0
-      ? toleranceKg > 0
-        ? +(displayStdWeight + toleranceKg).toFixed(3)
+      ? fallbackToleranceKg > 0
+        ? +(displayStdWeight + fallbackToleranceKg).toFixed(3)
         : +(displayStdWeight * (1 + TOLERANCE_PERCENT / 100)).toFixed(3)
       : 0;
+  const minWeight =
+    activeComponent?.minWeightKg !== undefined && activeComponent.minWeightKg !== null
+      ? activeComponent.minWeightKg
+      : fallbackMinWeight;
+  const maxWeight =
+    activeComponent?.maxWeightKg !== undefined && activeComponent.maxWeightKg !== null
+      ? activeComponent.maxWeightKg
+      : fallbackMaxWeight;
 
   const { weight, connected, tare } = useWeightStream({
     deviceId: "output-scale-1",
@@ -169,29 +302,130 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
     [capturedWeights, outputComponents],
   );
 
-  const handleCapture = useCallback(() => {
-    if (!canCapture || !weight || !activeComponent) {
+  const invalidateBatchQueries = useCallback(() => {
+    if (persistedOrderId === null) {
       return;
     }
 
-    setCapturedWeights((current) => {
-      const next = new Map(current);
-      next.set(activeComponent.id, {
-        componentId: activeComponent.id,
-        weightKg: weight.value,
-        capturedAt: weight.timestamp,
-      });
+    queryClient.invalidateQueries({ queryKey: ["production-output-batches", persistedOrderId] });
+    queryClient.invalidateQueries({ queryKey: ["production-batches", persistedOrderId] });
+    queryClient.invalidateQueries({ queryKey: ["production-order-detail", String(persistedOrderId)] });
+    queryClient.invalidateQueries({ queryKey: ["production-order", persistedOrderId] });
+    queryClient.invalidateQueries({ queryKey: ["production-output-captures", persistedOrderId] });
+    queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
+  }, [persistedOrderId, queryClient]);
 
-      const nextIndex = outputComponents.findIndex(
-        (component, index) => index > activeIndex && !next.has(component.id),
-      );
-      if (nextIndex >= 0) {
-        setActiveIndex(nextIndex);
+  const ensureEditableAdBatch = useCallback(async () => {
+    if (persistedOrderId === null) {
+      return null;
+    }
+
+    let batch =
+      activeAdBatch ??
+      (activeBatchIdRef.current !== null ? adBatches.find((candidate) => candidate.id === activeBatchIdRef.current) ?? null : null);
+
+    if (batch?.status === "FAILED") {
+      throw new Error("The current AD batch is marked failed. Create a fresh batch before capturing weights.");
+    }
+
+    if (!batch) {
+      if (!bomVariantId) {
+        throw new Error("Select a BOM variant and save the order before capturing AD weights.");
       }
 
-      return next;
-    });
-  }, [activeComponent, activeIndex, canCapture, outputComponents, weight]);
+      const createResponse = await coreApi.post<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
+        stage: "AD",
+        bom_variant: bomVariantId,
+      });
+      batch = unwrapSuccessEnvelope(createResponse.data as ProductionBatch | unknown) as ProductionBatch;
+      activeBatchIdRef.current = batch.id;
+      invalidateBatchQueries();
+    }
+
+    if (batch.status === "PENDING") {
+      const startResponse = await coreApi.post<unknown>(
+        `/api/production/orders/${persistedOrderId}/batches/${batch.id}/start/`,
+      );
+      batch = unwrapSuccessEnvelope(startResponse.data as ProductionBatch | unknown) as ProductionBatch;
+      activeBatchIdRef.current = batch.id;
+      invalidateBatchQueries();
+    }
+
+    return batch;
+  }, [activeAdBatch, adBatches, bomVariantId, invalidateBatchQueries, persistedOrderId]);
+
+  const handleCapture = useCallback(() => {
+    if (!canCapture || !weight || !activeComponent || isSyncingCapture || isFinalizingCapture) {
+      return;
+    }
+
+    const persistCapture = async () => {
+      let resolvedWeight = weight.value;
+      let resolvedCapturedAt = weight.timestamp;
+
+      if (persistedOrderId !== null) {
+        setIsSyncingCapture(true);
+        try {
+          const batch = await ensureEditableAdBatch();
+          if (!batch) {
+            throw new Error("Save the order first to sync AD batch weights.");
+          }
+
+          const matchedEntry = findMatchingBatchEntry(batch, activeComponent);
+          if (!matchedEntry) {
+            throw new Error(`No AD batch component matches ${activeComponent.itemName}.`);
+          }
+
+          const saveResponse = await coreApi.post<unknown>(
+            `/api/production/orders/${persistedOrderId}/batches/${batch.id}/weights/${matchedEntry.id}/`,
+            {
+              entered_weight_grams: weight.value.toFixed(3),
+            },
+          );
+          const savedEntry = unwrapSuccessEnvelope(saveResponse.data as BatchWeightEntry | unknown) as BatchWeightEntry;
+          resolvedWeight = parseNumericValue(savedEntry.entered_weight_grams ?? weight.value.toFixed(3));
+          resolvedCapturedAt = new Date(savedEntry.entered_at);
+          invalidateBatchQueries();
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, "Failed to save AD batch weight."));
+          return;
+        } finally {
+          setIsSyncingCapture(false);
+        }
+      }
+
+      setCapturedWeights((current) => {
+        const next = new Map(current);
+        next.set(activeComponent.id, {
+          componentId: activeComponent.id,
+          weightKg: resolvedWeight,
+          capturedAt: resolvedCapturedAt,
+        });
+
+        const nextIndex = outputComponents.findIndex(
+          (component, index) => index > activeIndex && !next.has(component.id),
+        );
+        if (nextIndex >= 0) {
+          setActiveIndex(nextIndex);
+        }
+
+        return next;
+      });
+    };
+
+    void persistCapture();
+  }, [
+    activeComponent,
+    activeIndex,
+    canCapture,
+    ensureEditableAdBatch,
+    invalidateBatchQueries,
+    isFinalizingCapture,
+    isSyncingCapture,
+    outputComponents,
+    persistedOrderId,
+    weight,
+  ]);
 
   const handleFinalCapture = useCallback(() => {
     if (requiredComponents.length === 0) {
@@ -211,42 +445,123 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
       return;
     }
 
-    const capturedAt = new Date();
-    const nextSequence = capturedOutputs.length + 1;
-    const record = buildCapturedOutputRecord({
-      components: outputComponents,
-      capturedWeights,
-      capturedAt,
-      productionId,
-      batchNo: binlotValue !== "-" ? binlotValue : null,
-      recipeNo,
-      sequence: nextSequence,
-      binlot: binlotValue,
-    });
-
-    if (capturedSessionKeysRef.current.has(record.sessionKey)) {
-      toast.error("This output session is already captured.");
+    if (isFinalizingCapture || isSyncingCapture) {
       return;
     }
 
-    capturedSessionKeysRef.current.add(record.sessionKey);
-    processScan(record.scancodeId);
-    setCapturedOutputs((current) => [record, ...current]);
-    setExpandedOutputIds((current) => ({ ...current, [record.id]: true }));
-    setCapturedWeights(new Map());
-    setActiveIndex(0);
-    toast.success("Captured output recorded.");
+    const finalizeCapture = async () => {
+      let capturedAt = new Date();
+      let resolvedBatchNo = binlotValue;
+      let nextBatchAutoValue = DEFAULT_BATCH_AUTO_VALUE;
+      let persistedRecord: CapturedOutputRecord | null = null;
+
+      if (persistedOrderId !== null) {
+        const activeBatchId = activeBatchIdRef.current ?? activeAdBatch?.id ?? null;
+        if (activeBatchId === null) {
+          toast.error("No active AD batch is available to confirm.");
+          return;
+        }
+
+        setIsFinalizingCapture(true);
+        try {
+          const confirmResponse = await coreApi.post<unknown>(
+            `/api/production/orders/${persistedOrderId}/batches/${activeBatchId}/confirm/`,
+          );
+          const confirmedBatch = unwrapSuccessEnvelope(confirmResponse.data as ProductionBatch | unknown) as ProductionBatch;
+
+          if (confirmedBatch.completed_at) {
+            capturedAt = new Date(confirmedBatch.completed_at);
+          }
+          if (confirmedBatch.batch_no?.trim()) {
+            resolvedBatchNo = confirmedBatch.batch_no.trim();
+          }
+
+          const nextBatchResponse = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
+            params: { stage: "BL" },
+          });
+          const nextBlBatch = normalizeListResponse<ProductionBatch>(nextBatchResponse.data)
+            .sort((left, right) => right.id - left.id)
+            .find((batch) => batch.status !== "COMPLETED");
+          if (nextBlBatch?.batch_no?.trim()) {
+            nextBatchAutoValue = nextBlBatch.batch_no.trim();
+          }
+
+          activeBatchIdRef.current = null;
+          invalidateBatchQueries();
+          const refreshedOutputCaptures = await outputCapturesQuery.refetch();
+          persistedRecord =
+            refreshedOutputCaptures.data?.find((record) => record.sourceBatchId === activeBatchId) ??
+            refreshedOutputCaptures.data?.[0] ??
+            null;
+          form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_AD, {
+            shouldDirty: false,
+            shouldTouch: false,
+            shouldValidate: false,
+          });
+          form.setValue("details.batch_auto", nextBatchAutoValue, {
+            shouldDirty: false,
+            shouldTouch: false,
+            shouldValidate: false,
+          });
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, "Failed to complete the AD batch."));
+          return;
+        } finally {
+          setIsFinalizingCapture(false);
+        }
+      }
+
+      const nextSequence = visibleCapturedOutputs.length + 1;
+      const record =
+        persistedRecord ??
+        buildCapturedOutputRecord({
+          components: outputComponents,
+          capturedWeights,
+          capturedAt,
+          productionId,
+          batchNo: resolvedBatchNo !== "-" ? resolvedBatchNo : null,
+          recipeNo,
+          sequence: nextSequence,
+          binlot: resolvedBatchNo !== "-" ? resolvedBatchNo : binlotValue,
+        });
+
+      if (capturedSessionKeysRef.current.has(record.sessionKey)) {
+        toast.error("This output session is already captured.");
+        return;
+      }
+
+      capturedSessionKeysRef.current.add(record.sessionKey);
+      processScan(record.scancodeId);
+      if (persistedOrderId === null || !persistedRecord) {
+        setCapturedOutputs((current) => [record, ...current]);
+      }
+      setExpandedOutputIds((current) => ({ ...current, [record.id]: true }));
+      setCapturedWeights(new Map());
+      setActiveIndex(0);
+      toast.success(
+        persistedOrderId !== null ? "Captured output recorded and AD batch completed." : "Captured output recorded.",
+      );
+    };
+
+    void finalizeCapture();
   }, [
+    activeAdBatch?.id,
     allRequiredCaptured,
     binlotValue,
-    capturedOutputs.length,
     capturedWeights,
+    form,
+    invalidateBatchQueries,
+    isFinalizingCapture,
+    isSyncingCapture,
     missingComponents,
     outputComponents,
+    persistedOrderId,
     processScan,
     productionId,
     recipeNo,
     requiredComponents.length,
+    outputCapturesQuery,
+    visibleCapturedOutputs.length,
   ]);
 
   const netWeightColor =
@@ -255,6 +570,8 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
       : tolerance?.withinTolerance === true
         ? "text-[#4ade80]"
         : "text-white";
+  const saveWeightDisabled = !canCapture || isSyncingCapture || isFinalizingCapture;
+  const finalCaptureDisabled = !allRequiredCaptured || requiredComponents.length === 0 || isFinalizingCapture || isSyncingCapture;
 
   return (
     <ProductionSectionCard title="Output Weight Capture" tone="emerald" icon={Scale}>
@@ -391,22 +708,24 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
               <button
                 type="button"
                 onClick={handleCapture}
-                disabled={!canCapture}
+                disabled={saveWeightDisabled}
                 title={
-                  !weight?.stable
+                  isSyncingCapture
+                    ? "Saving weight..."
+                    : !weight?.stable
                     ? "Waiting for stable reading…"
                     : !tolerance?.withinTolerance
                       ? `Weight out of range (${minWeight.toFixed(3)}–${maxWeight.toFixed(3)} kg)`
                       : "Save weight to the current capture session"
                 }
                 className={`w-full rounded-xl py-2.5 font-mono text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  canCapture
+                  !saveWeightDisabled
                     ? "cursor-pointer bg-emerald-600 text-white shadow-[0_0_14px_rgba(52,211,153,0.45)] hover:bg-emerald-500"
                     : "cursor-not-allowed bg-slate-800 text-slate-600"
                 }`}
               >
                 <span className="flex flex-col items-center gap-1">
-                  <CheckCircle2 className={`h-4 w-4 ${canCapture ? "text-emerald-200" : "text-slate-700"}`} />
+                  <CheckCircle2 className={`h-4 w-4 ${!saveWeightDisabled ? "text-emerald-200" : "text-slate-700"}`} />
                   SAVE WT.
                 </span>
               </button>
@@ -447,9 +766,9 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
               <button
                 type="button"
                 onClick={handleFinalCapture}
-                disabled={!allRequiredCaptured || requiredComponents.length === 0}
+                disabled={finalCaptureDisabled}
                 className={`rounded-lg px-4 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-colors ${
-                  allRequiredCaptured && requiredComponents.length > 0
+                  !finalCaptureDisabled
                     ? "bg-[#ff6b00] text-white hover:bg-[#ff7e1f]"
                     : "cursor-not-allowed bg-slate-800 text-slate-600"
                 }`}
@@ -477,11 +796,13 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
                 </h3>
               </div>
               <p className="mt-1 text-[11px] text-slate-500">
-                Final-captured recipe outputs stay listed below the weightage panel for this edit session.
+                {persistedOrderId !== null
+                  ? "Final-captured recipe outputs are saved for this production order and reload when you reopen it."
+                  : "Final-captured recipe outputs stay listed below the weightage panel until this order is saved."}
               </p>
             </div>
             <div className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-              {capturedOutputs.length} record{capturedOutputs.length === 1 ? "" : "s"}
+              {visibleCapturedOutputs.length} record{visibleCapturedOutputs.length === 1 ? "" : "s"}
             </div>
           </div>
 
@@ -500,14 +821,14 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
                 </tr>
               </thead>
               <tbody>
-                {capturedOutputs.length === 0 ? (
+                {visibleCapturedOutputs.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-[12px] text-slate-500">
                       Capture each recipe component, then use Final Capture to create the output list.
                     </td>
                   </tr>
                 ) : (
-                  capturedOutputs.map((record, index) => {
+                  visibleCapturedOutputs.map((record, index) => {
                     const isExpanded = !!expandedOutputIds[record.id];
                     const detailMap = new Map(record.details.map((detail) => [detail.componentId, detail]));
 
