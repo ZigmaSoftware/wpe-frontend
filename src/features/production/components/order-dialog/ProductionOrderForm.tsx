@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import type { LookupItem } from "@/features/wpe-masters/types";
+import { coreApi } from "@/lib/api";
 import type { ProductionMachine } from "@/lib/types";
 import ProductionGeneralTab from "./ProductionGeneralTab";
 import ProductionMaterialsTab from "./ProductionMaterialsTab";
@@ -73,7 +74,7 @@ const formatProductionTypeLabel = (value: string) => {
 
 const mapProductionTypeOptions = (items: LookupItem[]): ProductionTypeOption[] =>
   {
-    const options = items
+    const options: ProductionTypeOption[] = items
       .filter((item) => {
         const name = item.name.trim();
         return name.length > 0 && name.toLowerCase() !== "all";
@@ -161,6 +162,25 @@ const ProductionOrderForm = ({
     queryKey: ["production-order-form", "production-types"],
     queryFn: () => wpeMastersApi.productionTypes.lookup(),
   });
+
+  const isCreateMode = !initialValues;
+
+  const nextCodeQuery = useQuery({
+    queryKey: ["production-order-next-code"],
+    queryFn: async () => {
+      const res = await coreApi.get<{ code: string }>("/api/production/production/next-code/");
+      return res.data.code;
+    },
+    enabled: isCreateMode,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+  useEffect(() => {
+    if (isCreateMode && nextCodeQuery.data && !form.getValues("production_id")) {
+      form.setValue("production_id", nextCodeQuery.data, { shouldDirty: false });
+    }
+  }, [isCreateMode, nextCodeQuery.data, form]);
 
   const productionDate = form.watch("resources.production_date");
   const shift = form.watch("resources.shift");
@@ -271,11 +291,28 @@ const ProductionOrderForm = ({
                         <FormItem>
                           <FormLabel className={productionFieldLabelClassName}>Production ID*</FormLabel>
                           <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="Enter production order ID"
-                              className={productionCompactInputClassName}
-                            />
+                            <div className="relative">
+                              <Input
+                                {...field}
+                                placeholder={isCreateMode && nextCodeQuery.isLoading ? "Generating..." : "Enter production order ID"}
+                                className={productionCompactInputClassName}
+                                disabled={isCreateMode && nextCodeQuery.isLoading}
+                              />
+                              {isCreateMode ? (
+                                <button
+                                  type="button"
+                                  title="Regenerate ID"
+                                  className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
+                                  onClick={() => {
+                                    nextCodeQuery.refetch().then((result) => {
+                                      if (result.data) form.setValue("production_id", result.data, { shouldDirty: true });
+                                    });
+                                  }}
+                                >
+                                  <RefreshCw className={`h-3.5 w-3.5 ${nextCodeQuery.isLoading ? "animate-spin" : ""}`} />
+                                </button>
+                              ) : null}
+                            </div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>

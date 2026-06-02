@@ -281,6 +281,7 @@ export type CreateProductionOrderPayload = {
   plan_id?: string;
   material_cost?: string;
   total_cost?: string;
+  extra_form_data?: Record<string, unknown>;
   materials?: Array<{
     sequence: number;
     source_type: MaterialSourceTypeValue;
@@ -518,6 +519,19 @@ export type MaterialPlanItem = {
   notes?: string;
 };
 
+type ExtraFormData = {
+  stage?: string;
+  next_workflow_stage?: string;
+  notes?: string;
+  finished_goods?: ProductionItemOption | null;
+  production_facility?: string;
+  work_center?: string;
+  shift_incharge?: string;
+  plan_rows?: ProductionOrderFormValues["plan_rows"];
+  base_order?: ProductionOrderFormValues["base_order"];
+  custom_specs?: ProductionOrderFormValues["custom_specs"];
+};
+
 export type ProductionOrderDetail = {
   id: number;
   production_id: string;
@@ -531,6 +545,7 @@ export type ProductionOrderDetail = {
   line_number?: string | null;
   line_name?: string | null;
   material_plans?: MaterialPlanItem[];
+  extra_form_data?: ExtraFormData | null;
 };
 
 export const mapOrderDetailToFormValues = (
@@ -538,6 +553,7 @@ export const mapOrderDetailToFormValues = (
   machines: Array<{ id: number; machine_code?: string | null; name: string }>,
 ): ProductionOrderFormValues => {
   const defaults = createProductionOrderDefaultValues();
+  const extra = order.extra_form_data ?? {};
   const shiftValue = SHIFT_OPTIONS.find((o) => o.apiLabel === order.shift)?.value ?? "SHIFT_1";
   const qty = parseFloat(String(order.planned_quantity ?? "0")) || 0;
   const machine = machines.find(
@@ -568,18 +584,33 @@ export const mapOrderDetailToFormValues = (
     }),
   );
 
+  const savedPlanRows = extra.plan_rows;
+  const planRows: ProductionOrderFormValues["plan_rows"] =
+    Array.isArray(savedPlanRows) && savedPlanRows.length > 0
+      ? savedPlanRows
+      : [{ length_mts: "", qty_mts: qty > 0 ? qty.toFixed(3) : "", packets: "" }];
+
   return {
     ...defaults,
     production_id: order.production_id,
     status: (order.status as ProductionOrderStatusValue) ?? "PLANNED",
-    production_for: order.production_for?.trim() || "",
+    production_for: order.production_for?.trim() ?? "",
     production_type: order.production_type?.trim() || defaults.production_type,
-    plan_rows: [{ length_mts: "", qty_mts: qty > 0 ? qty.toFixed(3) : "", packets: "" }],
+    stage: (extra.stage as WorkflowStageValue) ?? defaults.stage,
+    next_workflow_stage: (extra.next_workflow_stage as WorkflowStageValue) ?? defaults.next_workflow_stage,
+    notes: extra.notes ?? defaults.notes,
+    finished_goods: extra.finished_goods ?? null,
+    plan_rows: planRows,
+    base_order: extra.base_order ?? defaults.base_order,
+    custom_specs: extra.custom_specs ?? defaults.custom_specs,
     resources: {
       ...defaults.resources,
       production_date: order.production_date ?? defaults.resources.production_date,
       shift: shiftValue,
+      production_facility: extra.production_facility ?? "",
+      work_center: extra.work_center ?? "",
       line_machine_id: machine ? String(machine.id) : "",
+      shift_incharge: extra.shift_incharge ?? "",
     },
     details: {
       ...defaults.details,
@@ -619,6 +650,18 @@ export const toProductionOrderPayload = (
     line_number: selectedMachine?.machine_code ?? "",
     material_cost: materialCost.toFixed(2),
     total_cost: materialCost.toFixed(2),
+    extra_form_data: {
+      stage: values.stage,
+      next_workflow_stage: values.next_workflow_stage,
+      notes: values.notes,
+      finished_goods: values.finished_goods ?? null,
+      production_facility: values.resources.production_facility,
+      work_center: values.resources.work_center,
+      shift_incharge: values.resources.shift_incharge,
+      plan_rows: values.plan_rows,
+      base_order: values.base_order,
+      custom_specs: values.custom_specs,
+    },
     materials: computedMaterialRows.map((row) => ({
       sequence: row.sequence,
       source_type: row.source_type,
