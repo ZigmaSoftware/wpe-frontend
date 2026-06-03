@@ -10,7 +10,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import type { LookupItem } from "@/features/wpe-masters/types";
 import { coreApi } from "@/lib/api";
-import type { ProductionMachine } from "@/lib/types";
+import type { ProductionBatch, ProductionMachine } from "@/lib/types";
 import ProductionGeneralTab from "./ProductionGeneralTab";
 import ProductionMaterialsTab from "./ProductionMaterialsTab";
 import ProductionOutputTab from "./ProductionOutputTab";
@@ -48,6 +48,10 @@ type ProductionOrderFormProps = {
   defaultWorkCenterName?: string;
   initialTab?: ProductionDialogTab;
   visibleTabs?: ProductionDialogTab[];
+  outputContext?: {
+    stage?: ProductionBatch["stage"] | null;
+    batchId?: number | null;
+  };
 };
 
 const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
@@ -145,6 +149,7 @@ const ProductionOrderForm = ({
   defaultWorkCenterName,
   initialTab,
   visibleTabs,
+  outputContext,
 }: ProductionOrderFormProps) => {
   const enabledTabs = useMemo(
     () => (visibleTabs?.length ? PRODUCTION_ORDER_TABS.filter((tab) => visibleTabs.includes(tab.value)) : PRODUCTION_ORDER_TABS),
@@ -406,7 +411,7 @@ const ProductionOrderForm = ({
                 />
               </TabsContent>
               <TabsContent value="output" forceMount className="mt-0 outline-none">
-                <ProductionOutputTab form={form} />
+                <ProductionOutputTab form={form} context={outputContext} />
               </TabsContent>
               <TabsContent value="scrap" className="mt-0 outline-none">
                 <ProductionPlaceholderTab
