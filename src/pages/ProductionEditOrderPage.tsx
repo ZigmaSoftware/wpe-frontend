@@ -21,6 +21,8 @@ type ProductionEditOrderLocationState = {
   backTo?: string;
   initialTab?: ProductionDialogTab;
   visibleTabs?: ProductionDialogTab[];
+  outputStage?: "AD" | "BL";
+  outputBatchId?: number | null;
 };
 
 const ProductionEditOrderPage = () => {
@@ -98,6 +100,10 @@ const ProductionEditOrderPage = () => {
         submitLabel="Save Changes"
         initialTab={locationState?.initialTab}
         visibleTabs={locationState?.visibleTabs}
+        outputContext={{
+          stage: locationState?.outputStage,
+          batchId: locationState?.outputBatchId ?? null,
+        }}
         defaultWorkCenterName={
           order.production_type?.trim().toLowerCase() === "wpe additive production".toLowerCase()
             ? DEFAULT_AD_WORK_CENTER_NAME

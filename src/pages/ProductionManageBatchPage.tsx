@@ -397,10 +397,12 @@ const ProductionManageBatchPage = () => {
     navigate(getProductionEditRoute(orderId), {
       state: {
         backTo: getProductionManageBatchRoute(orderId, currentManageStage),
-        ...(currentManageStage === "AD"
+        ...(currentManageStage === "AD" || currentManageStage === "BL"
           ? {
               initialTab: "output",
               visibleTabs: ["output"],
+              outputStage: currentManageStage,
+              outputBatchId: currentManageStage === "BL" ? displayedBatch?.id ?? selectedBatchId ?? null : null,
             }
           : {}),
       },

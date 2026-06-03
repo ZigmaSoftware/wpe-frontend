@@ -74,11 +74,7 @@ export const productionLineSchema = baseCodeSchema.extend({
 });
 
 export const binCreationSchema = baseCodeSchema.extend({
-  department: z.coerce.number().min(1, "Department is required."),
-  capacity: numericRequired("Capacity", 0.001),
-  capacity_uom: z.enum(["KG", "NOS"], { required_error: "Capacity UOM is required." }),
   current_status: z.enum(["FREE", "OCCUPIED", "HOLD", ""], { required_error: "Current status is required." }).default(""),
-  current_material: z.string().trim().optional().default(""),
 });
 
 export const bagCreationSchema = baseCodeSchema.extend({

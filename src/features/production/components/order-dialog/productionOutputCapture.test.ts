@@ -240,6 +240,7 @@ describe("productionOutputCapture helpers", () => {
       quantity_kg: "77.900",
       weight_kg: "77.900",
       binlot: "BATCH-00000011",
+      is_outwarded: false,
       session_key: "cmp-1",
       captured_at: "2026-06-01T12:30:00Z",
       component_columns: [
@@ -272,6 +273,7 @@ describe("productionOutputCapture helpers", () => {
       { id: "101", label: "Wood Powder" },
       { id: "102", label: "HDPE Chips (White)" },
     ]);
+    expect(record.isOutwarded).toBe(false);
     expect(record.details[0]).toEqual(
       expect.objectContaining({
         componentId: "101",
@@ -279,5 +281,70 @@ describe("productionOutputCapture helpers", () => {
         weightKg: "55.000",
       }),
     );
+  });
+
+  it("shows '-' when persisted binlot is still just the source batch number", () => {
+    const record = mapPersistedOutputCaptureRecord({
+      id: 8,
+      production_order: 2,
+      source_batch: 14,
+      source_batch_no: "BATCH-00000014",
+      sequence: 4,
+      scancode_id: "BIN-BATCH00000014/ITEM-OUT004/REF-20260603161000",
+      recipe_no: "BOM-BL-001",
+      quantity_kg: "40.000",
+      weight_kg: "40.000",
+      binlot: "BATCH-00000014",
+      is_outwarded: false,
+      session_key: "bl-batch-14",
+      captured_at: "2026-06-03T16:10:00Z",
+      component_columns: [{ id: 14, label: "Bin Weight" }],
+      details: [
+        {
+          component_id: 14,
+          item_code: "BATCH-00000014",
+          item_name: "Bin Weight",
+          weight_kg: "40.000",
+          captured_at: "2026-06-03T16:10:00Z",
+        },
+      ],
+      created_at: "2026-06-03T16:10:00Z",
+      updated_at: "2026-06-03T16:10:00Z",
+    });
+
+    expect(record.binlot).toBe("-");
+  });
+
+  it("maps outwarded BL output captures as outwarded rows", () => {
+    const record = mapPersistedOutputCaptureRecord({
+      id: 9,
+      production_order: 2,
+      source_batch: 17,
+      source_batch_no: "BATCH-00000017",
+      sequence: 5,
+      scancode_id: "BIN-BATCH00000017/ITEM-OUT005/REF-20260603170000",
+      recipe_no: "BOM-BL-002",
+      quantity_kg: "4.000",
+      weight_kg: "4.000",
+      binlot: "BIN-B",
+      is_outwarded: true,
+      session_key: "bl-batch-17",
+      captured_at: "2026-06-03T17:00:00Z",
+      component_columns: [{ id: 17, label: "Bin Weight" }],
+      details: [
+        {
+          component_id: 17,
+          item_code: "BATCH-00000017",
+          item_name: "Bin Weight",
+          weight_kg: "4.000",
+          captured_at: "2026-06-03T17:00:00Z",
+        },
+      ],
+      created_at: "2026-06-03T17:00:00Z",
+      updated_at: "2026-06-03T17:00:00Z",
+    });
+
+    expect(record.binlot).toBe("BIN-B");
+    expect(record.isOutwarded).toBe(true);
   });
 });

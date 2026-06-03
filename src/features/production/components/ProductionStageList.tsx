@@ -143,7 +143,7 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
   const meta = STAGE_PAGE_META[stage];
   const showsBatchCount = stage !== "PR";
   const showRowActions = stage === "AD";
-  const createActionLabel = stage === "AD" ? "AD" : "New Order";
+  const createActionLabel = stage === "AD" ? "New AD" : "New Order";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("all");
