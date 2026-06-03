@@ -1,33 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import type { ProductionStageValue } from "@/features/production/api/productionWorkspaceApi";
+import { useLocation, useNavigate } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import type { CreateProductionOrderPayload } from "@/features/production/components/order-dialog/productionOrderForm";
-import { getProductionStageRoute } from "@/features/production/utils/routes";
+import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type { ProductionMachine } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
 
-const STAGE_PRODUCTION_TYPE_DEFAULTS: Record<ProductionStageValue, string> = {
-  AD: "WPE Additive Production",
-  BL: "WPE Blend Production",
-  GL: "WPE Granulated Blend Production",
-  PR: "WPE Additive Production",
+type ProductionNewOrderLocationState = {
+  backTo?: string;
+  entryStage?: string;
+  defaultWorkCenterName?: string;
 };
 
 const ProductionNewOrderPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
-  const routeStage = searchParams.get("stage")?.toUpperCase();
-  const stage: ProductionStageValue =
-    routeStage === "BL" || routeStage === "GL" || routeStage === "PR" || routeStage === "AD"
-      ? routeStage
-      : "AD";
-  const backRoute = getProductionStageRoute(stage);
-  const defaultProductionType = STAGE_PRODUCTION_TYPE_DEFAULTS[stage];
+  const locationState = location.state as ProductionNewOrderLocationState | null;
+  const backRoute = typeof locationState?.backTo === "string" && locationState.backTo.trim().length > 0
+    ? locationState.backTo
+    : PRODUCTION_ROUTE;
+  const isAdEntry = locationState?.entryStage === "AD" || backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE;
 
   const machinesQ = useQuery({
     queryKey: ["production-machines"],
@@ -57,7 +53,8 @@ const ProductionNewOrderPage = () => {
         isSubmitting={createOrderMutation.isPending}
         machines={machinesQ.data ?? []}
         machinesLoading={machinesQ.isLoading}
-        defaultProductionType={defaultProductionType}
+        formTitle="New Production Order"
+        defaultWorkCenterName={isAdEntry ? locationState?.defaultWorkCenterName ?? "New Line Additive Work Center WIP" : undefined}
       />
     </ProductionOrderPageLayout>
   );

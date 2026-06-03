@@ -43,9 +43,7 @@ import { coreApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type {
   BatchWeightEntry,
-  BOMVariant,
   ProductionBatch,
-  ProductionMachine,
   ProductionOrder,
   RegrindEntry,
 } from "@/lib/types";
@@ -95,15 +93,6 @@ const dialogHeaderClassName = "border-b border-slate-200/75 px-6 py-5 text-left"
 const dialogBodyClassName = "px-6 py-6";
 const productionDialogTextareaClassName =
   "min-h-[88px] rounded-xl border-slate-200/90 bg-white text-[15px] text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-slate-500 focus-visible:border-[#2d6cdf] focus-visible:ring-[#2d6cdf]/20";
-
-const batchSchema = z.object({
-  stage: z.enum(STAGES),
-  bom_variant: z.number().nullable().default(null),
-  machine: z.number().nullable().default(null),
-  notes: z.string().default(""),
-});
-
-type BatchFormValues = z.infer<typeof batchSchema>;
 
 const regrindSchema = z.object({
   item_id: z.number({ required_error: "Item required" }),
@@ -193,16 +182,10 @@ const ProductionManageBatchPage = () => {
 
   const [detailTab, setDetailTab] = useState<"general" | "movement" | "transactions" | "summary">("general");
   const [viewMode, setViewMode] = useState<BatchSplitView>("split");
-  const [createBatchOpen, setCreateBatchOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [weightEntryOpen, setWeightEntryOpen] = useState(false);
   const [regrindOpen, setRegrindOpen] = useState(false);
   const [weightValues, setWeightValues] = useState<Record<number, string>>({});
-
-  const batchForm = useForm<BatchFormValues>({
-    resolver: zodResolver(batchSchema),
-    defaultValues: { stage: "AD", bom_variant: null, machine: null, notes: "" },
-  });
   const regrindForm = useForm<RegrindFormValues>({
     resolver: zodResolver(regrindSchema),
     defaultValues: {
@@ -222,22 +205,6 @@ const ProductionManageBatchPage = () => {
       return response.data;
     },
     enabled: hasValidOrderId,
-  });
-
-  const machinesQ = useQuery({
-    queryKey: ["production-machines"],
-    queryFn: async () => {
-      const response = await coreApi.get<unknown>("/api/production/machines/");
-      return normalizeListResponse<ProductionMachine>(response.data);
-    },
-  });
-
-  const bomVariantsQ = useQuery({
-    queryKey: ["bom-variants"],
-    queryFn: async () => {
-      const response = await coreApi.get<unknown>("/api/production/bom-variants/");
-      return normalizeListResponse<BOMVariant>(response.data);
-    },
   });
 
   const batchesQ = useQuery({
@@ -290,23 +257,6 @@ const ProductionManageBatchPage = () => {
     queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
     queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
   };
-
-  const createBatchMutation = useMutation({
-    mutationFn: (values: BatchFormValues) =>
-      coreApi.post(`/api/production/orders/${orderId}/batches/`, {
-        stage: values.stage,
-        bom_variant: values.bom_variant ?? undefined,
-        machine: values.machine ?? undefined,
-        notes: values.notes,
-      }),
-    onSuccess: (_, values) => {
-      toast.success("Batch created.");
-      setCreateBatchOpen(false);
-      batchForm.reset({ stage: values.stage, bom_variant: null, machine: null, notes: "" });
-      invalidateProductionContext();
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Failed to create batch.")),
-  });
 
   const startBatchMutation = useMutation({
     mutationFn: (batch: ProductionBatchExt) =>
@@ -443,20 +393,18 @@ const ProductionManageBatchPage = () => {
         : "xl:grid-cols-2";
   const headerActionLabel =
     currentManageStage === "AD" ? "Batch" : currentManageStage === "BL" ? "Bin Assign" : "Edit";
-  const handleHeaderAction = () => {
-    if (currentManageStage === "AD") {
-      batchForm.reset({
-        stage: currentManageStage,
-        bom_variant: null,
-        machine: null,
-        notes: "",
-      });
-      setCreateBatchOpen(true);
-      return;
-    }
-
-    navigate(getProductionEditRoute(orderId));
-  };
+  const handleHeaderAction = () =>
+    navigate(getProductionEditRoute(orderId), {
+      state: {
+        backTo: getProductionManageBatchRoute(orderId, currentManageStage),
+        ...(currentManageStage === "AD"
+          ? {
+              initialTab: "output",
+              visibleTabs: ["output"],
+            }
+          : {}),
+      },
+    });
 
   return (
     <div className="-m-4 min-h-full bg-[#eef3f8] py-2 lg:-m-6 lg:py-3">
@@ -797,137 +745,6 @@ const ProductionManageBatchPage = () => {
           </div>
         </div>
       </div>
-
-      <Dialog open={createBatchOpen} onOpenChange={(open) => !open && setCreateBatchOpen(false)}>
-        <DialogContent className={`max-w-xl ${dialogContentClassName}`}>
-          <DialogHeader className={dialogHeaderClassName}>
-            <DialogTitle className="text-xl font-semibold text-slate-950">Create New Batch</DialogTitle>
-            <DialogDescription className="text-sm text-slate-500">
-              For order: <span className="font-medium text-slate-700">{order?.production_id ?? "--"}</span>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className={dialogBodyClassName}>
-            <Form {...batchForm}>
-              <form
-                onSubmit={batchForm.handleSubmit((values) => {
-                  createBatchMutation.mutate(values);
-                })}
-                className="space-y-4"
-              >
-                <FormField
-                  control={batchForm.control}
-                  name="stage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>Stage</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className={productionCompactInputClassName}>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="AD">AD — Raw Weightage</SelectItem>
-                          <SelectItem value="BL">BL — Blending</SelectItem>
-                          <SelectItem value="GL">GL — Granulation</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={batchForm.control}
-                  name="bom_variant"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>BOM Variant</FormLabel>
-                      <Select
-                        value={field.value ? String(field.value) : "none"}
-                        onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}
-                      >
-                        <FormControl>
-                          <SelectTrigger className={productionCompactInputClassName}>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {(bomVariantsQ.data ?? []).map((bom) => (
-                            <SelectItem key={bom.id} value={String(bom.id)}>
-                              {bom.variant_code} — {bom.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className={productionHelperTextClassName}>Optional. Keeps the existing payload structure unchanged.</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={batchForm.control}
-                  name="machine"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>Machine</FormLabel>
-                      <Select
-                        value={field.value ? String(field.value) : "none"}
-                        onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}
-                      >
-                        <FormControl>
-                          <SelectTrigger className={productionCompactInputClassName}>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {(machinesQ.data ?? []).map((machine) => (
-                            <SelectItem key={machine.id} value={String(machine.id)}>
-                              {machine.machine_code} — {machine.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={batchForm.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>Notes</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} rows={3} className={productionDialogTextareaClassName} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setCreateBatchOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="rounded-xl bg-[#2d6cdf] text-white hover:bg-[#255fc8]"
-                    disabled={createBatchMutation.isPending}
-                  >
-                    Create Batch
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={weightEntryOpen} onOpenChange={(open) => !open && setWeightEntryOpen(false)}>
         <DialogContent className={`max-w-4xl ${dialogContentClassName}`}>

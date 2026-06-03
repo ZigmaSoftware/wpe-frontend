@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
@@ -19,15 +19,18 @@ import StoreTableToolbar, {
 } from "@/features/store/components/StoreTableToolbar";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import {
+  getProductionEditRoute,
+  getProductionStageRoute,
   getProductionManageBatchRoute,
   getProductionNewOrderRoute,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
 import {
   formatProductionListLabel,
-  WorkflowStageBadge,
 } from "@/features/production/components/productionListShared";
-import { formatDate } from "@/lib/api-helpers";
+import { toast } from "@/components/ui/sonner";
+import { coreApi } from "@/lib/api";
+import { formatDate, getApiErrorMessage } from "@/lib/api-helpers";
 import type { ProductionOrder, ProductionStageRecord } from "@/lib/types";
 
 type ProductionStageListProps = {
@@ -35,6 +38,8 @@ type ProductionStageListProps = {
   headerTitle?: string;
   headerDescription?: string;
 };
+
+const DEFAULT_AD_WORK_CENTER_NAME = "New Line Additive Work Center WIP";
 
 const STAGE_PAGE_META: Record<
   ProductionStageValue,
@@ -107,11 +112,6 @@ const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; 
 
 const resolvePageSize = (value: StorePageSizeValue) => (value === "all" ? 200 : Number(value));
 
-const STAGE_CREATE_LABELS: Partial<Record<ProductionStageValue, string>> = {
-  AD: "New AD",
-  BL: "New BL",
-};
-
 const getExportColumns = (
   stage: ProductionStageValue,
   orderLookup: Map<number, ProductionOrder>,
@@ -133,15 +133,17 @@ const getExportColumns = (
     { label: "BOM Varient", value: () => "-" },
     { label: "Started Date", value: (row) => formatDate(row.start_date_time || row.production_date) },
     { label: "Ended Date", value: (row) => formatDate(row.end_date_time) },
-    { label: "Production Status", value: (row) => row.workflow_status || "-" },
   ];
   return columns;
 };
 
 const ProductionStageList = ({ stage, headerTitle, headerDescription }: ProductionStageListProps) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const meta = STAGE_PAGE_META[stage];
   const showsBatchCount = stage !== "PR";
+  const showRowActions = stage === "AD";
+  const createActionLabel = stage === "AD" ? "AD" : "New Order";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -192,6 +194,23 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
     [ordersLookupQuery.data],
   );
 
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (orderId: number) => {
+      await coreApi.delete(`/api/production/production/${orderId}/`);
+      return orderId;
+    },
+    onSuccess: () => {
+      toast.success("Production order deleted.");
+      queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders-stage-lookup"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Failed to delete production order."));
+    },
+  });
+
   const getProductionName = (row: ProductionStageRecord) => {
     const matchedOrder = ordersById.get(row.order_id);
     if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
@@ -217,9 +236,19 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
         title={headerTitle || meta.label}
         description={headerDescription || meta.pageDescription}
         actions={
-          <Button onClick={() => navigate(getProductionNewOrderRoute(stage))}>
+          <Button
+            onClick={() =>
+              navigate(getProductionNewOrderRoute(), {
+                state: {
+                  backTo: getProductionStageRoute(stage),
+                  entryStage: stage,
+                  ...(stage === "AD" ? { defaultWorkCenterName: DEFAULT_AD_WORK_CENTER_NAME } : {}),
+                },
+              })
+            }
+          >
             <Plus className="mr-2 h-4 w-4" />
-            {STAGE_CREATE_LABELS[stage] ?? "New Order"}
+            {createActionLabel}
           </Button>
         }
       />
@@ -274,17 +303,17 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
             <>
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Prd ID</TableHead>
-                      <TableHead>Production Name</TableHead>
-                      <TableHead>No.of Batch</TableHead>
-                      <TableHead>BOM Varient</TableHead>
-                      <TableHead>Started Date</TableHead>
-                      <TableHead>Ended Date</TableHead>
-                      <TableHead>Production Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Prd ID</TableHead>
+                        <TableHead>Production Name</TableHead>
+                        <TableHead>No.of Batch</TableHead>
+                        <TableHead>BOM Varient</TableHead>
+                        <TableHead>Started Date</TableHead>
+                        <TableHead>Ended Date</TableHead>
+                        {showRowActions ? <TableHead className="w-[120px] text-right">Actions</TableHead> : null}
+                      </TableRow>
+                    </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow
@@ -298,9 +327,40 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
                         <TableCell className="text-muted-foreground">-</TableCell>
                         <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
                         <TableCell>{formatDate(row.end_date_time)}</TableCell>
-                        <TableCell>
-                          <WorkflowStageBadge status={row.workflow_status} />
-                        </TableCell>
+                        {showRowActions ? (
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-slate-500 hover:text-slate-900"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(getProductionEditRoute(row.order_id));
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-red-500 hover:text-red-600"
+                                disabled={deleteOrderMutation.isPending}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (!window.confirm(`Delete production order ${row.production_id}?`)) {
+                                    return;
+                                  }
+                                  deleteOrderMutation.mutate(row.order_id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>

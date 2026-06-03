@@ -26,8 +26,7 @@ export const getProductionStageRoute = (stage: ProductionStageValue) => {
 export const getProductionManageBatchRoute = (orderId: number | string, stage?: ProductionStageValue) =>
   `${PRODUCTION_MANAGE_BATCH_ROUTE_PREFIX}/${orderId}${stage ? `?stage=${stage}` : ""}`;
 export const getProductionEditRoute = (orderId: number | string) => `${PRODUCTION_ROUTE}/${orderId}/edit`;
-export const getProductionNewOrderRoute = (stage?: ProductionStageValue) =>
-  `${PRODUCTION_NEW_ORDER_ROUTE}${stage ? `?stage=${stage}` : ""}`;
+export const getProductionNewOrderRoute = () => PRODUCTION_NEW_ORDER_ROUTE;
 
 export type ProductionWorkspaceModuleDefinition = {
   to: string;
