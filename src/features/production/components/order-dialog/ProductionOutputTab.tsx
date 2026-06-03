@@ -8,7 +8,7 @@ import { useScannerInput } from "@/hooks/useScannerInput";
 import { useWeightStream } from "@/hooks/useWeightStream";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
-import type { BatchWeightEntry, ProductionBatch, ProductionOutputCapture } from "@/lib/types";
+import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
   areAllRequiredOutputComponentsCaptured,
@@ -315,7 +315,7 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
     queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
   }, [persistedOrderId, queryClient]);
 
-  const ensureEditableAdBatch = useCallback(async () => {
+  const ensureAdBatchForFinalCapture = useCallback(async () => {
     if (persistedOrderId === null) {
       return null;
     }
@@ -330,7 +330,7 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
 
     if (!batch) {
       if (!bomVariantId) {
-        throw new Error("Select a BOM variant and save the order before capturing AD weights.");
+        throw new Error("Select a BOM variant and save the order before final capture.");
       }
 
       const createResponse = await coreApi.post<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
@@ -339,91 +339,85 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
       });
       batch = unwrapSuccessEnvelope(createResponse.data as ProductionBatch | unknown) as ProductionBatch;
       activeBatchIdRef.current = batch.id;
-      invalidateBatchQueries();
-    }
-
-    if (batch.status === "PENDING") {
-      const startResponse = await coreApi.post<unknown>(
-        `/api/production/orders/${persistedOrderId}/batches/${batch.id}/start/`,
-      );
-      batch = unwrapSuccessEnvelope(startResponse.data as ProductionBatch | unknown) as ProductionBatch;
-      activeBatchIdRef.current = batch.id;
-      invalidateBatchQueries();
     }
 
     return batch;
-  }, [activeAdBatch, adBatches, bomVariantId, invalidateBatchQueries, persistedOrderId]);
+  }, [activeAdBatch, adBatches, bomVariantId, persistedOrderId]);
+
+  const startAdBatchIfPending = useCallback(
+    async (batch: ProductionBatch) => {
+      if (persistedOrderId === null || batch.status !== "PENDING") {
+        return batch;
+      }
+
+      const startResponse = await coreApi.post<unknown>(
+        `/api/production/orders/${persistedOrderId}/batches/${batch.id}/start/`,
+      );
+      const startedBatch = unwrapSuccessEnvelope(startResponse.data as ProductionBatch | unknown) as ProductionBatch;
+      activeBatchIdRef.current = startedBatch.id;
+      return startedBatch;
+    },
+    [persistedOrderId],
+  );
+
+  const syncCapturedWeightsToBatch = useCallback(
+    async (batch: ProductionBatch) => {
+      if (persistedOrderId === null) {
+        return;
+      }
+
+      const capturedComponents = outputComponents.filter((component) => capturedWeights.has(component.id));
+      for (const component of capturedComponents) {
+        const capture = capturedWeights.get(component.id);
+        if (!capture) {
+          continue;
+        }
+
+        const matchedEntry = findMatchingBatchEntry(batch, component);
+        if (!matchedEntry) {
+          throw new Error(`No AD batch component matches ${component.itemName}.`);
+        }
+
+        await coreApi.post<unknown>(
+          `/api/production/orders/${persistedOrderId}/batches/${batch.id}/weights/${matchedEntry.id}/`,
+          {
+            entered_weight_grams: capture.weightKg.toFixed(3),
+          },
+        );
+      }
+    },
+    [capturedWeights, outputComponents, persistedOrderId],
+  );
 
   const handleCapture = useCallback(() => {
     if (!canCapture || !weight || !activeComponent || isSyncingCapture || isFinalizingCapture) {
       return;
     }
 
-    const persistCapture = async () => {
-      let resolvedWeight = weight.value;
-      let resolvedCapturedAt = weight.timestamp;
+    setCapturedWeights((current) => {
+      const next = new Map(current);
+      next.set(activeComponent.id, {
+        componentId: activeComponent.id,
+        weightKg: weight.value,
+        capturedAt: weight.timestamp,
+      });
 
-      if (persistedOrderId !== null) {
-        setIsSyncingCapture(true);
-        try {
-          const batch = await ensureEditableAdBatch();
-          if (!batch) {
-            throw new Error("Save the order first to sync AD batch weights.");
-          }
-
-          const matchedEntry = findMatchingBatchEntry(batch, activeComponent);
-          if (!matchedEntry) {
-            throw new Error(`No AD batch component matches ${activeComponent.itemName}.`);
-          }
-
-          const saveResponse = await coreApi.post<unknown>(
-            `/api/production/orders/${persistedOrderId}/batches/${batch.id}/weights/${matchedEntry.id}/`,
-            {
-              entered_weight_grams: weight.value.toFixed(3),
-            },
-          );
-          const savedEntry = unwrapSuccessEnvelope(saveResponse.data as BatchWeightEntry | unknown) as BatchWeightEntry;
-          resolvedWeight = parseNumericValue(savedEntry.entered_weight_grams ?? weight.value.toFixed(3));
-          resolvedCapturedAt = new Date(savedEntry.entered_at);
-          invalidateBatchQueries();
-        } catch (error) {
-          toast.error(getApiErrorMessage(error, "Failed to save AD batch weight."));
-          return;
-        } finally {
-          setIsSyncingCapture(false);
-        }
+      const nextIndex = outputComponents.findIndex(
+        (component, index) => index > activeIndex && !next.has(component.id),
+      );
+      if (nextIndex >= 0) {
+        setActiveIndex(nextIndex);
       }
 
-      setCapturedWeights((current) => {
-        const next = new Map(current);
-        next.set(activeComponent.id, {
-          componentId: activeComponent.id,
-          weightKg: resolvedWeight,
-          capturedAt: resolvedCapturedAt,
-        });
-
-        const nextIndex = outputComponents.findIndex(
-          (component, index) => index > activeIndex && !next.has(component.id),
-        );
-        if (nextIndex >= 0) {
-          setActiveIndex(nextIndex);
-        }
-
-        return next;
-      });
-    };
-
-    void persistCapture();
+      return next;
+    });
   }, [
     activeComponent,
     activeIndex,
     canCapture,
-    ensureEditableAdBatch,
-    invalidateBatchQueries,
     isFinalizingCapture,
     isSyncingCapture,
     outputComponents,
-    persistedOrderId,
     weight,
   ]);
 
@@ -456,14 +450,17 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
       let persistedRecord: CapturedOutputRecord | null = null;
 
       if (persistedOrderId !== null) {
-        const activeBatchId = activeBatchIdRef.current ?? activeAdBatch?.id ?? null;
-        if (activeBatchId === null) {
-          toast.error("No active AD batch is available to confirm.");
-          return;
-        }
-
         setIsFinalizingCapture(true);
+        setIsSyncingCapture(true);
         try {
+          const batchToConfirm = await ensureAdBatchForFinalCapture();
+          if (!batchToConfirm) {
+            throw new Error("Save the order first to complete the AD batch.");
+          }
+
+          const startedBatch = await startAdBatchIfPending(batchToConfirm);
+          await syncCapturedWeightsToBatch(startedBatch);
+          const activeBatchId = startedBatch.id;
           const confirmResponse = await coreApi.post<unknown>(
             `/api/production/orders/${persistedOrderId}/batches/${activeBatchId}/confirm/`,
           );
@@ -508,6 +505,7 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
           toast.error(getApiErrorMessage(error, "Failed to complete the AD batch."));
           return;
         } finally {
+          setIsSyncingCapture(false);
           setIsFinalizingCapture(false);
         }
       }
@@ -546,10 +544,10 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
 
     void finalizeCapture();
   }, [
-    activeAdBatch?.id,
     allRequiredCaptured,
     binlotValue,
     capturedWeights,
+    ensureAdBatchForFinalCapture,
     form,
     invalidateBatchQueries,
     isFinalizingCapture,
@@ -561,6 +559,8 @@ const ProductionOutputTab = ({ form }: ProductionOutputTabProps) => {
     productionId,
     recipeNo,
     requiredComponents.length,
+    startAdBatchIfPending,
+    syncCapturedWeightsToBatch,
     outputCapturesQuery,
     visibleCapturedOutputs.length,
   ]);

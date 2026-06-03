@@ -6,6 +6,7 @@ import { PRODUCTION_ORDER_TABS, type ProductionDialogTab } from "./productionOrd
 type ProductionTabsProps = {
   value: ProductionDialogTab;
   onValueChange: (value: ProductionDialogTab) => void;
+  tabs?: Array<(typeof PRODUCTION_ORDER_TABS)[number]>;
 };
 
 const tabIcons = {
@@ -18,9 +19,9 @@ const tabIcons = {
   resources: Users,
 } as const;
 
-const ProductionTabs = ({ value, onValueChange }: ProductionTabsProps) => (
+const ProductionTabs = ({ value, onValueChange, tabs = PRODUCTION_ORDER_TABS }: ProductionTabsProps) => (
   <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none bg-transparent p-0">
-    {PRODUCTION_ORDER_TABS.map((tab) => {
+    {tabs.map((tab) => {
       const Icon = tabIcons[tab.value];
 
       return (

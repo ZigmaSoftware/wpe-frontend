@@ -4,6 +4,7 @@ import type { ProductionMachine } from "@/lib/types";
 import { buildInchargeOptions } from "./ProductionOrderForm";
 import {
   createProductionOrderDefaultValues,
+  mapOrderDetailToFormValues,
   productionOrderFormSchema,
   toProductionOrderPayload,
 } from "./productionOrderForm";
@@ -122,5 +123,54 @@ describe("productionOrderForm create flow", () => {
       expect.objectContaining({ id: "3", name: "fallback-user", description: "fallback-user" }),
       expect.objectContaining({ id: "2", name: "Operator", description: "operator1" }),
     ]);
+  });
+
+  it("restores saved work center and BOM variant selections from order detail", () => {
+    const values = mapOrderDetailToFormValues(
+      {
+        id: 9,
+        production_id: "PROD-009",
+        production_for: "HSN - 05",
+        production_type: "WPE Additive Production",
+        status: "IN_PROGRESS",
+        batch_number: "BATCH-00000009",
+        production_date: "2026-06-02",
+        shift: "Shift 1 (6:00 am - 2:00 pm)",
+        planned_quantity: "0.007",
+        line_number: "LN-07",
+        line_name: "Line 7",
+        material_plans: [
+          {
+            id: 11,
+            sequence: 1,
+            source_type: "ITEM",
+            is_bom_derived: true,
+            is_manual: false,
+            bom_variant: 77,
+            bom_component: 101,
+            item: 501,
+            item_code: "RM-501",
+            item_name: "Material 501",
+            unit: "kg",
+            per_unit_quantity: "1.000",
+            rate: "2.000",
+          },
+        ],
+        extra_form_data: {
+          production_facility: "10",
+          work_center: "20",
+          shift_incharge: "30",
+          selected_bom_variant_id: "77",
+          bom_multiplier: "3",
+        },
+      },
+      [machineFixture],
+    );
+
+    expect(values.resources.work_center).toBe("20");
+    expect(values.resources.production_facility).toBe("10");
+    expect(values.materials.selected_bom_variant_id).toBe("77");
+    expect(values.materials.bom_multiplier).toBe("3");
+    expect(values.materials.rows).toHaveLength(1);
   });
 });

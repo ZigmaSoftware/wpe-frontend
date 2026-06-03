@@ -393,7 +393,18 @@ const ProductionManageBatchPage = () => {
         : "xl:grid-cols-2";
   const headerActionLabel =
     currentManageStage === "AD" ? "Batch" : currentManageStage === "BL" ? "Bin Assign" : "Edit";
-  const handleHeaderAction = () => navigate(getProductionEditRoute(orderId));
+  const handleHeaderAction = () =>
+    navigate(getProductionEditRoute(orderId), {
+      state: {
+        backTo: getProductionManageBatchRoute(orderId, currentManageStage),
+        ...(currentManageStage === "AD"
+          ? {
+              initialTab: "output",
+              visibleTabs: ["output"],
+            }
+          : {}),
+      },
+    });
 
   return (
     <div className="-m-4 min-h-full bg-[#eef3f8] py-2 lg:-m-6 lg:py-3">

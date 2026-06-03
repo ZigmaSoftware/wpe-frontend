@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import {
   mapOrderDetailToFormValues,
   type CreateProductionOrderPayload,
+  type ProductionDialogTab,
   type ProductionOrderDetail,
 } from "@/features/production/components/order-dialog/productionOrderForm";
 import { PRODUCTION_AD_WEIGHTAGE_ROUTE } from "@/features/production/utils/routes";
@@ -14,10 +15,23 @@ import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type { ProductionMachine } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
 
+const DEFAULT_AD_WORK_CENTER_NAME = "New Line Additive Work Center WIP";
+
+type ProductionEditOrderLocationState = {
+  backTo?: string;
+  initialTab?: ProductionDialogTab;
+  visibleTabs?: ProductionDialogTab[];
+};
+
 const ProductionEditOrderPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const locationState = location.state as ProductionEditOrderLocationState | null;
+  const backRoute = typeof locationState?.backTo === "string" && locationState.backTo.trim().length > 0
+    ? locationState.backTo
+    : PRODUCTION_AD_WEIGHTAGE_ROUTE;
 
   const machinesQ = useQuery({
     queryKey: ["production-machines"],
@@ -46,14 +60,14 @@ const ProductionEditOrderPage = () => {
       queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
       queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["production-order-detail", id] });
-      navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE);
+      navigate(backRoute);
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to update order.")),
   });
 
   if (orderQ.isLoading || machinesQ.isLoading) {
     return (
-      <ProductionOrderPageLayout onBack={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
+      <ProductionOrderPageLayout onBack={() => navigate(backRoute)}>
         <LoadingState label="Loading production order..." />
       </ProductionOrderPageLayout>
     );
@@ -61,7 +75,7 @@ const ProductionEditOrderPage = () => {
 
   if (orderQ.isError) {
     return (
-      <ProductionOrderPageLayout onBack={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
+      <ProductionOrderPageLayout onBack={() => navigate(backRoute)}>
         <ErrorState description="Could not load production order." />
       </ProductionOrderPageLayout>
     );
@@ -72,16 +86,23 @@ const ProductionEditOrderPage = () => {
   const initialValues = mapOrderDetailToFormValues(order, machines);
 
   return (
-    <ProductionOrderPageLayout onBack={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
+    <ProductionOrderPageLayout onBack={() => navigate(backRoute)}>
       <ProductionOrderForm
         onSubmit={(values) => updateOrderMutation.mutate(values)}
-        onCancel={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}
+        onCancel={() => navigate(backRoute)}
         isSubmitting={updateOrderMutation.isPending}
         machines={machines}
         machinesLoading={machinesQ.isLoading}
         initialValues={initialValues}
         formTitle={`Edit Order — ${order.production_id}`}
         submitLabel="Save Changes"
+        initialTab={locationState?.initialTab}
+        visibleTabs={locationState?.visibleTabs}
+        defaultWorkCenterName={
+          order.production_type?.trim().toLowerCase() === "wpe additive production".toLowerCase()
+            ? DEFAULT_AD_WORK_CENTER_NAME
+            : undefined
+        }
       />
     </ProductionOrderPageLayout>
   );

@@ -20,6 +20,7 @@ import {
   buildActualStartDateTimeValue,
   createProductionOrderDefaultValues,
   formatDateTimeLabel,
+  PRODUCTION_ORDER_TABS,
   productionOrderFormSchema,
   toProductionOrderPayload,
   type CreateProductionOrderPayload,
@@ -44,6 +45,9 @@ type ProductionOrderFormProps = {
   formTitle?: string;
   submitLabel?: string;
   defaultProductionType?: string;
+  defaultWorkCenterName?: string;
+  initialTab?: ProductionDialogTab;
+  visibleTabs?: ProductionDialogTab[];
 };
 
 const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
@@ -138,8 +142,20 @@ const ProductionOrderForm = ({
   formTitle,
   submitLabel,
   defaultProductionType = DEFAULT_PRODUCTION_TYPE,
+  defaultWorkCenterName,
+  initialTab,
+  visibleTabs,
 }: ProductionOrderFormProps) => {
-  const [activeTab, setActiveTab] = useState<ProductionDialogTab>("general");
+  const enabledTabs = useMemo(
+    () => (visibleTabs?.length ? PRODUCTION_ORDER_TABS.filter((tab) => visibleTabs.includes(tab.value)) : PRODUCTION_ORDER_TABS),
+    [visibleTabs],
+  );
+  const initialActiveTab = useMemo<ProductionDialogTab>(
+    () =>
+      (initialTab && enabledTabs.some((tab) => tab.value === initialTab) ? initialTab : enabledTabs[0]?.value) ?? "general",
+    [enabledTabs, initialTab],
+  );
+  const [activeTab, setActiveTab] = useState<ProductionDialogTab>(initialActiveTab);
   const form = useForm<ProductionOrderFormValues>({
     resolver: zodResolver(productionOrderFormSchema),
     defaultValues: initialValues ?? createProductionOrderDefaultValues(),
@@ -183,6 +199,12 @@ const ProductionOrderForm = ({
       form.setValue("production_id", nextCodeQuery.data, { shouldDirty: false });
     }
   }, [isCreateMode, nextCodeQuery.data, form]);
+
+  useEffect(() => {
+    if (!enabledTabs.some((tab) => tab.value === activeTab)) {
+      setActiveTab(initialActiveTab);
+    }
+  }, [activeTab, enabledTabs, initialActiveTab]);
 
   const productionDate = form.watch("resources.production_date");
   const shift = form.watch("resources.shift");
@@ -253,6 +275,30 @@ const ProductionOrderForm = ({
       shouldValidate: false,
     });
   }, [defaultProductionTypeOption, form, productionType]);
+
+  useEffect(() => {
+    if (!defaultWorkCenterName) {
+      return;
+    }
+
+    const currentWorkCenter = form.getValues("resources.work_center").trim();
+    if (currentWorkCenter) {
+      return;
+    }
+
+    const matchingWorkCenter = workCenterOptions.find(
+      (option) => option.name.trim().toLowerCase() === defaultWorkCenterName.trim().toLowerCase(),
+    );
+    if (!matchingWorkCenter) {
+      return;
+    }
+
+    form.setValue("resources.work_center", matchingWorkCenter.id, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: false,
+    });
+  }, [defaultWorkCenterName, form, workCenterOptions]);
 
   const lookupsLoading =
     locationsQuery.isLoading ||
@@ -329,9 +375,11 @@ const ProductionOrderForm = ({
                   </div>
               </div>
 
-            <div className="rounded-[24px] border border-slate-200/90 bg-white px-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:px-5 lg:px-6">
-              <ProductionTabs value={activeTab} onValueChange={setActiveTab} />
-            </div>
+            {enabledTabs.length > 1 ? (
+              <div className="rounded-[24px] border border-slate-200/90 bg-white px-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:px-5 lg:px-6">
+                <ProductionTabs value={activeTab} onValueChange={setActiveTab} tabs={enabledTabs} />
+              </div>
+            ) : null}
 
             <div className="flex-1">
               <TabsContent value="general" className="mt-0 outline-none">

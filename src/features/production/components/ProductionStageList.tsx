@@ -36,6 +36,8 @@ type ProductionStageListProps = {
   headerDescription?: string;
 };
 
+const DEFAULT_AD_WORK_CENTER_NAME = "New Line Additive Work Center WIP";
+
 const STAGE_PAGE_META: Record<
   ProductionStageValue,
   Pick<ProductionWorkspaceModuleDefinition, "label" | "description"> & {
@@ -136,6 +138,7 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
   const navigate = useNavigate();
   const meta = STAGE_PAGE_META[stage];
   const showsBatchCount = stage !== "PR";
+  const createActionLabel = stage === "AD" ? "AD" : "New Order";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -214,12 +217,16 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
           <Button
             onClick={() =>
               navigate(getProductionNewOrderRoute(), {
-                state: { backTo: getProductionStageRoute(stage) },
+                state: {
+                  backTo: getProductionStageRoute(stage),
+                  entryStage: stage,
+                  ...(stage === "AD" ? { defaultWorkCenterName: DEFAULT_AD_WORK_CENTER_NAME } : {}),
+                },
               })
             }
           >
             <Plus className="mr-2 h-4 w-4" />
-            New Order
+            {createActionLabel}
           </Button>
         }
       />

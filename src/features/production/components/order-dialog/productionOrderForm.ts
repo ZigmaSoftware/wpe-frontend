@@ -530,6 +530,8 @@ type ExtraFormData = {
   production_facility?: string;
   work_center?: string;
   shift_incharge?: string;
+  selected_bom_variant_id?: string;
+  bom_multiplier?: string;
   plan_rows?: ProductionOrderFormValues["plan_rows"];
   base_order?: ProductionOrderFormValues["base_order"];
   custom_specs?: ProductionOrderFormValues["custom_specs"];
@@ -588,6 +590,8 @@ export const mapOrderDetailToFormValues = (
   );
 
   const savedPlanRows = extra.plan_rows;
+  const inferredBomVariantId =
+    materialRows.find((row) => row.bom_variant !== null)?.bom_variant ?? null;
   const planRows: ProductionOrderFormValues["plan_rows"] =
     Array.isArray(savedPlanRows) && savedPlanRows.length > 0
       ? savedPlanRows
@@ -619,7 +623,13 @@ export const mapOrderDetailToFormValues = (
       ...defaults.details,
       batch_auto: order.batch_number?.trim() || defaults.details.batch_auto,
     },
-    materials: { selected_bom_variant_id: "", bom_multiplier: "1", rows: materialRows },
+    materials: {
+      selected_bom_variant_id:
+        extra.selected_bom_variant_id?.trim() ||
+        (typeof inferredBomVariantId === "number" ? String(inferredBomVariantId) : ""),
+      bom_multiplier: extra.bom_multiplier?.trim() || defaults.materials.bom_multiplier,
+      rows: materialRows,
+    },
   };
 };
 
@@ -661,6 +671,8 @@ export const toProductionOrderPayload = (
       production_facility: values.resources.production_facility,
       work_center: values.resources.work_center,
       shift_incharge: values.resources.shift_incharge,
+      selected_bom_variant_id: values.materials.selected_bom_variant_id,
+      bom_multiplier: values.materials.bom_multiplier,
       plan_rows: values.plan_rows,
       base_order: values.base_order,
       custom_specs: values.custom_specs,

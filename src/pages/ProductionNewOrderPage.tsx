@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import type { CreateProductionOrderPayload } from "@/features/production/components/order-dialog/productionOrderForm";
-import { PRODUCTION_ROUTE } from "@/features/production/utils/routes";
+import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type { ProductionMachine } from "@/lib/types";
@@ -11,6 +11,8 @@ import { toast } from "@/components/ui/sonner";
 
 type ProductionNewOrderLocationState = {
   backTo?: string;
+  entryStage?: string;
+  defaultWorkCenterName?: string;
 };
 
 const ProductionNewOrderPage = () => {
@@ -21,6 +23,7 @@ const ProductionNewOrderPage = () => {
   const backRoute = typeof locationState?.backTo === "string" && locationState.backTo.trim().length > 0
     ? locationState.backTo
     : PRODUCTION_ROUTE;
+  const isAdEntry = locationState?.entryStage === "AD" || backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE;
 
   const machinesQ = useQuery({
     queryKey: ["production-machines"],
@@ -50,6 +53,8 @@ const ProductionNewOrderPage = () => {
         isSubmitting={createOrderMutation.isPending}
         machines={machinesQ.data ?? []}
         machinesLoading={machinesQ.isLoading}
+        formTitle="New Production Order"
+        defaultWorkCenterName={isAdEntry ? locationState?.defaultWorkCenterName ?? "New Line Additive Work Center WIP" : undefined}
       />
     </ProductionOrderPageLayout>
   );
