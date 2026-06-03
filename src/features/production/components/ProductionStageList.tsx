@@ -19,13 +19,13 @@ import StoreTableToolbar, {
 } from "@/features/store/components/StoreTableToolbar";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import {
+  getProductionStageRoute,
   getProductionManageBatchRoute,
   getProductionNewOrderRoute,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
 import {
   formatProductionListLabel,
-  WorkflowStageBadge,
 } from "@/features/production/components/productionListShared";
 import { formatDate } from "@/lib/api-helpers";
 import type { ProductionOrder, ProductionStageRecord } from "@/lib/types";
@@ -107,11 +107,6 @@ const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; 
 
 const resolvePageSize = (value: StorePageSizeValue) => (value === "all" ? 200 : Number(value));
 
-const STAGE_CREATE_LABELS: Partial<Record<ProductionStageValue, string>> = {
-  AD: "New AD",
-  BL: "New BL",
-};
-
 const getExportColumns = (
   stage: ProductionStageValue,
   orderLookup: Map<number, ProductionOrder>,
@@ -133,7 +128,6 @@ const getExportColumns = (
     { label: "BOM Varient", value: () => "-" },
     { label: "Started Date", value: (row) => formatDate(row.start_date_time || row.production_date) },
     { label: "Ended Date", value: (row) => formatDate(row.end_date_time) },
-    { label: "Production Status", value: (row) => row.workflow_status || "-" },
   ];
   return columns;
 };
@@ -217,9 +211,15 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
         title={headerTitle || meta.label}
         description={headerDescription || meta.pageDescription}
         actions={
-          <Button onClick={() => navigate(getProductionNewOrderRoute(stage))}>
+          <Button
+            onClick={() =>
+              navigate(getProductionNewOrderRoute(), {
+                state: { backTo: getProductionStageRoute(stage) },
+              })
+            }
+          >
             <Plus className="mr-2 h-4 w-4" />
-            {STAGE_CREATE_LABELS[stage] ?? "New Order"}
+            New Order
           </Button>
         }
       />
@@ -282,7 +282,6 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
                       <TableHead>BOM Varient</TableHead>
                       <TableHead>Started Date</TableHead>
                       <TableHead>Ended Date</TableHead>
-                      <TableHead>Production Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -298,9 +297,6 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
                         <TableCell className="text-muted-foreground">-</TableCell>
                         <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
                         <TableCell>{formatDate(row.end_date_time)}</TableCell>
-                        <TableCell>
-                          <WorkflowStageBadge status={row.workflow_status} />
-                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
