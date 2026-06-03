@@ -6,7 +6,7 @@ import { PRODUCTION_ORDER_TABS, type ProductionDialogTab } from "./productionOrd
 type ProductionTabsProps = {
   value: ProductionDialogTab;
   onValueChange: (value: ProductionDialogTab) => void;
-  tabs?: Array<(typeof PRODUCTION_ORDER_TABS)[number]>;
+  tabs?: ReadonlyArray<(typeof PRODUCTION_ORDER_TABS)[number]>;
 };
 
 const tabIcons = {

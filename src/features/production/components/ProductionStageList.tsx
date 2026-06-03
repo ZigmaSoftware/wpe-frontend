@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
@@ -19,6 +19,7 @@ import StoreTableToolbar, {
 } from "@/features/store/components/StoreTableToolbar";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import {
+  getProductionEditRoute,
   getProductionStageRoute,
   getProductionManageBatchRoute,
   getProductionNewOrderRoute,
@@ -27,7 +28,9 @@ import {
 import {
   formatProductionListLabel,
 } from "@/features/production/components/productionListShared";
-import { formatDate } from "@/lib/api-helpers";
+import { toast } from "@/components/ui/sonner";
+import { coreApi } from "@/lib/api";
+import { formatDate, getApiErrorMessage } from "@/lib/api-helpers";
 import type { ProductionOrder, ProductionStageRecord } from "@/lib/types";
 
 type ProductionStageListProps = {
@@ -136,8 +139,10 @@ const getExportColumns = (
 
 const ProductionStageList = ({ stage, headerTitle, headerDescription }: ProductionStageListProps) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const meta = STAGE_PAGE_META[stage];
   const showsBatchCount = stage !== "PR";
+  const showRowActions = stage === "AD";
   const createActionLabel = stage === "AD" ? "AD" : "New Order";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
@@ -188,6 +193,23 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
       new Map((ordersLookupQuery.data ?? []).map((order) => [order.id, order])),
     [ordersLookupQuery.data],
   );
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (orderId: number) => {
+      await coreApi.delete(`/api/production/production/${orderId}/`);
+      return orderId;
+    },
+    onSuccess: () => {
+      toast.success("Production order deleted.");
+      queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders-stage-lookup"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Failed to delete production order."));
+    },
+  });
 
   const getProductionName = (row: ProductionStageRecord) => {
     const matchedOrder = ordersById.get(row.order_id);
@@ -281,16 +303,17 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
             <>
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Prd ID</TableHead>
-                      <TableHead>Production Name</TableHead>
-                      <TableHead>No.of Batch</TableHead>
-                      <TableHead>BOM Varient</TableHead>
-                      <TableHead>Started Date</TableHead>
-                      <TableHead>Ended Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Prd ID</TableHead>
+                        <TableHead>Production Name</TableHead>
+                        <TableHead>No.of Batch</TableHead>
+                        <TableHead>BOM Varient</TableHead>
+                        <TableHead>Started Date</TableHead>
+                        <TableHead>Ended Date</TableHead>
+                        {showRowActions ? <TableHead className="w-[120px] text-right">Actions</TableHead> : null}
+                      </TableRow>
+                    </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow
@@ -304,6 +327,40 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
                         <TableCell className="text-muted-foreground">-</TableCell>
                         <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
                         <TableCell>{formatDate(row.end_date_time)}</TableCell>
+                        {showRowActions ? (
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-slate-500 hover:text-slate-900"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(getProductionEditRoute(row.order_id));
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-red-500 hover:text-red-600"
+                                disabled={deleteOrderMutation.isPending}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (!window.confirm(`Delete production order ${row.production_id}?`)) {
+                                    return;
+                                  }
+                                  deleteOrderMutation.mutate(row.order_id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
