@@ -360,6 +360,7 @@ const ProductionOrderForm = ({
                                 className={productionCompactInputClassName}
                                 disabled={isCreateMode && nextCodeQuery.isLoading}
                               />
+                              
                               {isCreateMode ? (
                                 <button
                                   type="button"
