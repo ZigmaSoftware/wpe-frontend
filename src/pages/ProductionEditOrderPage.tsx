@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import {
@@ -11,6 +11,7 @@ import {
 import {
   PRODUCTION_AD_WEIGHTAGE_ROUTE,
   PRODUCTION_BL_BLENDING_ROUTE,
+  PRODUCTION_GL_GRANULATION_ROUTE,
 } from "@/features/production/utils/routes";
 import { ErrorState, LoadingState } from "@/components/QueryState";
 import { coreApi } from "@/lib/api";
@@ -32,25 +33,46 @@ const ProductionEditOrderPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const locationState = location.state as ProductionEditOrderLocationState | null;
+  const searchOutputMode = searchParams.get("mode");
+  const searchOutputStage = searchParams.get("stage")?.toUpperCase();
+  const searchOutputBatchIdRaw = searchParams.get("batchId");
+  const searchOutputBatchId = searchOutputBatchIdRaw ? Number(searchOutputBatchIdRaw) : null;
+  const searchVisibleTabs = searchOutputMode === "output" ? (["output"] as ProductionDialogTab[]) : undefined;
+  const searchInitialTab = searchOutputMode === "output" ? ("output" as ProductionDialogTab) : undefined;
+  const normalizedSearchOutputStage =
+    searchOutputStage === "AD" || searchOutputStage === "BL" || searchOutputStage === "GL"
+      ? searchOutputStage
+      : null;
+  const effectiveInitialTab = locationState?.initialTab ?? searchInitialTab;
+  const effectiveVisibleTabs = locationState?.visibleTabs ?? searchVisibleTabs;
+  const effectiveOutputStage =
+    locationState?.outputStage ?? normalizedSearchOutputStage;
+  const effectiveOutputBatchId =
+    locationState?.outputBatchId ?? (Number.isInteger(searchOutputBatchId) && searchOutputBatchId && searchOutputBatchId > 0 ? searchOutputBatchId : null);
   const outputOnlyStage =
-    locationState?.outputStage &&
-    locationState?.initialTab === "output" &&
-    locationState?.visibleTabs?.length === 1 &&
-    locationState.visibleTabs[0] === "output"
-      ? locationState.outputStage
+    effectiveOutputStage &&
+    effectiveInitialTab === "output" &&
+    effectiveVisibleTabs?.length === 1 &&
+    effectiveVisibleTabs[0] === "output"
+      ? effectiveOutputStage
       : null;
   const backRoute = typeof locationState?.backTo === "string" && locationState.backTo.trim().length > 0
     ? locationState.backTo
     : outputOnlyStage === "BL"
       ? PRODUCTION_BL_BLENDING_ROUTE
+      : outputOnlyStage === "GL"
+        ? PRODUCTION_GL_GRANULATION_ROUTE
       : PRODUCTION_AD_WEIGHTAGE_ROUTE;
   const backLabel =
     outputOnlyStage === "AD"
       ? "Back to AD - Manage Batch"
       : outputOnlyStage === "BL"
         ? "Back to BL - Manage Batch"
+        : outputOnlyStage === "GL"
+          ? "Back to GL - Manage Batch"
         : undefined;
 
   const machinesQ = useQuery({
@@ -109,6 +131,8 @@ const ProductionEditOrderPage = () => {
       ? `Batch Creation — ${order.production_id}`
       : outputOnlyStage === "BL"
         ? `Bin Assign — ${order.production_id}`
+        : outputOnlyStage === "GL"
+          ? `Bag Assign — ${order.production_id}`
         : `Edit Order — ${order.production_id}`;
 
   return (
@@ -122,13 +146,14 @@ const ProductionEditOrderPage = () => {
         initialValues={initialValues}
         formTitle={formTitle}
         submitLabel="Save Changes"
-        showFooterActions={!(outputOnlyStage === "AD" || outputOnlyStage === "BL")}
-        initialTab={locationState?.initialTab}
-        visibleTabs={locationState?.visibleTabs}
+        showFooterActions={!(outputOnlyStage === "AD" || outputOnlyStage === "BL" || outputOnlyStage === "GL")}
+        initialTab={effectiveInitialTab}
+        visibleTabs={effectiveVisibleTabs}
         outputContext={{
-          stage: locationState?.outputStage,
-          batchId: locationState?.outputBatchId ?? null,
-          requireFinalCaptureConfirmation: outputOnlyStage === "AD" || outputOnlyStage === "BL",
+          stage: effectiveOutputStage,
+          batchId: effectiveOutputBatchId,
+          requireFinalCaptureConfirmation:
+            outputOnlyStage === "AD" || outputOnlyStage === "BL" || outputOnlyStage === "GL",
         }}
         defaultWorkCenterName={
           order.production_type?.trim().toLowerCase() === "wpe additive production".toLowerCase()

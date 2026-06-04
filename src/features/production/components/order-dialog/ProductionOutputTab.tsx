@@ -9,6 +9,7 @@ import { useWeightStream } from "@/hooks/useWeightStream";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
 import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
+import { BATCH_STATUS_CLASSES, StatusBadge } from "@/pages/productionShared";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
   areAllRequiredOutputComponentsCaptured,
@@ -103,6 +104,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   const productionId = form.watch("production_id");
   const batchAuto = form.watch("details.batch_auto");
   const outputStage = context?.stage ?? "AD";
+  const isAdMode = outputStage === "AD";
   const isBlMode = outputStage === "BL";
   const isGlMode = outputStage === "GL";
   const isSingleCaptureMode = isBlMode || isGlMode;
@@ -130,6 +132,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   const [capturedWeights, setCapturedWeights] = useState<Map<string, OutputComponentCapture>>(new Map());
   const [capturedOutputs, setCapturedOutputs] = useState<CapturedOutputRecord[]>([]);
   const [expandedOutputIds, setExpandedOutputIds] = useState<Record<string, boolean>>({});
+  const [adOutputBatchId, setAdOutputBatchId] = useState<number | null>(null);
   const [isSyncingCapture, setIsSyncingCapture] = useState(false);
   const [isFinalizingCapture, setIsFinalizingCapture] = useState(false);
   const [outwardingRecordId, setOutwardingRecordId] = useState<string | null>(null);
@@ -163,13 +166,25 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
 
     return stageBatches.find((batch) => batch.status !== "COMPLETED") ?? null;
   }, [isSingleCaptureMode, selectedContextBatchId, stageBatches]);
-  const outputCaptureSourceBatchId = isSingleCaptureMode ? activeBatch?.id ?? selectedContextBatchId : null;
+  const outputCaptureSourceBatchId = isSingleCaptureMode
+    ? activeBatch?.id ?? selectedContextBatchId
+    : adOutputBatchId;
+  const stageBatchIds = useMemo(() => new Set(stageBatches.map((batch) => batch.id)), [stageBatches]);
   const outputCapturesQuery = useQuery({
-    queryKey: ["production-output-captures", persistedOrderId, outputCaptureSourceBatchId ?? "all"],
-    enabled: persistedOrderId !== null && (!isSingleCaptureMode || outputCaptureSourceBatchId !== null),
+    queryKey: [
+      "production-output-captures",
+      persistedOrderId,
+      isSingleCaptureMode ? outputCaptureSourceBatchId ?? "all" : "stage-batches",
+    ],
+    enabled:
+      persistedOrderId !== null &&
+      (isSingleCaptureMode ? outputCaptureSourceBatchId !== null : true),
     queryFn: async () => {
       const response = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/output-captures/`, {
-        params: outputCaptureSourceBatchId ? { source_batch: outputCaptureSourceBatchId } : undefined,
+        params:
+          isSingleCaptureMode && outputCaptureSourceBatchId
+            ? { source_batch: outputCaptureSourceBatchId }
+            : undefined,
       });
       return normalizeListResponse<ProductionOutputCapture>(response.data).map(mapPersistedOutputCaptureRecord);
     },
@@ -256,7 +271,14 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
     [outputComponents],
   );
   const activeComponent = outputComponents[activeIndex] ?? null;
-  const persistedCapturedOutputs = outputCapturesQuery.data ?? [];
+  const persistedCapturedOutputs = useMemo(() => {
+    const records = outputCapturesQuery.data ?? [];
+    if (isSingleCaptureMode) {
+      return records;
+    }
+
+    return records.filter((record) => record.sourceBatchId != null && stageBatchIds.has(record.sourceBatchId));
+  }, [isSingleCaptureMode, outputCapturesQuery.data, stageBatchIds]);
   const existingSingleCapture = isSingleCaptureMode ? persistedCapturedOutputs[0] ?? null : null;
   const visibleCapturedOutputs =
     persistedOrderId !== null
@@ -270,6 +292,21 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
       activeBatchIdRef.current = activeBatch.id;
     }
   }, [activeBatch?.id]);
+
+  useEffect(() => {
+    if (isSingleCaptureMode) {
+      return;
+    }
+
+    if (activeBatch?.id) {
+      setAdOutputBatchId((current) => (current === activeBatch.id ? current : activeBatch.id));
+      return;
+    }
+
+    if (adOutputBatchId === null && stageBatches[0]?.id) {
+      setAdOutputBatchId(stageBatches[0].id);
+    }
+  }, [activeBatch?.id, adOutputBatchId, isSingleCaptureMode, stageBatches]);
 
   useEffect(() => {
     capturedSessionKeysRef.current = new Set(visibleCapturedOutputs.map((record) => record.sessionKey));
@@ -568,7 +605,11 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
     }
 
     if (requireFinalCaptureConfirmation) {
-      const shouldCreateBatch = window.confirm("Do I need to create a batch?\n\nYes = create Batch\nNo = cancel");
+      const shouldCreateBatch = window.confirm(
+        isGlMode
+          ? "Do you need to create Bag?\n\nYes = create Bag\nNo = cancel"
+          : "Do I need to create a batch?\n\nYes = create Batch\nNo = cancel",
+      );
       if (!shouldCreateBatch) {
         return;
       }
@@ -645,6 +686,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
               resolvedBatchNo = confirmedBatch.batch_no.trim();
             }
 
+            setAdOutputBatchId(activeBatchId);
             const nextBatchResponse = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
               params: { stage: "BL" },
             });
@@ -656,7 +698,6 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
               nextBatchAutoValue = nextBatchDisplayNo;
             }
 
-            activeBatchIdRef.current = null;
             invalidateBatchQueries();
             const refreshedOutputCaptures = await outputCapturesQuery.refetch();
             persistedRecord =
@@ -763,7 +804,13 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
 
   const handleOutward = useCallback(
     async (record: CapturedOutputRecord) => {
-      if (!isBlMode || persistedOrderId === null || !record.sourceBatchId || record.isOutwarded || outwardingRecordId !== null) {
+      if (
+        (!isBlMode && !isGlMode) ||
+        persistedOrderId === null ||
+        !record.sourceBatchId ||
+        record.isOutwarded ||
+        outwardingRecordId !== null
+      ) {
         return;
       }
 
@@ -773,37 +820,46 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
           `/api/production/orders/${persistedOrderId}/batches/${record.sourceBatchId}/confirm/`,
         );
 
-        const nextBatchResponse = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
-          params: { stage: "GL" },
-        });
-        const nextGlBatch = normalizeListResponse<ProductionBatch>(nextBatchResponse.data)
-          .sort((left, right) => right.id - left.id)
-          .find((batch) => batch.status !== "COMPLETED");
-        const nextBatchDisplayNo = nextGlBatch?.display_batch_no?.trim() || nextGlBatch?.batch_no?.trim();
+        let nextBatchDisplayNo: string | undefined;
+        if (isBlMode) {
+          const nextBatchResponse = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
+            params: { stage: "GL" },
+          });
+          const nextGlBatch = normalizeListResponse<ProductionBatch>(nextBatchResponse.data)
+            .sort((left, right) => right.id - left.id)
+            .find((batch) => batch.status !== "COMPLETED");
+          nextBatchDisplayNo = nextGlBatch?.display_batch_no?.trim() || nextGlBatch?.batch_no?.trim();
+        }
 
         invalidateBatchQueries();
         await outputCapturesQuery.refetch();
 
-        form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_BL, {
-          shouldDirty: false,
-          shouldTouch: false,
-          shouldValidate: false,
-        });
-        if (nextBatchDisplayNo) {
-          form.setValue("details.batch_auto", nextBatchDisplayNo, {
+        if (isBlMode) {
+          form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_BL, {
             shouldDirty: false,
             shouldTouch: false,
             shouldValidate: false,
           });
+          if (nextBatchDisplayNo) {
+            form.setValue("details.batch_auto", nextBatchDisplayNo, {
+              shouldDirty: false,
+              shouldTouch: false,
+              shouldValidate: false,
+            });
+          }
         }
-        toast.success("BL batch moved to GL and the assigned bin was released.");
+        toast.success(
+          isBlMode
+            ? "BL batch moved to GL and the assigned bin was released."
+            : "GL batch moved to PR and the assigned bag was released.",
+        );
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Failed to outward the BL batch."));
+        toast.error(getApiErrorMessage(error, isBlMode ? "Failed to outward the BL batch." : "Failed to outward the GL batch."));
       } finally {
         setOutwardingRecordId(null);
       }
     },
-    [form, invalidateBatchQueries, isBlMode, outputCapturesQuery, outwardingRecordId, persistedOrderId],
+    [form, invalidateBatchQueries, isBlMode, isGlMode, outputCapturesQuery, outwardingRecordId, persistedOrderId],
   );
 
   const netWeightColor = isSingleCaptureMode
@@ -1114,8 +1170,8 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                   ? isBlMode
                     ? "Captured BL outputs are saved for the selected batch. Use OutWard to move the batch to GL and release the assigned bin."
                     : isGlMode
-                      ? "Captured GL outputs are saved for the selected batch and reload when you reopen it."
-                    : "Final-captured recipe outputs are saved for this production order and reload when you reopen it."
+                      ? "Captured GL outputs are saved for the selected batch. Use OutWard to move the batch to PR and release the assigned bag."
+                      : "Final-captured recipe outputs are saved for this production order and reload when you reopen it."
                   : "Final-captured recipe outputs stay listed below the weightage panel until this order is saved."}
               </p>
             </div>
@@ -1135,19 +1191,20 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                   <th className="px-3 py-3">Scancode ID</th>
                   <th className="px-3 py-3 text-right">Qty</th>
                   <th className="px-3 py-3 text-right">Weight (kg)</th>
-                  <th className="px-4 py-3 text-right">{isGlMode ? "Baglot" : "Binlot"}</th>
-                  {isBlMode ? <th className="px-4 py-3 text-right">OutWard</th> : null}
+                  <th className="px-4 py-3 text-right">{isAdMode ? "Batch ID" : isGlMode ? "Baglot" : "Binlot"}</th>
+                  {isAdMode ? <th className="px-4 py-3 text-right">Production Status</th> : null}
+                  {isBlMode || isGlMode ? <th className="px-4 py-3 text-right">OutWard</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {visibleCapturedOutputs.length === 0 ? (
                   <tr>
-                    <td colSpan={isBlMode ? 9 : 8} className="px-4 py-8 text-center text-[12px] text-slate-500">
+                    <td colSpan={9} className="px-4 py-8 text-center text-[12px] text-slate-500">
                       {isBlMode
                         ? "Save the stable BL batch weight, use Final Capture to create the output list, then click OutWard to move the batch to GL."
                         : isGlMode
-                          ? "Save the stable GL batch weight, then use Final Capture to create the output list."
-                        : "Capture each recipe component, then use Final Capture to create the output list."}
+                          ? "Save the stable GL batch weight, use Final Capture to create the output list, then click OutWard to move the batch to PR."
+                          : "Capture each recipe component, then use Final Capture to create the output list."}
                     </td>
                   </tr>
                 ) : (
@@ -1179,8 +1236,15 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                           <td className="px-3 py-3 font-mono text-[11px] font-semibold text-slate-900">{record.scancodeId}</td>
                           <td className="px-3 py-3 text-right font-medium text-slate-800">{record.qty}</td>
                           <td className="px-3 py-3 text-right font-medium text-slate-800">{record.weightKg}</td>
-                          <td className="px-4 py-3 text-right font-medium text-slate-700">{record.binlot}</td>
-                          {isBlMode ? (
+                          <td className="px-4 py-3 text-right font-medium text-slate-700">
+                            {isAdMode ? record.batchId : record.binlot}
+                          </td>
+                          {isAdMode ? (
+                            <td className="px-4 py-3 text-right">
+                              <StatusBadge status={record.productionStatus} classes={BATCH_STATUS_CLASSES} />
+                            </td>
+                          ) : null}
+                          {isBlMode || isGlMode ? (
                             <td className="px-4 py-3 text-right">
                               {record.isOutwarded ? (
                                 <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
@@ -1207,7 +1271,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                         </tr>
                         {isExpanded ? (
                           <tr className="border-t border-slate-200/60 bg-slate-50/70">
-                            <td colSpan={isBlMode ? 9 : 8} className="p-0">
+                            <td colSpan={9} className="p-0">
                               <div className="overflow-x-auto px-4 py-3 animate-in fade-in-0 slide-in-from-top-1 duration-200">
                                 <table className="min-w-max border-separate border-spacing-0 text-[11px]">
                                   <thead>

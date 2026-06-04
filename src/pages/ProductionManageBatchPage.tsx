@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Columns2, PanelLeftOpen, PanelRightOpen, Plus, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Columns2, PanelLeftOpen, PanelRightOpen, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { z } from "zod";
@@ -109,6 +109,39 @@ type ItemOption = { id: number; item_code: string; item_name: string };
 
 const compactHeaderMetricClassName =
   "rounded-lg border border-slate-200/85 bg-white px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]";
+
+const STAGE_WORKFLOW_PRIORITY: Record<ProductionBatch["stage"], number> = {
+  AD: 0,
+  BL: 1,
+  GL: 2,
+};
+
+const dedupeWorkflowBatches = (batches: ProductionBatchExt[]) => {
+  const batchesByWorkflow = new Map<string, ProductionBatchExt[]>();
+
+  batches.forEach((batch) => {
+    const workflowKey = (batch.display_batch_no?.trim() || batch.batch_no || String(batch.id)).toUpperCase();
+    const existing = batchesByWorkflow.get(workflowKey);
+    if (existing) {
+      existing.push(batch);
+      return;
+    }
+    batchesByWorkflow.set(workflowKey, [batch]);
+  });
+
+  return Array.from(batchesByWorkflow.values())
+    .map((workflowBatches) =>
+      [...workflowBatches].sort((left, right) => {
+        const stagePriorityDelta =
+          STAGE_WORKFLOW_PRIORITY[right.stage] - STAGE_WORKFLOW_PRIORITY[left.stage];
+        if (stagePriorityDelta !== 0) {
+          return stagePriorityDelta;
+        }
+        return right.id - left.id;
+      })[0],
+    )
+    .sort((left, right) => right.id - left.id);
+};
 
 const ItemSearch = ({ onSelect }: { onSelect: (item: ItemOption) => void }) => {
   const [query, setQuery] = useState("");
@@ -229,10 +262,13 @@ const ProductionManageBatchPage = () => {
     enabled: hasValidOrderId && selectedBatchId !== null && regrindOpen,
   });
 
-  useEffect(() => {
-    const batches = batchesQ.data ?? [];
+  const allBatches = useMemo(() => {
+    const rawBatches = batchesQ.data ?? [];
+    return activeStageFilter ? rawBatches : dedupeWorkflowBatches(rawBatches);
+  }, [activeStageFilter, batchesQ.data]);
 
-    if (!batches.length) {
+  useEffect(() => {
+    if (!allBatches.length) {
       if (selectedBatchId !== null) {
         setSelectedBatchId(null);
       }
@@ -241,14 +277,14 @@ const ProductionManageBatchPage = () => {
       return;
     }
 
-    if (selectedBatchId && batches.some((batch) => batch.id === selectedBatchId)) {
+    if (selectedBatchId && allBatches.some((batch) => batch.id === selectedBatchId)) {
       return;
     }
 
-    setSelectedBatchId(batches[0].id);
+    setSelectedBatchId(allBatches[0].id);
     setWeightEntryOpen(false);
     setRegrindOpen(false);
-  }, [batchesQ.data, selectedBatchId]);
+  }, [allBatches, selectedBatchId]);
 
   const invalidateProductionContext = () => {
     queryClient.invalidateQueries({ queryKey: ["production-batches", orderId] });
@@ -322,6 +358,20 @@ const ProductionManageBatchPage = () => {
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to add regrind.")),
   });
 
+  const deleteBatchMutation = useMutation({
+    mutationFn: async (batch: ProductionBatchExt) => {
+      await coreApi.delete(`/api/production/orders/${orderId}/batches/${batch.id}/`);
+    },
+    onSuccess: (_, batch) => {
+      toast.success(`Batch ${resolveDisplayBatchNo(batch)} deleted.`);
+      setSelectedBatchId((current) => (current === batch.id ? null : current));
+      setWeightEntryOpen(false);
+      setRegrindOpen(false);
+      invalidateProductionContext();
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Failed to delete batch.")),
+  });
+
   const openWeightEntry = (batch: ProductionBatchExt) => {
     setSelectedBatchId(batch.id);
     setWeightValues({});
@@ -341,7 +391,6 @@ const ProductionManageBatchPage = () => {
     setRegrindOpen(true);
   };
 
-  const allBatches = batchesQ.data ?? [];
   const order = orderQ.data;
   const resolveDisplayBatchNo = (batch?: ProductionBatchExt | null) =>
     batch?.display_batch_no?.trim() || batch?.batch_no || order?.batch_number?.trim() || "Not assigned";
@@ -395,24 +444,40 @@ const ProductionManageBatchPage = () => {
     currentManageStage === "AD" ? "Batch" : currentManageStage === "BL" ? "Bin Assign" : "Bag Assign";
   const backButtonLabel =
     currentManageStage === "AD"
-      ? "Back to AD list"
-      : currentManageStage === "BL"
-        ? "Back to BL list"
-        : "Back to Production";
+    ? "Back to AD list"
+    : currentManageStage === "BL"
+      ? "Back to BL list"
+      : "Back to Production";
   const pageTitle =
     currentManageStage === "AD"
-      ? "AD - Manage Batch"
-      : currentManageStage === "BL"
-        ? "BL - Manage Batch"
-        : "Manage Batches";
+    ? "AD - Manage Batch"
+    : currentManageStage === "BL"
+      ? "BL - Manage Batch"
+      : "Manage Batches";
   const batchListTitle =
     currentManageStage === "AD"
-      ? "AD - Batch List"
-      : currentManageStage === "BL"
-        ? "BL - Batch List"
+    ? "AD - Batch List"
+    : currentManageStage === "BL"
+      ? "BL - Batch List"
+      : currentManageStage === "GL"
+        ? "GL Batch List"
         : "Production / Batch List";
+  const canRunHeaderAction = currentManageStage === "AD" || displayedBatch !== null;
+  const handleEditOrder = () => navigate(getProductionEditRoute(orderId));
+  const handleDeleteBatch = (batch: ProductionBatchExt) => {
+    if (!window.confirm(`Delete batch ${resolveDisplayBatchNo(batch)}?`)) {
+      return;
+    }
+    deleteBatchMutation.mutate(batch);
+  };
   const handleHeaderAction = () =>
-    navigate(getProductionEditRoute(orderId), {
+    navigate({
+      pathname: getProductionEditRoute(orderId),
+      search:
+        currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL"
+          ? `?mode=output&stage=${currentManageStage}${currentManageStage === "AD" ? "" : `&batchId=${displayedBatch?.id ?? selectedBatchId ?? ""}`}`
+          : "",
+    }, {
       state: {
         backTo: getProductionManageBatchRoute(orderId, currentManageStage),
         ...(currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL"
@@ -528,33 +593,48 @@ const ProductionManageBatchPage = () => {
                 />
               ) : (
                 <div className="space-y-4 px-4 sm:px-5 lg:px-6">
-                  <div className="flex justify-center">
-                    <div className="inline-flex items-center gap-1 rounded-2xl border border-white/70 bg-white/90 p-1.5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.45)] backdrop-blur">
-                      {([
-                        { value: "left", label: "Left focused", Icon: PanelLeftOpen },
-                        { value: "split", label: "Split view", Icon: Columns2 },
-                        { value: "right", label: "Right focused", Icon: PanelRightOpen },
-                      ] as const).map((option) => {
-                        const isActive = viewMode === option.value;
+                  <div className="flex flex-col gap-3 md:relative md:min-h-[44px] md:justify-center">
+                    <div className="flex justify-center">
+                      <div className="inline-flex items-center gap-1 rounded-2xl border border-white/70 bg-white/90 p-1.5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.45)] backdrop-blur">
+                        {([
+                          { value: "left", label: "Left focused", Icon: PanelLeftOpen },
+                          { value: "split", label: "Split view", Icon: Columns2 },
+                          { value: "right", label: "Right focused", Icon: PanelRightOpen },
+                        ] as const).map((option) => {
+                          const isActive = viewMode === option.value;
 
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            aria-label={option.label}
-                            title={option.label}
-                            className={`group relative flex h-9 w-10 items-center justify-center rounded-xl border transition-all duration-200 ${
-                              isActive
-                                ? "border-slate-900 bg-[linear-gradient(135deg,#0f172a,#1e293b)] text-white shadow-[0_14px_30px_-18px_rgba(15,23,42,0.9)]"
-                                : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900"
-                            }`}
-                            onClick={() => setViewMode(option.value)}
-                          >
-                            <option.Icon className={`h-[1.05rem] w-[1.05rem] ${isActive ? "" : "transition-transform duration-200 group-hover:scale-105"}`} strokeWidth={2.1} />
-                          </button>
-                        );
-                      })}
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              aria-label={option.label}
+                              title={option.label}
+                              className={`group relative flex h-9 w-10 items-center justify-center rounded-xl border transition-all duration-200 ${
+                                isActive
+                                  ? "border-slate-900 bg-[linear-gradient(135deg,#0f172a,#1e293b)] text-white shadow-[0_14px_30px_-18px_rgba(15,23,42,0.9)]"
+                                  : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                              }`}
+                              onClick={() => setViewMode(option.value)}
+                            >
+                              <option.Icon className={`h-[1.05rem] w-[1.05rem] ${isActive ? "" : "transition-transform duration-200 group-hover:scale-105"}`} strokeWidth={2.1} />
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
+
+                    {currentManageStage === "AD" && canRunHeaderAction ? (
+                      <div className="flex justify-end md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2">
+                        <Button
+                          size="sm"
+                          className="h-10 rounded-xl border-0 bg-[linear-gradient(135deg,#0f766e,#14b8a6)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_-20px_rgba(15,118,110,0.75)] hover:opacity-95"
+                          onClick={handleHeaderAction}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          {headerActionLabel}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className={`grid gap-4 ${splitLayoutClassName}`}>
@@ -643,17 +723,44 @@ const ProductionManageBatchPage = () => {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-9 rounded-md px-3 text-xs"
-                              onClick={handleHeaderAction}
-                            >
-                              {currentManageStage === "AD" || currentManageStage === "BL" ? (
-                                <Plus className="mr-2 h-3.5 w-3.5" />
-                              ) : null}
-                              {headerActionLabel}
-                            </Button>
+                            {currentManageStage === "AD" ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-9 w-9 text-slate-500 hover:text-slate-900"
+                                  onClick={handleEditOrder}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-9 w-9 text-red-500 hover:text-red-600"
+                                  disabled={!displayedBatch || deleteBatchMutation.isPending}
+                                  onClick={() => {
+                                    if (displayedBatch) {
+                                      handleDeleteBatch(displayedBatch);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 rounded-md px-3 text-xs"
+                                onClick={handleHeaderAction}
+                                disabled={!canRunHeaderAction}
+                              >
+                                {currentManageStage === "BL" || currentManageStage === "GL" ? <Plus className="mr-2 h-3.5 w-3.5" /> : null}
+                                {headerActionLabel}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>

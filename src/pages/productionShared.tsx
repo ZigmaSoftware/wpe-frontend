@@ -16,6 +16,7 @@ export const ORDER_STATUS_CLASSES: Record<string, string> = {
 export const BATCH_STATUS_CLASSES: Record<string, string> = {
   PENDING: "bg-yellow-100 text-yellow-700",
   IN_PROGRESS: "bg-blue-100 text-blue-700",
+  "In Progress": "bg-blue-100 text-blue-700",
   COMPLETED: "bg-green-100 text-green-700",
   FAILED: "bg-red-100 text-red-700",
   "BL - Blending": "bg-blue-100 text-blue-700",

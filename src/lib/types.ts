@@ -502,6 +502,8 @@ export type ProductionOutputCapture = {
   production_order: number;
   source_batch: number;
   source_batch_no: string;
+  source_batch_display_batch_no?: string | null;
+  source_batch_display_status?: string | null;
   sequence: number;
   scancode_id: string;
   recipe_no: string;
