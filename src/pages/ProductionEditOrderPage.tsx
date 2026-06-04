@@ -8,11 +8,14 @@ import {
   type ProductionDialogTab,
   type ProductionOrderDetail,
 } from "@/features/production/components/order-dialog/productionOrderForm";
-import { PRODUCTION_AD_WEIGHTAGE_ROUTE } from "@/features/production/utils/routes";
+import {
+  PRODUCTION_AD_WEIGHTAGE_ROUTE,
+  PRODUCTION_BL_BLENDING_ROUTE,
+} from "@/features/production/utils/routes";
 import { ErrorState, LoadingState } from "@/components/QueryState";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
-import type { ProductionMachine } from "@/lib/types";
+import type { ProductionBatch, ProductionMachine } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
 
 const DEFAULT_AD_WORK_CENTER_NAME = "New Line Additive Work Center WIP";
@@ -21,7 +24,7 @@ type ProductionEditOrderLocationState = {
   backTo?: string;
   initialTab?: ProductionDialogTab;
   visibleTabs?: ProductionDialogTab[];
-  outputStage?: "AD" | "BL";
+  outputStage?: ProductionBatch["stage"];
   outputBatchId?: number | null;
 };
 
@@ -31,9 +34,24 @@ const ProductionEditOrderPage = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
   const locationState = location.state as ProductionEditOrderLocationState | null;
+  const outputOnlyStage =
+    locationState?.outputStage &&
+    locationState?.initialTab === "output" &&
+    locationState?.visibleTabs?.length === 1 &&
+    locationState.visibleTabs[0] === "output"
+      ? locationState.outputStage
+      : null;
   const backRoute = typeof locationState?.backTo === "string" && locationState.backTo.trim().length > 0
     ? locationState.backTo
-    : PRODUCTION_AD_WEIGHTAGE_ROUTE;
+    : outputOnlyStage === "BL"
+      ? PRODUCTION_BL_BLENDING_ROUTE
+      : PRODUCTION_AD_WEIGHTAGE_ROUTE;
+  const backLabel =
+    outputOnlyStage === "AD"
+      ? "Back to AD - Manage Batch"
+      : outputOnlyStage === "BL"
+        ? "Back to BL - Manage Batch"
+        : undefined;
 
   const machinesQ = useQuery({
     queryKey: ["production-machines"],
@@ -69,7 +87,7 @@ const ProductionEditOrderPage = () => {
 
   if (orderQ.isLoading || machinesQ.isLoading) {
     return (
-      <ProductionOrderPageLayout onBack={() => navigate(backRoute)}>
+      <ProductionOrderPageLayout onBack={() => navigate(backRoute)} backLabel={backLabel}>
         <LoadingState label="Loading production order..." />
       </ProductionOrderPageLayout>
     );
@@ -77,7 +95,7 @@ const ProductionEditOrderPage = () => {
 
   if (orderQ.isError) {
     return (
-      <ProductionOrderPageLayout onBack={() => navigate(backRoute)}>
+      <ProductionOrderPageLayout onBack={() => navigate(backRoute)} backLabel={backLabel}>
         <ErrorState description="Could not load production order." />
       </ProductionOrderPageLayout>
     );
@@ -86,9 +104,15 @@ const ProductionEditOrderPage = () => {
   const machines = machinesQ.data ?? [];
   const order = orderQ.data!;
   const initialValues = mapOrderDetailToFormValues(order, machines);
+  const formTitle =
+    outputOnlyStage === "AD"
+      ? `Batch Creation — ${order.production_id}`
+      : outputOnlyStage === "BL"
+        ? `Bin Assign — ${order.production_id}`
+        : `Edit Order — ${order.production_id}`;
 
   return (
-    <ProductionOrderPageLayout onBack={() => navigate(backRoute)}>
+    <ProductionOrderPageLayout onBack={() => navigate(backRoute)} backLabel={backLabel}>
       <ProductionOrderForm
         onSubmit={(values) => updateOrderMutation.mutate(values)}
         onCancel={() => navigate(backRoute)}
@@ -96,13 +120,15 @@ const ProductionEditOrderPage = () => {
         machines={machines}
         machinesLoading={machinesQ.isLoading}
         initialValues={initialValues}
-        formTitle={`Edit Order — ${order.production_id}`}
+        formTitle={formTitle}
         submitLabel="Save Changes"
+        showFooterActions={!(outputOnlyStage === "AD" || outputOnlyStage === "BL")}
         initialTab={locationState?.initialTab}
         visibleTabs={locationState?.visibleTabs}
         outputContext={{
           stage: locationState?.outputStage,
           batchId: locationState?.outputBatchId ?? null,
+          requireFinalCaptureConfirmation: outputOnlyStage === "AD" || outputOnlyStage === "BL",
         }}
         defaultWorkCenterName={
           order.production_type?.trim().toLowerCase() === "wpe additive production".toLowerCase()

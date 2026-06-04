@@ -156,18 +156,18 @@ export interface BinCreationWritePayload extends CodeMasterWritePayload {
 }
 
 export interface BagCreationRecord extends CodeMasterRecord {
-  standard_weight: string;
+  standard_weight: string | null;
   uom: "KG";
-  department: number;
-  department_name: string;
+  department: number | null;
+  department_name: string | null;
   current_status: "FREE" | "OCCUPIED" | "USED";
 }
 
 export interface BagCreationWritePayload extends CodeMasterWritePayload {
-  standard_weight: number | string;
-  uom: "KG";
-  department: number;
-  current_status: "FREE" | "OCCUPIED" | "USED";
+  standard_weight?: number | string | null;
+  uom?: "KG";
+  department?: number | null;
+  current_status?: "FREE" | "OCCUPIED" | "USED";
   is_active?: boolean;
 }
 

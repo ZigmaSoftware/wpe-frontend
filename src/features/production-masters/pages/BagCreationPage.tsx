@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,7 +8,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import CodeMasterPage from "@/features/wpe-masters/components/CodeMasterPage";
-import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import { productionMastersApi } from "@/features/production-masters/api/productionMastersApi";
 import ProductionEnumBadge from "@/features/production-masters/components/ProductionEnumBadge";
 import { bagCreationSchema, type BagCreationFormValues } from "@/features/production-masters/schemas";
@@ -18,19 +16,14 @@ const defaultValues: BagCreationFormValues = {
   code: "",
   name: "",
   description: "",
-  standard_weight: 0,
+  standard_weight: undefined,
   uom: "KG",
-  department: 0,
+  department: null,
   current_status: "FREE",
   is_active: true,
 };
 
 const BagCreationPage = () => {
-  const departmentQuery = useQuery({
-    queryKey: ["wpe-masters", "departments", "lookup"],
-    queryFn: wpeMastersApi.departments.lookup,
-  });
-
   return (
     <CodeMasterPage
       title="Bag Creation"
@@ -43,7 +36,7 @@ const BagCreationPage = () => {
         code: record.code ?? "",
         name: record.name,
         description: record.description ?? "",
-        standard_weight: Number(record.standard_weight),
+        standard_weight: record.standard_weight === null ? undefined : Number(record.standard_weight),
         uom: record.uom,
         department: record.department,
         current_status: record.current_status,
@@ -52,9 +45,8 @@ const BagCreationPage = () => {
       mapFormToPayload={(values) => ({
         name: values.name,
         description: values.description,
-        standard_weight: values.standard_weight,
+        standard_weight: values.standard_weight ?? null,
         uom: values.uom,
-        department: values.department,
         current_status: values.current_status,
         is_active: values.is_active,
       })}
@@ -65,9 +57,8 @@ const BagCreationPage = () => {
       createLabel="Add Bag"
       createButtonLabel="Create Bag"
       allowDelete={false}
-      renderNameSecondary={(record) => record.department_name}
       extraColumns={[
-        { key: "standard_weight", title: "Standard Weight", render: (record) => `${record.standard_weight} KG` },
+        { key: "standard_weight", title: "Standard Weight", render: (record) => (record.standard_weight ? `${record.standard_weight} KG` : "-") },
         { key: "current_status", title: "Current Status", render: (record) => <ProductionEnumBadge value={record.current_status} /> },
       ]}
       renderExtras={({ form }) => (
@@ -77,7 +68,7 @@ const BagCreationPage = () => {
             name="standard_weight"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Standard Weight*</FormLabel>
+                <FormLabel>Standard Weight</FormLabel>
                 <FormControl>
                   <Input {...field} type="number" step="0.001" value={field.value ?? ""} />
                 </FormControl>
@@ -90,7 +81,7 @@ const BagCreationPage = () => {
             name="uom"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>UOM*</FormLabel>
+                <FormLabel>UOM</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
@@ -107,34 +98,10 @@ const BagCreationPage = () => {
           />
           <FormField
             control={form.control}
-            name="department"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Department*</FormLabel>
-                <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Department" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {(departmentQuery.data ?? []).map((option) => (
-                      <SelectItem key={option.id} value={String(option.id)}>
-                        {option.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="current_status"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Current Status*</FormLabel>
+                <FormLabel>Current Status</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>

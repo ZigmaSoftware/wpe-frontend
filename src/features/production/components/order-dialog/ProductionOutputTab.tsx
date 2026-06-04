@@ -22,6 +22,7 @@ import {
   resolveOutputCaptureComponents,
   type CapturedOutputRecord,
   type OutputCaptureComponent,
+  type OutputCaptureMaterialSeed,
   type OutputComponentCapture,
 } from "./productionOutputCapture";
 import type { ProductionOrderFormValues } from "./productionOrderForm";
@@ -59,6 +60,7 @@ type ProductionOutputTabProps = {
   context?: {
     stage?: ProductionBatch["stage"] | null;
     batchId?: number | null;
+    requireFinalCaptureConfirmation?: boolean;
   };
 };
 
@@ -100,8 +102,11 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   const selectedBomVariantId = form.watch("materials.selected_bom_variant_id");
   const productionId = form.watch("production_id");
   const batchAuto = form.watch("details.batch_auto");
-  const outputStage = context?.stage === "BL" ? "BL" : "AD";
+  const outputStage = context?.stage ?? "AD";
   const isBlMode = outputStage === "BL";
+  const isGlMode = outputStage === "GL";
+  const isSingleCaptureMode = isBlMode || isGlMode;
+  const requireFinalCaptureConfirmation = context?.requireFinalCaptureConfirmation === true;
   const selectedContextBatchId = context?.batchId ?? null;
 
   const materials: OutputMaterialRow[] = formMaterials.length > 0 ? formMaterials : DEMO_MATERIALS;
@@ -148,19 +153,20 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
     [stageBatchesQuery.data],
   );
   const activeBatch = useMemo(() => {
-    if (isBlMode) {
-      if (selectedContextBatchId !== null) {
-        return stageBatches.find((batch) => batch.id === selectedContextBatchId) ?? null;
-      }
+    if (selectedContextBatchId !== null) {
+      return stageBatches.find((batch) => batch.id === selectedContextBatchId) ?? null;
+    }
+
+    if (isSingleCaptureMode) {
       return stageBatches.find((batch) => batch.status !== "COMPLETED") ?? stageBatches[0] ?? null;
     }
 
     return stageBatches.find((batch) => batch.status !== "COMPLETED") ?? null;
-  }, [isBlMode, selectedContextBatchId, stageBatches]);
-  const outputCaptureSourceBatchId = isBlMode ? activeBatch?.id ?? selectedContextBatchId : null;
+  }, [isSingleCaptureMode, selectedContextBatchId, stageBatches]);
+  const outputCaptureSourceBatchId = isSingleCaptureMode ? activeBatch?.id ?? selectedContextBatchId : null;
   const outputCapturesQuery = useQuery({
     queryKey: ["production-output-captures", persistedOrderId, outputCaptureSourceBatchId ?? "all"],
-    enabled: persistedOrderId !== null && (!isBlMode || outputCaptureSourceBatchId !== null),
+    enabled: persistedOrderId !== null && (!isSingleCaptureMode || outputCaptureSourceBatchId !== null),
     queryFn: async () => {
       const response = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/output-captures/`, {
         params: outputCaptureSourceBatchId ? { source_batch: outputCaptureSourceBatchId } : undefined,
@@ -170,44 +176,80 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   });
 
   const recipeNo = useMemo(() => {
-    if (isBlMode) {
+    if (isSingleCaptureMode) {
       return activeBatch?.display_batch_no?.trim() || activeBatch?.batch_no?.trim() || productionId.trim() || "—";
     }
 
     return bomVariantQuery.data?.variant_code?.trim() || productionId.trim() || "—";
-  }, [activeBatch?.batch_no, activeBatch?.display_batch_no, bomVariantQuery.data?.variant_code, isBlMode, productionId]);
-  const blOutputComponents = useMemo<OutputCaptureComponent[]>(
+  }, [activeBatch?.batch_no, activeBatch?.display_batch_no, bomVariantQuery.data?.variant_code, isSingleCaptureMode, productionId]);
+  const singleCaptureOutputComponents = useMemo<OutputCaptureComponent[]>(
     () => {
-      if (!isBlMode || !activeBatch) {
+      if (!isSingleCaptureMode || !activeBatch) {
         return [];
       }
 
+      if (isGlMode) {
+        const stageComponents = resolveOutputCaptureComponents({
+          batchEntries: activeBatch.weight_entries,
+          bomComponents: null,
+          materials: [],
+        });
+        const primaryComponent =
+          getRequiredOutputComponents(stageComponents)[0] ?? stageComponents[0] ?? null;
+
+        return [
+          {
+            id: `gl-batch-${outputCaptureSourceBatchId ?? activeBatch.id}`,
+            itemCode:
+              primaryComponent?.itemCode ||
+              activeBatch.display_batch_no?.trim() ||
+              activeBatch.batch_no?.trim() ||
+              productionId.trim() ||
+              "GL-BAG",
+            itemName: primaryComponent?.itemName || "Bag Weight",
+            plannedWeightKg: primaryComponent?.plannedWeightKg ?? 0,
+            minWeightKg: primaryComponent?.minWeightKg,
+            maxWeightKg: primaryComponent?.maxWeightKg,
+            toleranceKg: primaryComponent?.toleranceKg,
+            sequence: 1,
+          },
+        ];
+      }
+
       return [
-            {
-              id: `bl-batch-${outputCaptureSourceBatchId ?? "current"}`,
-              itemCode:
-                activeBatch?.display_batch_no?.trim() ||
-                activeBatch?.batch_no?.trim() ||
-                productionId.trim() ||
-                "BL-BIN",
-              itemName: "Bin Weight",
-              plannedWeightKg: 0,
-              sequence: 1,
-            },
-          ];
+        {
+          id: `bl-batch-${outputCaptureSourceBatchId ?? "current"}`,
+          itemCode:
+            activeBatch.display_batch_no?.trim() ||
+            activeBatch.batch_no?.trim() ||
+            productionId.trim() ||
+            "BL-BIN",
+          itemName: "Bin Weight",
+          plannedWeightKg: 0,
+          sequence: 1,
+        },
+      ];
     },
-    [activeBatch?.batch_no, activeBatch?.display_batch_no, isBlMode, outputCaptureSourceBatchId, productionId],
+    [
+      activeBatch,
+      isGlMode,
+      isSingleCaptureMode,
+      outputCaptureSourceBatchId,
+      productionId,
+    ],
   );
   const outputComponents = useMemo<OutputCaptureComponent[]>(
     () =>
-      isBlMode
-        ? blOutputComponents
+      isSingleCaptureMode
+        ? singleCaptureOutputComponents
         : resolveOutputCaptureComponents({
             batchEntries: activeBatch?.weight_entries,
             bomComponents: bomVariantQuery.data?.components,
-            materials,
+            materials: materials.filter((m): m is OutputCaptureMaterialSeed =>
+              typeof (m as OutputCaptureMaterialSeed).client_id === "string"
+            ) as OutputCaptureMaterialSeed[],
           }),
-    [activeBatch?.weight_entries, blOutputComponents, bomVariantQuery.data?.components, isBlMode, materials],
+    [activeBatch?.weight_entries, bomVariantQuery.data?.components, isSingleCaptureMode, materials, singleCaptureOutputComponents],
   );
   const requiredComponents = useMemo(
     () => getRequiredOutputComponents(outputComponents),
@@ -215,7 +257,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   );
   const activeComponent = outputComponents[activeIndex] ?? null;
   const persistedCapturedOutputs = outputCapturesQuery.data ?? [];
-  const existingBlCapture = isBlMode ? persistedCapturedOutputs[0] ?? null : null;
+  const existingSingleCapture = isSingleCaptureMode ? persistedCapturedOutputs[0] ?? null : null;
   const visibleCapturedOutputs =
     persistedOrderId !== null
       ? persistedCapturedOutputs.length > 0
@@ -255,7 +297,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   }, [outputComponents]);
 
   useEffect(() => {
-    if (isBlMode || !activeBatch) {
+    if (isSingleCaptureMode || !activeBatch) {
       return;
     }
 
@@ -277,15 +319,15 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
 
       return next;
     });
-  }, [activeBatch, isBlMode, outputComponents]);
+  }, [activeBatch, isSingleCaptureMode, outputComponents]);
 
   useEffect(() => {
-    if (!isBlMode || !activeComponent || !existingBlCapture) {
+    if (!isSingleCaptureMode || !activeComponent || !existingSingleCapture) {
       return;
     }
 
-    const detail = existingBlCapture.details[0];
-    const persistedWeight = parseNumericValue(detail?.weightKg ?? existingBlCapture.weightKg);
+    const detail = existingSingleCapture.details[0];
+    const persistedWeight = parseNumericValue(detail?.weightKg ?? existingSingleCapture.weightKg);
     if (persistedWeight <= 0) {
       return;
     }
@@ -297,12 +339,12 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
           {
             componentId: activeComponent.id,
             weightKg: persistedWeight,
-            capturedAt: new Date(detail?.capturedAt ?? existingBlCapture.capturedAt),
+            capturedAt: new Date(detail?.capturedAt ?? existingSingleCapture.capturedAt),
           },
         ],
       ]),
     );
-  }, [activeComponent, existingBlCapture, isBlMode]);
+  }, [activeComponent, existingSingleCapture, isSingleCaptureMode]);
 
   useEffect(() => {
     if (!outputComponents.length) {
@@ -357,14 +399,14 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   });
 
   const tolerance =
-    !isBlMode && displayStdWeight > 0 && weight
+    !isSingleCaptureMode && displayStdWeight > 0 && weight
       ? {
           withinTolerance: weight.value >= minWeight && weight.value <= maxWeight,
           deviation: +(weight.value - displayStdWeight).toFixed(3),
         }
       : null;
 
-  const canCapture = isBlMode
+  const canCapture = isSingleCaptureMode
     ? !!(weight?.stable && weight.value > 0 && activeComponent)
     : !!(weight?.stable && tolerance?.withinTolerance === true && activeComponent);
   const totalCaptured = Array.from(capturedWeights.values()).reduce((sum, capture) => sum + capture.weightKg, 0);
@@ -501,7 +543,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
 
   const handleFinalCapture = useCallback(() => {
     if (requiredComponents.length === 0) {
-      toast.error(isBlMode ? "No batch capture target is available for final capture." : "No recipe components available for final capture.");
+      toast.error(isSingleCaptureMode ? "No batch capture target is available for final capture." : "No recipe components available for final capture.");
       return;
     }
 
@@ -514,7 +556,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
       const suffix = remainingCount > 0 ? ` +${remainingCount} more` : "";
 
       toast.error(
-        isBlMode
+        isSingleCaptureMode
           ? `Capture the current batch weight before final capture. Missing: ${missingLabel}${suffix}`
           : `Capture all recipe components before final capture. Missing: ${missingLabel}${suffix}`,
       );
@@ -523,6 +565,13 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
 
     if (isFinalizingCapture || isSyncingCapture || outwardingRecordId !== null) {
       return;
+    }
+
+    if (requireFinalCaptureConfirmation) {
+      const shouldCreateBatch = window.confirm("Do I need to create a batch?\n\nYes = create Batch\nNo = cancel");
+      if (!shouldCreateBatch) {
+        return;
+      }
     }
 
     const finalizeCapture = async () => {
@@ -535,21 +584,25 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
         setIsFinalizingCapture(true);
         setIsSyncingCapture(true);
         try {
-          if (isBlMode) {
+          if (isSingleCaptureMode) {
             if (!activeBatch) {
-              throw new Error("Select a BL batch before final capture.");
+              throw new Error(isBlMode ? "Select a BL batch before final capture." : "Select a GL batch before final capture.");
             }
             if (activeBatch.status === "COMPLETED") {
-              throw new Error("This BL batch is already moved to GL.");
+              throw new Error(isBlMode ? "This BL batch is already moved to GL." : "This GL batch is already completed.");
             }
 
-            const existingCaptureRecord = existingBlCapture;
+            const existingCaptureRecord = existingSingleCapture;
             const weightCapture = activeComponent ? capturedWeights.get(activeComponent.id) : null;
             if (!existingCaptureRecord && !weightCapture) {
-              throw new Error("Capture a stable batch weight before final capture.");
+              throw new Error(isBlMode ? "Capture a stable batch weight before final capture." : "Capture a stable bag weight before final capture.");
             }
             if (existingCaptureRecord) {
-              throw new Error("This BL batch already has a captured output row. Use OutWard to move it to GL.");
+              throw new Error(
+                isBlMode
+                  ? "This BL batch already has a captured output row. Use OutWard to move it to GL."
+                  : "This GL batch already has a captured output row.",
+              );
             }
 
             const startedBatch = await startBatchIfPending(activeBatch);
@@ -623,7 +676,14 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
           }
         } catch (error) {
           toast.error(
-            getApiErrorMessage(error, isBlMode ? "Failed to create the BL captured output list." : "Failed to complete the AD batch."),
+            getApiErrorMessage(
+              error,
+              isBlMode
+                ? "Failed to create the BL captured output list."
+                : isGlMode
+                  ? "Failed to create the GL captured output list."
+                  : "Failed to complete the AD batch.",
+            ),
           );
           return;
         } finally {
@@ -663,7 +723,9 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
         persistedOrderId !== null
           ? isBlMode
             ? "BL captured output recorded. Use OutWard to move it to GL."
-            : "Captured output recorded and AD batch completed."
+            : isGlMode
+              ? "GL captured output recorded."
+              : "Captured output recorded and AD batch completed."
           : "Captured output recorded.",
       );
     };
@@ -676,10 +738,12 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
     binlotValue,
     capturedWeights,
     ensureAdBatchForFinalCapture,
-    existingBlCapture,
+    existingSingleCapture,
     form,
     invalidateBatchQueries,
     isBlMode,
+    isGlMode,
+    isSingleCaptureMode,
     isFinalizingCapture,
     isSyncingCapture,
     missingComponents,
@@ -689,6 +753,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
     processScan,
     productionId,
     recipeNo,
+    requireFinalCaptureConfirmation,
     requiredComponents.length,
     startBatchIfPending,
     syncCapturedWeightsToBatch,
@@ -741,7 +806,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
     [form, invalidateBatchQueries, isBlMode, outputCapturesQuery, outwardingRecordId, persistedOrderId],
   );
 
-  const netWeightColor = isBlMode
+  const netWeightColor = isSingleCaptureMode
     ? weight?.stable
       ? "text-[#4ade80]"
       : "text-white"
@@ -750,18 +815,19 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
       : tolerance?.withinTolerance === true
         ? "text-[#4ade80]"
         : "text-white";
-  const isBlCaptureLocked = isBlMode && (activeBatch?.status === "COMPLETED" || existingBlCapture !== null);
+  const isSingleCaptureLocked =
+    isSingleCaptureMode && (activeBatch?.status === "COMPLETED" || existingSingleCapture !== null);
   const saveWeightDisabled =
-    !canCapture || isSyncingCapture || isFinalizingCapture || outwardingRecordId !== null || (isBlMode && isBlCaptureLocked);
-  const finalCaptureDisabled = isBlMode
+    !canCapture || isSyncingCapture || isFinalizingCapture || outwardingRecordId !== null || isSingleCaptureLocked;
+  const finalCaptureDisabled = isSingleCaptureMode
     ? !activeBatch ||
       activeBatch.status === "COMPLETED" ||
-      existingBlCapture !== null ||
+      existingSingleCapture !== null ||
       requiredComponents.length === 0 ||
       isFinalizingCapture ||
       isSyncingCapture ||
       outwardingRecordId !== null ||
-      (!allRequiredCaptured && existingBlCapture === null)
+      (!allRequiredCaptured && existingSingleCapture === null)
     : !allRequiredCaptured || requiredComponents.length === 0 || isFinalizingCapture || isSyncingCapture || outwardingRecordId !== null;
   const currentBatchLabel =
     activeBatch?.display_batch_no?.trim() || activeBatch?.batch_no?.trim() || (binlotValue !== "-" ? binlotValue : "Not assigned");
@@ -773,11 +839,11 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
         <div className="overflow-hidden rounded-2xl border border-slate-700 bg-[#1a1a2e] shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
           <div className="flex min-h-[88px] items-stretch">
             <div className="w-[168px] shrink-0 space-y-[5px] border-r border-slate-700 bg-[#0d0d1a] px-4 py-3 font-mono text-[11px]">
-              {isBlMode ? (
+              {isSingleCaptureMode ? (
                 <>
                   <div className="flex justify-between gap-3">
                     <span className="text-slate-500">STAGE</span>
-                    <span className="font-semibold text-white">BL</span>
+                    <span className="font-semibold text-white">{outputStage}</span>
                   </div>
                   <div className="flex justify-between gap-3">
                     <span className="text-slate-500">BATCH</span>
@@ -812,15 +878,19 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
 
             <div className="flex flex-1 flex-col items-center justify-center gap-1 border-r border-slate-700 bg-[#111827] px-4">
               <span className="text-[13px] font-bold uppercase tracking-[0.2em] text-white">
-                {isBlMode ? "Bin Assign" : "Recipe No:"}&nbsp;{recipeNo}
+                {isBlMode ? "Bin Assign" : isGlMode ? "Bag Assign" : "Recipe No:"}&nbsp;{recipeNo}
               </span>
               {activeComponent ? (
                 <div className="text-center">
                   <span className="font-mono text-[11px] tracking-widest text-blue-300">
-                    ▶ {isBlMode ? currentBatchLabel : activeComponent.itemCode}
+                    ▶ {isSingleCaptureMode ? currentBatchLabel : activeComponent.itemCode}
                   </span>
                   <div className="mt-1 text-[11px] text-slate-400">
-                    {isBlMode ? "Single bin weight capture for the selected BL batch." : activeComponent.itemName}
+                    {isBlMode
+                      ? "Single bin weight capture for the selected BL batch."
+                      : isGlMode
+                        ? "Single bag weight capture for the selected GL batch."
+                        : activeComponent.itemName}
                   </div>
                 </div>
               ) : null}
@@ -855,7 +925,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
 
           <div className="flex items-stretch border-t border-slate-700">
             <div className="flex-1 p-3">
-              {isBlMode ? (
+              {isSingleCaptureMode ? (
                 <button
                   type="button"
                   onClick={() => setActiveIndex(0)}
@@ -954,10 +1024,12 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                     ? "Saving weight..."
                     : !weight?.stable
                     ? "Waiting for stable reading…"
-                    : !isBlMode && !tolerance?.withinTolerance
+                    : !isSingleCaptureMode && !tolerance?.withinTolerance
                       ? `Weight out of range (${minWeight.toFixed(3)}–${maxWeight.toFixed(3)} kg)`
                       : isBlMode
                         ? "Save the current BL batch weight"
+                        : isGlMode
+                          ? "Save the current GL batch weight"
                         : "Save weight to the current capture session"
                 }
                 className={`w-full rounded-xl py-2.5 font-mono text-[10px] font-bold uppercase tracking-widest transition-all ${
@@ -1041,6 +1113,8 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                 {persistedOrderId !== null
                   ? isBlMode
                     ? "Captured BL outputs are saved for the selected batch. Use OutWard to move the batch to GL and release the assigned bin."
+                    : isGlMode
+                      ? "Captured GL outputs are saved for the selected batch and reload when you reopen it."
                     : "Final-captured recipe outputs are saved for this production order and reload when you reopen it."
                   : "Final-captured recipe outputs stay listed below the weightage panel until this order is saved."}
               </p>
@@ -1061,7 +1135,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                   <th className="px-3 py-3">Scancode ID</th>
                   <th className="px-3 py-3 text-right">Qty</th>
                   <th className="px-3 py-3 text-right">Weight (kg)</th>
-                  <th className="px-4 py-3 text-right">Binlot</th>
+                  <th className="px-4 py-3 text-right">{isGlMode ? "Baglot" : "Binlot"}</th>
                   {isBlMode ? <th className="px-4 py-3 text-right">OutWard</th> : null}
                 </tr>
               </thead>
@@ -1071,6 +1145,8 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                     <td colSpan={isBlMode ? 9 : 8} className="px-4 py-8 text-center text-[12px] text-slate-500">
                       {isBlMode
                         ? "Save the stable BL batch weight, use Final Capture to create the output list, then click OutWard to move the batch to GL."
+                        : isGlMode
+                          ? "Save the stable GL batch weight, then use Final Capture to create the output list."
                         : "Capture each recipe component, then use Final Capture to create the output list."}
                     </td>
                   </tr>
