@@ -49,7 +49,7 @@ import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-hel
 import type { StoreStockRecord, StoreStockRequest } from "@/lib/types";
 
 type BlendingPageModule = "stock" | "requests" | "transactions";
-type RequestStatusFilter = "pending" | "all" | "approved";
+type RequestStatusFilter = "all" | "pending" | "approved" | "partially_approved" | "cancelled";
 type TransactionStatusFilter = "all" | "pending" | "approved" | "rejected";
 
 type RequestFilterState = {
@@ -108,7 +108,7 @@ const createAdditiveRequestDefaults = (): AdditiveRequestValues => ({
 const createDefaultRequestFilters = (): RequestFilterState => ({
   fromDate: "",
   toDate: "",
-  status: "pending",
+  status: "all",
 });
 
 const createDefaultTransactionFilters = (): TransactionFilterState => ({
@@ -583,9 +583,11 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="partially_approved">Partially Approved</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>

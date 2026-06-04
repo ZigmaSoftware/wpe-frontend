@@ -1,3 +1,4 @@
+import axios from "axios";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
@@ -167,7 +168,12 @@ const CodeMasterPage = <
       toast.success("Status updated.");
       await invalidate();
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Failed to update status.")),
+    onError: async (error) => {
+      toast.error(getApiErrorMessage(error, "Failed to update status."));
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        await invalidate();
+      }
+    },
   });
 
   const deleteMutation = useMutation({
@@ -176,7 +182,12 @@ const CodeMasterPage = <
       toast.success(`${title} deleted.`);
       await invalidate();
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, `Failed to delete ${title}.`)),
+    onError: async (error) => {
+      toast.error(getApiErrorMessage(error, `Failed to delete ${title}.`));
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        await invalidate();
+      }
+    },
   });
 
   const openCreate = async () => {
