@@ -103,10 +103,7 @@ const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; 
   ],
   PR: [
     { value: "all", label: "All Statuses" },
-    { value: "PLANNED", label: "Planned" },
     { value: "IN_PROGRESS", label: "In Progress" },
-    { value: "PLAN_COMPLETED", label: "Completed" },
-    { value: "CLOSED", label: "Closed" },
   ],
 };
 
@@ -143,7 +140,8 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
   const meta = STAGE_PAGE_META[stage];
   const showsBatchCount = stage !== "PR";
   const showRowActions = stage === "AD";
-  const createActionLabel = stage === "AD" ? "New AD" : stage === "BL" ? "New BL" : "New Order";
+  const createActionLabel =
+    stage === "AD" ? "New AD" : stage === "BL" ? "New BL" : stage === "GL" ? "New GL" : "New Order";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("all");

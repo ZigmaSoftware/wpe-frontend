@@ -6,6 +6,7 @@ import type { CreateProductionOrderPayload } from "@/features/production/compone
 import {
   PRODUCTION_AD_WEIGHTAGE_ROUTE,
   PRODUCTION_BL_BLENDING_ROUTE,
+  PRODUCTION_GL_GRANULATION_ROUTE,
   PRODUCTION_ROUTE,
 } from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
@@ -29,8 +30,15 @@ const ProductionNewOrderPage = () => {
     : PRODUCTION_ROUTE;
   const isAdEntry = locationState?.entryStage === "AD" || backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE;
   const isBlEntry = locationState?.entryStage === "BL" || backRoute === PRODUCTION_BL_BLENDING_ROUTE;
-  const backLabel = isAdEntry ? "Back to AD list" : isBlEntry ? "Back to BL List" : undefined;
-  const formTitle = isAdEntry ? "New Additive Creation" : isBlEntry ? "Blending Creation" : "New Production Order";
+  const isGlEntry = locationState?.entryStage === "GL" || backRoute === PRODUCTION_GL_GRANULATION_ROUTE;
+  const backLabel = isAdEntry ? "Back to AD list" : isBlEntry ? "Back to BL List" : isGlEntry ? "Back to GL List" : undefined;
+  const formTitle = isAdEntry
+    ? "New Additive Creation"
+    : isBlEntry
+      ? "Blending Creation"
+      : isGlEntry
+        ? "New GL Creation"
+        : "New Production Order";
   const submitLabel = isAdEntry ? "Create Additive" : "Create Production Order";
 
   const machinesQ = useQuery({
