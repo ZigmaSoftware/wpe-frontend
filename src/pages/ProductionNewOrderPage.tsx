@@ -3,7 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import type { CreateProductionOrderPayload } from "@/features/production/components/order-dialog/productionOrderForm";
-import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
+import {
+  PRODUCTION_AD_WEIGHTAGE_ROUTE,
+  PRODUCTION_BL_BLENDING_ROUTE,
+  PRODUCTION_ROUTE,
+} from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type { ProductionMachine } from "@/lib/types";
@@ -24,6 +28,10 @@ const ProductionNewOrderPage = () => {
     ? locationState.backTo
     : PRODUCTION_ROUTE;
   const isAdEntry = locationState?.entryStage === "AD" || backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE;
+  const isBlEntry = locationState?.entryStage === "BL" || backRoute === PRODUCTION_BL_BLENDING_ROUTE;
+  const backLabel = isAdEntry ? "Back to AD list" : isBlEntry ? "Back to BL List" : undefined;
+  const formTitle = isAdEntry ? "New Additive Creation" : isBlEntry ? "Blending Creation" : "New Production Order";
+  const submitLabel = isAdEntry ? "Create Additive" : "Create Production Order";
 
   const machinesQ = useQuery({
     queryKey: ["production-machines"],
@@ -46,14 +54,18 @@ const ProductionNewOrderPage = () => {
   });
 
   return (
-    <ProductionOrderPageLayout onBack={() => navigate(backRoute)}>
+    <ProductionOrderPageLayout
+      onBack={() => navigate(backRoute)}
+      backLabel={backLabel}
+    >
       <ProductionOrderForm
         onSubmit={(values) => createOrderMutation.mutate(values)}
         onCancel={() => navigate(backRoute)}
         isSubmitting={createOrderMutation.isPending}
         machines={machinesQ.data ?? []}
         machinesLoading={machinesQ.isLoading}
-        formTitle="New Production Order"
+        formTitle={formTitle}
+        submitLabel={submitLabel}
         defaultWorkCenterName={isAdEntry ? locationState?.defaultWorkCenterName ?? "New Line Additive Work Center WIP" : undefined}
       />
     </ProductionOrderPageLayout>

@@ -10,7 +10,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import type { LookupItem } from "@/features/wpe-masters/types";
 import { coreApi } from "@/lib/api";
-import type { ProductionMachine } from "@/lib/types";
+import type { ProductionBatch, ProductionMachine } from "@/lib/types";
 import ProductionGeneralTab from "./ProductionGeneralTab";
 import ProductionMaterialsTab from "./ProductionMaterialsTab";
 import ProductionOutputTab from "./ProductionOutputTab";
@@ -48,6 +48,12 @@ type ProductionOrderFormProps = {
   defaultWorkCenterName?: string;
   initialTab?: ProductionDialogTab;
   visibleTabs?: ProductionDialogTab[];
+  outputContext?: {
+    stage?: ProductionBatch["stage"] | null;
+    batchId?: number | null;
+    requireFinalCaptureConfirmation?: boolean;
+  };
+  showFooterActions?: boolean;
 };
 
 const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
@@ -137,6 +143,8 @@ const ProductionOrderForm = ({
   defaultWorkCenterName,
   initialTab,
   visibleTabs,
+  outputContext,
+  showFooterActions = true,
 }: ProductionOrderFormProps) => {
   const enabledTabs = useMemo(
     () => (visibleTabs?.length ? PRODUCTION_ORDER_TABS.filter((tab) => visibleTabs.includes(tab.value)) : PRODUCTION_ORDER_TABS),
@@ -403,7 +411,7 @@ const ProductionOrderForm = ({
                 />
               </TabsContent>
               <TabsContent value="output" forceMount className="mt-0 outline-none">
-                <ProductionOutputTab form={form} />
+                <ProductionOutputTab form={form} context={outputContext} />
               </TabsContent>
               <TabsContent value="scrap" className="mt-0 outline-none">
                 <ProductionPlaceholderTab
@@ -425,32 +433,36 @@ const ProductionOrderForm = ({
               </TabsContent>
             </div>
 
-            <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200/90 bg-white px-4 py-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:px-6">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 rounded-2xl border-slate-200 bg-white px-6 text-[15px] font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={onCancel}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
+            {showFooterActions ? (
+              <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200/90 bg-white px-4 py-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:px-5 lg:px-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-2xl border-slate-200 bg-white px-6 text-[15px] font-semibold text-slate-800 hover:bg-slate-50"
+                    onClick={onCancel}
+                    disabled={isSubmitting}
+                  >
+                    Cancel
+                  </Button>
 
-              <Button
-                type="submit"
-                className="h-11 rounded-2xl bg-[linear-gradient(135deg,#ff8f1f_0%,#ff6b00_100%)] px-6 text-[15px] font-semibold text-white shadow-[0_22px_34px_-24px_rgba(255,107,0,0.95)] hover:opacity-95"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {`${resolvedSubmitLabel}...`}
-                  </>
-                ) : (
-                  resolvedSubmitLabel
-                )}
-              </Button>
-            </div>
+                  <Button
+                    type="submit"
+                    className="h-11 rounded-2xl bg-[linear-gradient(135deg,#ff8f1f_0%,#ff6b00_100%)] px-6 text-[15px] font-semibold text-white shadow-[0_22px_34px_-24px_rgba(255,107,0,0.95)] hover:opacity-95"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {`${resolvedSubmitLabel}...`}
+                      </>
+                    ) : (
+                      resolvedSubmitLabel
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </Tabs>
         </form>
       </Form>

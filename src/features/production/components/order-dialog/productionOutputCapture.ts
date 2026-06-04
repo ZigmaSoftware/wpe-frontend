@@ -111,6 +111,7 @@ export type CapturedOutputRecord = {
   qty: string;
   weightKg: string;
   binlot: string;
+  isOutwarded: boolean;
   sourceBatchId?: number | null;
   sequence?: number | null;
   componentColumns: Array<{
@@ -255,6 +256,7 @@ export const buildCapturedOutputRecord = ({
     qty: totalWeight.toFixed(3),
     weightKg: totalWeight.toFixed(3),
     binlot: binlot.trim() || "-",
+    isOutwarded: false,
     componentColumns: requiredComponents.map((component) => ({
       id: component.id,
       label: component.itemName,
@@ -273,6 +275,17 @@ export const buildCapturedOutputRecord = ({
   };
 };
 
+const resolveDisplayedBinlot = (capture: ProductionOutputCapture) => {
+  const assignedBinlot = capture.binlot.trim();
+  const sourceBatchNo = capture.source_batch_no.trim();
+
+  if (!assignedBinlot || assignedBinlot === sourceBatchNo) {
+    return "-";
+  }
+
+  return assignedBinlot;
+};
+
 export const mapPersistedOutputCaptureRecord = (capture: ProductionOutputCapture): CapturedOutputRecord => ({
   id: `persisted-output-${capture.id}`,
   sessionKey: capture.session_key,
@@ -281,7 +294,8 @@ export const mapPersistedOutputCaptureRecord = (capture: ProductionOutputCapture
   capturedAt: capture.captured_at,
   qty: capture.quantity_kg,
   weightKg: capture.weight_kg,
-  binlot: capture.binlot.trim() || capture.source_batch_no.trim() || "-",
+  binlot: resolveDisplayedBinlot(capture),
+  isOutwarded: capture.is_outwarded,
   sourceBatchId: capture.source_batch,
   sequence: capture.sequence,
   componentColumns: capture.component_columns.map((column) => ({

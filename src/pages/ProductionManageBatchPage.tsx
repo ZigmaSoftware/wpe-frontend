@@ -392,15 +392,35 @@ const ProductionManageBatchPage = () => {
         ? "xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
         : "xl:grid-cols-2";
   const headerActionLabel =
-    currentManageStage === "AD" ? "Batch" : currentManageStage === "BL" ? "Bin Assign" : "Edit";
+    currentManageStage === "AD" ? "Batch" : currentManageStage === "BL" ? "Bin Assign" : "Bag Assign";
+  const backButtonLabel =
+    currentManageStage === "AD"
+      ? "Back to AD list"
+      : currentManageStage === "BL"
+        ? "Back to BL list"
+        : "Back to Production";
+  const pageTitle =
+    currentManageStage === "AD"
+      ? "AD - Manage Batch"
+      : currentManageStage === "BL"
+        ? "BL - Manage Batch"
+        : "Manage Batches";
+  const batchListTitle =
+    currentManageStage === "AD"
+      ? "AD - Batch List"
+      : currentManageStage === "BL"
+        ? "BL - Batch List"
+        : "Production / Batch List";
   const handleHeaderAction = () =>
     navigate(getProductionEditRoute(orderId), {
       state: {
         backTo: getProductionManageBatchRoute(orderId, currentManageStage),
-        ...(currentManageStage === "AD"
+        ...(currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL"
           ? {
               initialTab: "output",
               visibleTabs: ["output"],
+              outputStage: currentManageStage,
+              outputBatchId: currentManageStage === "AD" ? null : displayedBatch?.id ?? selectedBatchId ?? null,
             }
           : {}),
       },
@@ -417,7 +437,7 @@ const ProductionManageBatchPage = () => {
             onClick={() => navigate(backRoute)}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Production
+            {backButtonLabel}
           </Button>
         </div>
 
@@ -428,7 +448,7 @@ const ProductionManageBatchPage = () => {
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-[1.15rem] font-semibold leading-tight tracking-[-0.02em] text-slate-950 sm:text-[1.25rem]">
-                      Manage Batches
+                      {pageTitle}
                     </h1>
                     {order ? <StatusBadge status={order.status} classes={ORDER_STATUS_CLASSES} /> : null}
                   </div>
@@ -542,7 +562,7 @@ const ProductionManageBatchPage = () => {
                       <div className="border-b border-slate-200/70 px-4 py-3">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <h2 className="text-[15px] font-semibold leading-tight text-slate-950">Production / Batch List</h2>
+                            <h2 className="text-[15px] font-semibold leading-tight text-slate-950">{batchListTitle}</h2>
                             <p className="mt-1 text-[11px] text-slate-500">
                               {activeStageFilter
                                 ? `Select a ${activeStageFilter} batch from the list to review its details.`

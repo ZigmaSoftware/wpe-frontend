@@ -508,6 +508,7 @@ export type ProductionOutputCapture = {
   quantity_kg: string;
   weight_kg: string;
   binlot: string;
+  is_outwarded: boolean;
   session_key: string;
   captured_at: string;
   component_columns: ProductionOutputCaptureColumn[];

@@ -138,36 +138,36 @@ export interface ProductionLineWritePayload extends CodeMasterWritePayload {
 }
 
 export interface BinCreationRecord extends CodeMasterRecord {
-  department: number;
-  department_name: string;
-  capacity: string;
-  capacity_uom: "KG" | "NOS";
+  department: number | null;
+  department_name: string | null;
+  capacity: string | null;
+  capacity_uom: "KG" | "NOS" | "";
   current_status: "FREE" | "OCCUPIED" | "HOLD" | "";
   current_material: string;
 }
 
 export interface BinCreationWritePayload extends CodeMasterWritePayload {
-  department: number;
-  capacity: number | string;
-  capacity_uom: "KG" | "NOS";
+  department?: number | null;
+  capacity?: number | string | null;
+  capacity_uom?: "KG" | "NOS" | "";
   current_status?: "FREE" | "OCCUPIED" | "HOLD" | "";
   current_material?: string;
   is_active?: boolean;
 }
 
 export interface BagCreationRecord extends CodeMasterRecord {
-  standard_weight: string;
+  standard_weight: string | null;
   uom: "KG";
-  department: number;
-  department_name: string;
+  department: number | null;
+  department_name: string | null;
   current_status: "FREE" | "OCCUPIED" | "USED";
 }
 
 export interface BagCreationWritePayload extends CodeMasterWritePayload {
-  standard_weight: number | string;
-  uom: "KG";
-  department: number;
-  current_status: "FREE" | "OCCUPIED" | "USED";
+  standard_weight?: number | string | null;
+  uom?: "KG";
+  department?: number | null;
+  current_status?: "FREE" | "OCCUPIED" | "USED";
   is_active?: boolean;
 }
 
@@ -198,4 +198,3 @@ export interface PackingMaterialWritePayload extends CodeMasterWritePayload {
   standard_consumption?: number | string | null;
   is_active?: boolean;
 }
-
