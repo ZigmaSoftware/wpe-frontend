@@ -113,14 +113,6 @@ const buildFacilityOptions = (locations: LookupItem[]) => {
   return mapNamedOptions(source);
 };
 
-const buildWorkCenterOptions = (warehouses: LookupItem[], locations: LookupItem[]) => {
-  const warehouseWorkCenters = warehouses.filter((warehouse) => /work center|wip/i.test(warehouse.name));
-  if (warehouseWorkCenters.length > 0) {
-    return mapNamedOptions(warehouseWorkCenters);
-  }
-
-  return mapNamedOptions(locations.filter((location) => /work center|wip/i.test(location.name)));
-};
 
 export const buildInchargeOptions = (users: LookupItem[]): NamedOption[] =>
   users
@@ -166,9 +158,13 @@ const ProductionOrderForm = ({
     queryFn: () => wpeMastersApi.locations.lookup(),
   });
 
-  const warehousesQuery = useQuery({
-    queryKey: ["production-order-form", "warehouses"],
-    queryFn: () => wpeMastersApi.warehouses.lookup(),
+  const workCentresQuery = useQuery({
+    queryKey: ["production-order-form", "work-centres"],
+    queryFn: async () => {
+      const res = await coreApi.get<LookupItem[]>("/api/production/work-centre-creations/lookup/");
+      return res.data;
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   const usersQuery = useQuery({
@@ -228,8 +224,8 @@ const ProductionOrderForm = ({
   );
 
   const workCenterOptions = useMemo(
-    () => buildWorkCenterOptions(warehousesQuery.data ?? [], locationsQuery.data ?? []),
-    [locationsQuery.data, warehousesQuery.data],
+    () => mapNamedOptions(workCentresQuery.data ?? []),
+    [workCentresQuery.data],
   );
 
   const inchargeOptions = useMemo(
@@ -302,11 +298,11 @@ const ProductionOrderForm = ({
 
   const lookupsLoading =
     locationsQuery.isLoading ||
-    warehousesQuery.isLoading ||
+    workCentresQuery.isLoading ||
     usersQuery.isLoading ||
     productionTypesQuery.isLoading;
   const lookupError =
-    locationsQuery.isError || warehousesQuery.isError || usersQuery.isError || productionTypesQuery.isError
+    locationsQuery.isError || workCentresQuery.isError || usersQuery.isError || productionTypesQuery.isError
       ? "Some reference lookups could not be loaded. The form stays usable, but some selections may be limited."
       : null;
 

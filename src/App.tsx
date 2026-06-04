@@ -87,10 +87,12 @@ import TaxesPage from "@/features/common-master/pages/TaxesPage";
 import {
   BLENDING_INVENTORY_ROUTE,
   INVENTORY_ROUTE,
+  PRODUCTION_INVENTORY_ROUTE,
   STORE_INVENTORY_ROUTE,
 } from "@/features/items/utils/routes";
 import GRNPage from "@/pages/GRNPage";
 import ItemsPage from "@/pages/ItemsPage";
+import ProductionInventoryPage from "@/pages/ProductionInventoryPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import ProductionManageBatchPage from "@/pages/ProductionManageBatchPage";
@@ -167,6 +169,7 @@ const App = () => (
                   <Route path={INVENTORY_ROUTE} element={<Navigate to={STORE_INVENTORY_ROUTE} replace />} />
                   <Route path={STORE_INVENTORY_ROUTE} element={<ItemsPage module="store" />} />
                   <Route path={BLENDING_INVENTORY_ROUTE} element={<ItemsPage module="blending" />} />
+                  <Route path={PRODUCTION_INVENTORY_ROUTE} element={<ProductionInventoryPage />} />
                   <Route path={BLENDING_ROUTE} element={<Navigate to={BLENDING_STOCK_ROUTE} replace />} />
                   <Route path={BLENDING_STOCK_ROUTE} element={<BlendingPage module="stock" />} />
                   <Route path={BLENDING_STORE_REQUEST_ROUTE} element={<BlendingPage module="requests" />} />

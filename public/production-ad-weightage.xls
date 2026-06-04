@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>AD - Weightage</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
+      h1 { margin: 0 0 6px; font-size: 20px; }
+      p { margin: 0 0 18px; color: #475569; font-size: 12px; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; vertical-align: top; }
+      th { background: #e2e8f0; font-weight: 700; }
+      tr:nth-child(even) td { background: #f8fafc; }
+    </style>
+  </head>
+  <body>
+    <h1>AD - Weightage</h1>
+    <p>Generated 02 Jun 2026, 06:22 pm</p>
+    <table>
+      <thead>
+        <tr><th>Prd ID</th><th>Production Name</th><th>No.of Batch</th><th>BOM Varient</th><th>Started Date</th><th>Ended Date</th><th>Production Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>001</td><td>Recycling Production</td><td>0</td><td>-</td><td>26 May 2026</td><td>-</td><td>-</td></tr><tr><td>001</td><td>Recycling Production</td><td>0</td><td>-</td><td>22 May 2026</td><td>-</td><td>-</td></tr><tr><td>001</td><td>Recycling Production</td><td>0</td><td>-</td><td>22 May 2026</td><td>-</td><td>-</td></tr>
+      </tbody>
+    </table>
+  </body>
+</html>
