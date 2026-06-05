@@ -20,7 +20,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, signIn, user } = useAuth();
+  const { isAuthenticated, isBootstrapping, signIn } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginFormValues>({
@@ -32,16 +32,16 @@ const LoginPage = () => {
   });
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (!isBootstrapping && isAuthenticated) {
       navigate("/app", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isBootstrapping, navigate]);
 
   const onSubmit = async (values: LoginFormValues) => {
     try {
       await signIn(values.username, values.password);
       const destination = (location.state as { from?: string } | null)?.from ?? "/app";
-      toast.success(`Welcome back${user?.username ? `, ${user.username}` : ""}.`);
+      toast.success(`Welcome back${values.username ? `, ${values.username}` : ""}.`);
       navigate(destination, { replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Login failed. Please check your credentials.");

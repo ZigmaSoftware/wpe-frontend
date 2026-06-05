@@ -38,11 +38,34 @@ export const userTypeSchema = z.object({
   is_active: z.boolean(),
 });
 
+export const staffCreationSchema = z.object({
+  staff_code: z.string().trim().min(1, "Employee ID is required."),
+  name: z.string().trim().min(1, "Name is required."),
+  age: z.coerce.number().min(1, "Age is required."),
+  department: z.coerce.number().min(1, "Department is required."),
+  role: z.coerce.number().min(1, "Role is required."),
+  mobile: z.string().trim().regex(/^\+?[0-9]{10,15}$/, "Enter a valid phone number."),
+  email: z.string().trim().email("Enter a valid email."),
+  joining_date: optionalString(),
+  gender: z.enum(["male", "female", "other"]).optional().or(z.literal("")).nullable(),
+  address: optionalString(),
+  emergency_contact_no: z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9]{10,15}$/, "Enter a valid emergency contact number.")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  photo: z.instanceof(File).nullable().optional(),
+  photo_url: z.string().optional(),
+  is_active: z.boolean(),
+  remarks: optionalString(),
+});
+
 export const userCreationSchema = z
   .object({
     staff: z.coerce.number().min(1, "Staff is required."),
-    department: z.coerce.number().min(1, "Department is required."),
-    role: z.coerce.number().min(1, "Role is required."),
+    user_type: z.coerce.number().min(1, "User type is required."),
     company: z.coerce.number().min(1, "Company is required."),
     username: z.string().trim().min(1, "Username is required."),
     password: z.string().optional().or(z.literal("")),
@@ -83,5 +106,6 @@ export type MainScreenFormValues = z.infer<typeof mainScreenSchema>;
 export type ScreenSectionFormValues = z.infer<typeof screenSectionSchema>;
 export type UserScreenFormValues = z.infer<typeof userScreenSchema>;
 export type UserTypeFormValues = z.infer<typeof userTypeSchema>;
+export type StaffCreationFormValues = z.infer<typeof staffCreationSchema>;
 export type UserCreationFormValues = z.infer<typeof userCreationSchema>;
 export type UserScreenPermissionFormValues = z.infer<typeof userScreenPermissionSchema>;

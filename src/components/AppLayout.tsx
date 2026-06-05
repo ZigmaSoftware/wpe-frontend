@@ -49,10 +49,14 @@ const AppLayout = () => {
 
   const isFullscreenFormLayout = fullscreenMatchers.some((matcher) => matcher.test(location.pathname));
 
-  const navigation = useMemo(() => buildAppNavigation(adminMenu), [adminMenu]);
+  const navigation = useMemo(
+    () => buildAppNavigation(adminMenu, { hasFullAccess: Boolean(user?.is_staff) }),
+    [adminMenu, user?.is_staff],
+  );
   const breadcrumbs = useMemo(() => buildBreadcrumbs(location.pathname, navigation), [location.pathname, navigation]);
   const topLevelKey = useMemo(() => getTopLevelNavKey(location.pathname, navigation), [location.pathname, navigation]);
   const searchableLinks = useMemo(() => flattenNavigationLinks(navigation), [navigation]);
+  const homePath = navigation.dashboard?.to ?? searchableLinks[0]?.to ?? "/app";
 
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -230,51 +234,57 @@ const AppLayout = () => {
             {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
 
-          <Link className="wpe-brand" to="/app/dashboard">
+          <Link className="wpe-brand" to={homePath}>
             <img src="/zigma.png" alt="Zigma WPE ERP" className="h-9 w-auto object-contain" />
           </Link>
 
           <span className="wpe-nav-sep wpe-desktop-only" />
 
           <nav className="wpe-nav-primary wpe-desktop-only">
-            <Link
-              className={`wpe-nav-item ${topLevelKey === "dashboard" ? "is-active" : ""}`}
-              to={navigation.dashboard.to}
-              onClick={() => setOpenMega(null)}
-            >
-              <LayoutDashboard className="h-4 w-4" />
-              <span>{DASHBOARD_SECTION_LABEL}</span>
-            </Link>
+            {navigation.dashboard ? (
+              <Link
+                className={`wpe-nav-item ${topLevelKey === "dashboard" ? "is-active" : ""}`}
+                to={navigation.dashboard.to}
+                onClick={() => setOpenMega(null)}
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                <span>{DASHBOARD_SECTION_LABEL}</span>
+              </Link>
+            ) : null}
 
-            <button
-              type="button"
-              className={`wpe-nav-item ${topLevelKey === "workspace" ? "is-active" : ""} ${openMega === "workspace" ? "is-open" : ""}`}
-              onClick={() => setOpenMega((current) => (current === "workspace" ? null : "workspace"))}
-              onMouseEnter={() => {
-                if (openMega) {
-                  setOpenMega("workspace");
-                }
-              }}
-            >
-              <Layers className="h-4 w-4" />
-              <span>WPE Workspace</span>
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
+            {navigation.workspace.length > 0 ? (
+              <button
+                type="button"
+                className={`wpe-nav-item ${topLevelKey === "workspace" ? "is-active" : ""} ${openMega === "workspace" ? "is-open" : ""}`}
+                onClick={() => setOpenMega((current) => (current === "workspace" ? null : "workspace"))}
+                onMouseEnter={() => {
+                  if (openMega) {
+                    setOpenMega("workspace");
+                  }
+                }}
+              >
+                <Layers className="h-4 w-4" />
+                <span>WPE Workspace</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
 
-            <button
-              type="button"
-              className={`wpe-nav-item ${topLevelKey === "masters" ? "is-active" : ""} ${openMega === "masters" ? "is-open" : ""}`}
-              onClick={() => setOpenMega((current) => (current === "masters" ? null : "masters"))}
-              onMouseEnter={() => {
-                if (openMega) {
-                  setOpenMega("masters");
-                }
-              }}
-            >
-              <Database className="h-4 w-4" />
-              <span>Masters</span>
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
+            {navigation.masters.length > 0 ? (
+              <button
+                type="button"
+                className={`wpe-nav-item ${topLevelKey === "masters" ? "is-active" : ""} ${openMega === "masters" ? "is-open" : ""}`}
+                onClick={() => setOpenMega((current) => (current === "masters" ? null : "masters"))}
+                onMouseEnter={() => {
+                  if (openMega) {
+                    setOpenMega("masters");
+                  }
+                }}
+              >
+                <Database className="h-4 w-4" />
+                <span>Masters</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </nav>
 
           <div className="wpe-nav-right">
@@ -349,8 +359,8 @@ const AppLayout = () => {
           </div>
         </div>
 
-        {renderWorkspaceMega()}
-        {renderMastersMega()}
+        {navigation.workspace.length > 0 ? renderWorkspaceMega() : null}
+        {navigation.masters.length > 0 ? renderMastersMega() : null}
       </header>
 
       <div
@@ -363,20 +373,26 @@ const AppLayout = () => {
 
       <div className={`wpe-mobile-sheet ${mobileOpen ? "is-open" : ""}`}>
         <div className="wpe-mobile-sheet-inner">
-          <Link className="wpe-mobile-dashboard" to={navigation.dashboard.to} onClick={() => setMobileOpen(false)}>
-            <LayoutDashboard className="h-4 w-4" />
-            <span>{DASHBOARD_SECTION_LABEL}</span>
-          </Link>
+          {navigation.dashboard ? (
+            <Link className="wpe-mobile-dashboard" to={navigation.dashboard.to} onClick={() => setMobileOpen(false)}>
+              <LayoutDashboard className="h-4 w-4" />
+              <span>{DASHBOARD_SECTION_LABEL}</span>
+            </Link>
+          ) : null}
 
-          <div className="wpe-mobile-section">
-            <div className="wpe-mobile-section-title">WPE Workspace</div>
-            {navigation.workspace.map(renderMobileGroup)}
-          </div>
+          {navigation.workspace.length > 0 ? (
+            <div className="wpe-mobile-section">
+              <div className="wpe-mobile-section-title">WPE Workspace</div>
+              {navigation.workspace.map(renderMobileGroup)}
+            </div>
+          ) : null}
 
-          <div className="wpe-mobile-section">
-            <div className="wpe-mobile-section-title">Masters</div>
-            {navigation.masters.map(renderMobileGroup)}
-          </div>
+          {navigation.masters.length > 0 ? (
+            <div className="wpe-mobile-section">
+              <div className="wpe-mobile-section-title">Masters</div>
+              {navigation.masters.map(renderMobileGroup)}
+            </div>
+          ) : null}
         </div>
       </div>
 

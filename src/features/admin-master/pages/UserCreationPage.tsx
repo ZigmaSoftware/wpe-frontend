@@ -16,9 +16,8 @@ import { adminMasterApi } from "@/features/admin-master/api/adminMasterApi";
 import { adminMasterKeys } from "@/features/admin-master/api/queryKeys";
 import {
   useCompanyOptions,
-  useUserCreationDepartmentOptions,
-  useUserCreationRoleOptions,
   useUserCreationSelectOptions,
+  useUserTypeOptions,
 } from "@/features/admin-master/hooks/useAdminLookups";
 import { useAdminMutation } from "@/features/admin-master/hooks/useAdminMutations";
 import { useAdminTableSearchParams } from "@/features/admin-master/hooks/useAdminTableSearchParams";
@@ -34,8 +33,7 @@ import { cn } from "@/lib/utils";
 
 const defaultValues: UserCreationFormValues = {
   staff: 0,
-  department: 0,
-  role: 0,
+  user_type: 0,
   company: 0,
   username: "",
   password: "",
@@ -139,11 +137,10 @@ const UserCreationPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<UserCreationRecord | null>(null);
   const form = useForm<UserCreationFormValues>({ resolver: zodResolver(userCreationSchema), defaultValues });
   const userCreationSelectOptions = useUserCreationSelectOptions();
-  const departmentOptions = useUserCreationDepartmentOptions();
+  const userTypeOptions = useUserTypeOptions();
   const companyOptions = useCompanyOptions();
   const selectedStaffId = form.watch("staff");
-  const selectedDepartmentId = form.watch("department");
-  const roleOptions = useUserCreationRoleOptions(selectedDepartmentId || undefined);
+  const selectedUserTypeId = form.watch("user_type");
 
   const query = useQuery({
     queryKey: adminMasterKeys.entity("user-creation", table.page, table.pageSize, debouncedSearch, table.ordering, ""),
@@ -183,36 +180,38 @@ const UserCreationPage = () => {
   });
 
   const userRecords = useMemo(() => query.data?.items ?? [], [query.data?.items]);
-  const staffOptions = userCreationSelectOptions.data ?? [];
+  const staffOptions = useMemo(() => userCreationSelectOptions.data ?? [], [userCreationSelectOptions.data]);
   const selectedStaffOption = useMemo(
     () => staffOptions.find((option) => option.id === selectedStaffId) ?? null,
     [selectedStaffId, staffOptions],
   );
+  const availableUserTypes = useMemo(() => userTypeOptions.data ?? [], [userTypeOptions.data]);
 
   useEffect(() => {
     if (!selectedStaffOption) {
       return;
     }
 
+    if (availableUserTypes.length > 0) {
+      const matchedUserType = availableUserTypes.find(
+        (option) =>
+          option.department_id === (selectedStaffOption.department_id ?? null) &&
+          option.role_id === (selectedStaffOption.role_id ?? null),
+      );
+      const currentUserType = availableUserTypes.find((option) => option.id === selectedUserTypeId) ?? null;
+
+      if (
+        !currentUserType ||
+        currentUserType.department_id !== (selectedStaffOption.department_id ?? null) ||
+        currentUserType.role_id !== (selectedStaffOption.role_id ?? null)
+      ) {
+        form.setValue("user_type", matchedUserType?.id ?? 0, { shouldValidate: true });
+      }
+    }
+
     form.setValue("mobile_no", selectedStaffOption.mobile ?? "", { shouldValidate: true });
     form.setValue("email", selectedStaffOption.email ?? "", { shouldValidate: true });
-  }, [form, selectedStaffOption]);
-
-  useEffect(() => {
-    const currentRole = form.getValues("role");
-    const availableRoles = roleOptions.data ?? [];
-
-    if (!selectedDepartmentId) {
-      if (currentRole) {
-        form.setValue("role", 0, { shouldValidate: true });
-      }
-      return;
-    }
-
-    if (currentRole && !availableRoles.some((option) => option.id === currentRole)) {
-      form.setValue("role", 0, { shouldValidate: true });
-    }
-  }, [form, roleOptions.data, selectedDepartmentId]);
+  }, [availableUserTypes, form, selectedStaffOption, selectedUserTypeId]);
 
   const openCreateDialog = () => {
     setEditing(null);
@@ -225,8 +224,7 @@ const UserCreationPage = () => {
     form.reset({
       ...defaultValues,
       staff: record.staff,
-      department: record.department ?? 0,
-      role: record.role ?? 0,
+      user_type: record.user_type ?? 0,
       company: record.company ?? 0,
       username: record.username,
       account_status: record.account_status,
@@ -242,7 +240,7 @@ const UserCreationPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="User Creation"
-        description="Provision authenticated users mapped to staff, department, role, and company."
+        description="Provision authenticated users mapped to staff, user type, and company."
       />
       <MasterToolbar search={table.search} onSearchChange={table.setSearch} createLabel="Add User" onCreate={openCreateDialog} />
       <MasterTable
@@ -334,60 +332,33 @@ const UserCreationPage = () => {
                 <StaffSelectField value={field.value} onChange={field.onChange} options={staffOptions} />
               )}
             />
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="department"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Department</FormLabel>
-                    <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(departmentOptions.data ?? []).map((option) => (
-                          <SelectItem key={option.id} value={String(option.id)}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role</FormLabel>
-                    <Select
-                      value={field.value ? String(field.value) : undefined}
-                      onValueChange={(value) => field.onChange(Number(value))}
-                      disabled={!selectedDepartmentId}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={selectedDepartmentId ? "Select role" : "Select department first"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(roleOptions.data ?? []).map((option) => (
-                          <SelectItem key={option.id} value={String(option.id)}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="user_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>User Type*</FormLabel>
+                  <Select value={String(field.value ?? 0)} onValueChange={(value) => field.onChange(Number(value))}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select user type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="0" disabled>
+                        Select user type
+                      </SelectItem>
+                      {availableUserTypes.map((option) => (
+                        <SelectItem key={option.id} value={String(option.id)}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -395,13 +366,16 @@ const UserCreationPage = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Company</FormLabel>
-                    <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
+                    <Select value={String(field.value ?? 0)} onValueChange={(value) => field.onChange(Number(value))}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select company" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="0" disabled>
+                          Select company
+                        </SelectItem>
                         {(companyOptions.data ?? []).map((option) => (
                           <SelectItem key={option.id} value={String(option.id)}>
                             {option.name}

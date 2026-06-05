@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckSquare, ChevronRight, RotateCcw, Save, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import { Badge } from "@/components/ui/badge";
@@ -130,13 +130,64 @@ const formatScopeLabel = (value: UserScreenPermissionRecord["scope_type"]) =>
     .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
     .join(" ");
 
+const PermissionHeaderToggle = ({
+  label,
+  checked,
+  disabled,
+  onToggle,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) => (
+  <div
+    role="checkbox"
+    aria-checked={checked}
+    aria-disabled={disabled}
+    tabIndex={disabled ? -1 : 0}
+    className={cn(
+      "inline-flex items-center justify-center gap-2",
+      disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+    )}
+    onClick={() => {
+      if (!disabled) {
+        onToggle();
+      }
+    }}
+    onKeyDown={(event) => {
+      if (disabled) {
+        return;
+      }
+
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        onToggle();
+      }
+    }}
+  >
+    <Checkbox checked={checked} disabled={disabled} className="pointer-events-none" />
+    <span>{label}</span>
+  </div>
+);
+
 const UserScreenPermissionAssignmentPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { id } = useParams<{ id?: string }>();
+  const [searchParams] = useSearchParams();
   const permissionId = id ? Number(id) : null;
   const isEditMode = Boolean(permissionId);
-  const [selectedUserTypeId, setSelectedUserTypeId] = useState<number | null>(null);
+  const presetUserTypeId = useMemo(() => {
+    const rawValue = searchParams.get("userType");
+    if (!rawValue) {
+      return null;
+    }
+    const parsedValue = Number(rawValue);
+    return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+  }, [searchParams]);
+  const isPresetUserTypeMode = !isEditMode && Boolean(presetUserTypeId);
+  const [selectedUserTypeId, setSelectedUserTypeId] = useState<number | null>(presetUserTypeId);
   const [selectedMainScreenId, setSelectedMainScreenId] = useState<number | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
   const [selections, setSelections] = useState<SelectionMap>({});
@@ -234,6 +285,44 @@ const UserScreenPermissionAssignmentPage = () => {
 
     return currentRows.length > 0 ? currentRows.every((entry) => Boolean(entry.is_active)) : true;
   }, [contextStatuses, currentContextKey, selections, visibleScreens]);
+
+  const visibleScreenPermissionState = useMemo(
+    () =>
+      visibleScreens.map((screen) => ({
+        screen,
+        permissions: normalizeActionPermissions(screen.available_actions, selections[screen.id]?.action_permissions),
+      })),
+    [selections, visibleScreens],
+  );
+
+  const visibleAllSelected = useMemo(
+    () =>
+      visibleScreenPermissionState.length > 0 &&
+      visibleScreenPermissionState.every(({ permissions }) => Boolean(permissions.all)),
+    [visibleScreenPermissionState],
+  );
+
+  const visibleActionColumnState = useMemo(
+    () =>
+      Object.fromEntries(
+        ACTIONS.map((action) => {
+          const applicableRows = visibleScreenPermissionState.filter(({ screen }) =>
+            screen.available_actions.includes(action),
+          );
+
+          return [
+            action,
+            {
+              enabled:
+                applicableRows.length > 0 &&
+                applicableRows.every(({ permissions }) => Boolean(permissions[action])),
+              disabled: applicableRows.length === 0,
+            },
+          ];
+        }),
+      ) as Record<AdminAction, { enabled: boolean; disabled: boolean }>,
+    [visibleScreenPermissionState],
+  );
 
   const selectedUserTypeLabel = useMemo(
     () =>
@@ -363,6 +452,14 @@ const UserScreenPermissionAssignmentPage = () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [isDirty]);
+
+  useEffect(() => {
+    if (!presetUserTypeId || isEditMode) {
+      return;
+    }
+
+    setSelectedUserTypeId((currentValue) => currentValue ?? presetUserTypeId);
+  }, [isEditMode, presetUserTypeId]);
 
   useEffect(() => {
     if (!permissionDetailQuery.data) {
@@ -516,6 +613,30 @@ const UserScreenPermissionAssignmentPage = () => {
     });
   };
 
+  const applySelectionToScreen = (
+    next: SelectionMap,
+    screen: UserScreenRecord,
+    actionPermissions?: AdminActionPermissions | null,
+    isActive?: boolean,
+  ) => {
+    const contextKey = getContextKey(screen.main_screen, screen.screen_section);
+    const contextStatus = contextStatuses[contextKey] ?? baselineContextStatuses[contextKey] ?? true;
+    const baselineEntry = baselineSelections[screen.id];
+
+    const normalizedEntry = buildScreenPermissionEntry(
+      screen,
+      actionPermissions,
+      isActive ?? next[screen.id]?.is_active ?? baselineEntry?.is_active ?? contextStatus,
+    );
+
+    if (!ACTIONS.some((action) => Boolean(normalizedEntry.action_permissions?.[action])) && !baselineEntry) {
+      delete next[screen.id];
+      return;
+    }
+
+    next[screen.id] = normalizedEntry;
+  };
+
   const handleRowActionToggle = (screen: UserScreenRecord, action: AdminAction) => {
     updateSelections(screen, (currentEntry) => {
       const currentPermissions = normalizeActionPermissions(screen.available_actions, currentEntry?.action_permissions);
@@ -544,6 +665,58 @@ const UserScreenPermissionAssignmentPage = () => {
         ...(currentEntry ?? buildScreenPermissionEntry(screen, currentPermissions, Boolean(currentEntry?.is_active))),
         action_permissions: nextPermissions,
       };
+    });
+  };
+
+  const handleColumnActionToggle = (action: AdminAction) => {
+    const applicableScreens = visibleScreens.filter((screen) => screen.available_actions.includes(action));
+    if (applicableScreens.length === 0) {
+      return;
+    }
+
+    const enableForAll = applicableScreens.some(
+      (screen) =>
+        !normalizeActionPermissions(screen.available_actions, selections[screen.id]?.action_permissions)[action],
+    );
+
+    setSelections((current) => {
+      const next = cloneSelectionMap(current);
+
+      for (const screen of applicableScreens) {
+        const currentPermissions = normalizeActionPermissions(
+          screen.available_actions,
+          (next[screen.id] ?? baselineSelections[screen.id])?.action_permissions,
+        );
+        const nextPermissions = normalizeActionPermissions(screen.available_actions, {
+          ...currentPermissions,
+          [action]: enableForAll,
+        });
+        applySelectionToScreen(next, screen, nextPermissions);
+      }
+
+      return next;
+    });
+  };
+
+  const handleVisibleMatrixToggleAll = () => {
+    if (visibleScreens.length === 0) {
+      return;
+    }
+
+    const enableForAll = !visibleAllSelected;
+
+    setSelections((current) => {
+      const next = cloneSelectionMap(current);
+
+      for (const screen of visibleScreens) {
+        const nextPermissions = normalizeActionPermissions(
+          screen.available_actions,
+          Object.fromEntries(screen.available_actions.map((action) => [action, enableForAll])),
+        );
+        applySelectionToScreen(next, screen, nextPermissions);
+      }
+
+      return next;
     });
   };
 
@@ -627,7 +800,7 @@ const UserScreenPermissionAssignmentPage = () => {
       toast.success(
         legacyPermission
           ? "Legacy permission migrated to screen-level rows successfully."
-          : isEditMode
+          : isEditMode || isPresetUserTypeMode
             ? "User screen permissions updated successfully."
             : "User screen permissions saved successfully.",
       );
@@ -687,14 +860,14 @@ const UserScreenPermissionAssignmentPage = () => {
           <span>User Type Permissions</span>
           <ChevronRight className="h-4 w-4" />
           <span className="font-medium text-slate-900">
-            {isEditMode ? "Edit Assignment" : "New Assignment"}
+            {isEditMode || isPresetUserTypeMode ? "Edit Assignment" : "New Assignment"}
           </span>
         </div>
 
         <PageHeader
-          title={isEditMode ? "Edit User Type Permissions" : "Create User Type Permissions"}
+          title={isEditMode || isPresetUserTypeMode ? "Edit User Type Permissions" : "Create User Type Permissions"}
           description={
-            isEditMode
+            isEditMode || isPresetUserTypeMode
               ? "Adjust screen-level permissions in one place and save the final assignment once."
               : "Configure screen-level permissions across multiple main screens and user sections before one final save."
           }
@@ -733,7 +906,7 @@ const UserScreenPermissionAssignmentPage = () => {
                 <Select
                   value={selectedUserTypeId ? String(selectedUserTypeId) : undefined}
                   onValueChange={(value) => handleUserTypeChange(Number(value))}
-                  disabled={isEditMode}
+                  disabled={isEditMode || isPresetUserTypeMode}
                 >
                   <SelectTrigger className="h-11 rounded-xl">
                     <SelectValue placeholder="Select user type" />
@@ -924,13 +1097,24 @@ const UserScreenPermissionAssignmentPage = () => {
                     <TableHeader className="bg-slate-100/80">
                       <TableRow className="hover:bg-slate-100/80">
                         <TableHead className="min-w-[260px] font-semibold text-slate-700">Screen Name</TableHead>
-                        <TableHead className="text-center font-semibold text-slate-700">All</TableHead>
-                        <TableHead className="text-center font-semibold text-slate-700">Add</TableHead>
-                        <TableHead className="text-center font-semibold text-slate-700">View</TableHead>
-                        <TableHead className="text-center font-semibold text-slate-700">List</TableHead>
-                        <TableHead className="text-center font-semibold text-slate-700">Update</TableHead>
-                        <TableHead className="text-center font-semibold text-slate-700">Delete</TableHead>
-                        <TableHead className="text-center font-semibold text-slate-700">Print</TableHead>
+                        <TableHead className="text-center font-semibold text-slate-700">
+                          <PermissionHeaderToggle
+                            label="All"
+                            checked={visibleAllSelected}
+                            disabled={visibleScreens.length === 0}
+                            onToggle={handleVisibleMatrixToggleAll}
+                          />
+                        </TableHead>
+                        {ACTIONS.map((action) => (
+                          <TableHead key={action} className="text-center font-semibold uppercase text-slate-700">
+                            <PermissionHeaderToggle
+                              label={action}
+                              checked={visibleActionColumnState[action].enabled}
+                              disabled={visibleActionColumnState[action].disabled}
+                              onToggle={() => handleColumnActionToggle(action)}
+                            />
+                          </TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>

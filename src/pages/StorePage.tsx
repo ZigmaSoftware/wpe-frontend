@@ -154,7 +154,7 @@ const STORE_MODULE_META: Record<StorePageModule, Pick<StoreWorkspaceModuleDefini
     description: "Monitor current store stock balances, inwards, outwards, and item-level movement access.",
   },
   requests: {
-    label: "Store Request",
+    label: "Request Approval's",
     description: "Review department requests, approval decisions, issued quantities, and request reasons.",
   },
   transactions: {
@@ -356,7 +356,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
       ];
 
       exportTableData({
-        title: "Store Requests",
+        title: "Request Approval's",
         filename: "store-requests",
         rows: requestRows,
         columns,
@@ -427,17 +427,17 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
 
   const renderRequestTable = () => {
     if (requestsQuery.isLoading) {
-      return <LoadingState label="Loading store requests..." />;
+      return <LoadingState label="Loading request approvals..." />;
     }
 
     if (requestsQuery.isError) {
-      return <ErrorState description={getApiErrorMessage(requestsQuery.error, "Unable to load store requests.")} />;
+      return <ErrorState description={getApiErrorMessage(requestsQuery.error, "Unable to load request approvals.")} />;
     }
 
     if (!requestRows.length) {
       return (
         <EmptyState
-          title="No store requests"
+          title="No request approvals"
           description="No department requests matched the selected date range, status, or department filters."
         />
       );

@@ -21,3 +21,6 @@ export const findScreenPermissions = (menu: AdminMenuMain[], screenCode: string)
   }
   return null;
 };
+
+export const hasAnyScreenAccess = (menu: AdminMenuMain[], screenCodes: readonly string[]) =>
+  screenCodes.some((screenCode) => Boolean(findScreenPermissions(menu, screenCode)));

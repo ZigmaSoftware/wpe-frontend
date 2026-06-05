@@ -10,9 +10,12 @@ import type {
   PermissionAssignmentEntry,
   ResolvedPermissionResponse,
   ScreenSectionRecord,
+  StaffCreationRecord,
+  StaffCreationWritePayload,
   UserCreationRecord,
   UserCreationWritePayload,
   UserScreenPermissionRecord,
+  UserScreenPermissionSummaryRecord,
   UserScreenRecord,
   UserTypeRecord,
   UserTypeWritePayload,
@@ -75,6 +78,29 @@ const deleteEntity = async (path: string) => {
 const toggleEntity = async (path: string) => {
   const response = await coreApi.patch(path, {});
   return response.data;
+};
+
+const buildFormData = (payload: Record<string, unknown>) => {
+  const fd = new FormData();
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === "photo_url") continue;
+    if (value instanceof File) {
+      fd.append(key, value);
+      continue;
+    }
+    if (key === "photo" && (value === null || value === undefined)) {
+      continue;
+    }
+    if (value === null) {
+      fd.append(key, "");
+      continue;
+    }
+    if (value === undefined) {
+      continue;
+    }
+    fd.append(key, String(value));
+  }
+  return fd;
 };
 
 export const adminMasterApi = {
@@ -146,10 +172,33 @@ export const adminMasterApi = {
     const response = await coreApi.get<LookupOption[]>("/api/wpe-masters/departments/lookup/");
     return response.data;
   },
-  lookupUserTypeRoles: async () => {
-    const response = await coreApi.get<LookupOption[]>("/api/wpe-masters/roles/lookup/");
-    return response.data;
+  lookupUserTypeRoles: async (departmentId?: number | null) => {
+    if (!departmentId) {
+      return [] as LookupOption[];
+    }
+    const filteredResponse = await coreApi.get<LookupOption[]>("/api/wpe-masters/roles/lookup/", {
+      params: { department: departmentId, department_id: departmentId },
+    });
+    return filteredResponse.data;
   },
+
+  listStaffCreations: (params: AdminTableParams) => listEntity<StaffCreationRecord>("/api/users/staff/", params),
+  createStaffCreation: async (payload: StaffCreationWritePayload) => {
+    const response = await coreApi.post<{ data: StaffCreationRecord } | StaffCreationRecord>(
+      "/api/users/staff/",
+      buildFormData(payload as unknown as Record<string, unknown>),
+    );
+    return unwrap(response.data);
+  },
+  updateStaffCreation: async (id: number, payload: Partial<StaffCreationWritePayload>) => {
+    const response = await coreApi.put<{ data: StaffCreationRecord } | StaffCreationRecord>(
+      `/api/users/staff/${id}/`,
+      buildFormData(payload as unknown as Record<string, unknown>),
+    );
+    return unwrap(response.data);
+  },
+  deleteStaffCreation: (id: number) => deleteEntity(`/api/users/staff/${id}/`),
+  toggleStaffCreation: (id: number) => toggleEntity(`/api/users/staff/${id}/toggle-status/`),
 
   listUserCreations: (params: AdminTableParams) => listEntity<UserCreationRecord>("/api/users/users-creation/", params),
   createUserCreation: (payload: UserCreationWritePayload) => createEntity<UserCreationRecord>("/api/users/users-creation/", payload),
@@ -175,6 +224,8 @@ export const adminMasterApi = {
   },
 
   listUserScreenPermissions: (params: AdminTableParams) => listEntity<UserScreenPermissionRecord>("/api/users/user-permissions/", params),
+  listUserScreenPermissionSummaries: (params: AdminTableParams) =>
+    listEntity<UserScreenPermissionSummaryRecord>("/api/users/user-permissions/summary/", params),
   getUserScreenPermission: async (id: number) => {
     const response = await coreApi.get<UserScreenPermissionRecord>(`/api/users/user-permissions/${id}/`);
     return response.data;
@@ -183,6 +234,10 @@ export const adminMasterApi = {
   updateUserScreenPermission: (id: number, payload: Partial<UserScreenPermissionRecord>) => updateEntity<UserScreenPermissionRecord>(`/api/users/user-permissions/${id}/`, payload),
   deleteUserScreenPermission: (id: number) => deleteEntity(`/api/users/user-permissions/${id}/`),
   toggleUserScreenPermission: (id: number) => toggleEntity(`/api/users/user-permissions/${id}/toggle-status/`),
+  deleteUserScreenPermissionSummary: (userTypeId: number) =>
+    deleteEntity(`/api/users/user-permissions/summary/${userTypeId}/`),
+  toggleUserScreenPermissionSummary: (userTypeId: number) =>
+    toggleEntity(`/api/users/user-permissions/summary/${userTypeId}/toggle-status/`),
   assignUserScreenPermissions: async (userType: number, permissions: PermissionAssignmentEntry[]) => {
     const response = await coreApi.post("/api/users/user-permissions/assign/", {
       user_type: userType,
