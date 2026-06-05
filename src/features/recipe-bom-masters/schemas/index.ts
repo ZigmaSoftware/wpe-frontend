@@ -16,11 +16,7 @@ export const recipeCreationSchema = z.object({
   name: trimmedRequired("Recipe name"),
   description: z.string().trim().optional().default(""),
   recipe_version: z.string().trim().optional().default(""),
-  batch_size: numericRequired("Batch size"),
-  batch_uom: trimmedRequired("Batch UOM"),
-  status: z.enum(["DRAFT", "APPROVED", "INACTIVE"], { required_error: "Status is required." }),
-  approved_by: z.coerce.number().nullable().optional(),
-  approved_at: z.string().trim().optional().default(""),
+  batch_size: numericOptional("Batch size"),
   is_active: z.boolean().default(true),
 });
 
