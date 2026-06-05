@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Columns2, PanelLeftOpen, PanelRightOpen, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Columns2, PanelLeftOpen, PanelRightOpen, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -358,20 +358,6 @@ const ProductionManageBatchPage = () => {
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to add regrind.")),
   });
 
-  const deleteBatchMutation = useMutation({
-    mutationFn: async (batch: ProductionBatchExt) => {
-      await coreApi.delete(`/api/production/orders/${orderId}/batches/${batch.id}/`);
-    },
-    onSuccess: (_, batch) => {
-      toast.success(`Batch ${resolveDisplayBatchNo(batch)} deleted.`);
-      setSelectedBatchId((current) => (current === batch.id ? null : current));
-      setWeightEntryOpen(false);
-      setRegrindOpen(false);
-      invalidateProductionContext();
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Failed to delete batch.")),
-  });
-
   const openWeightEntry = (batch: ProductionBatchExt) => {
     setSelectedBatchId(batch.id);
     setWeightValues({});
@@ -463,13 +449,6 @@ const ProductionManageBatchPage = () => {
         ? "GL Batch List"
         : "Production / Batch List";
   const canRunHeaderAction = currentManageStage === "AD" || displayedBatch !== null;
-  const handleEditOrder = () => navigate(getProductionEditRoute(orderId));
-  const handleDeleteBatch = (batch: ProductionBatchExt) => {
-    if (!window.confirm(`Delete batch ${resolveDisplayBatchNo(batch)}?`)) {
-      return;
-    }
-    deleteBatchMutation.mutate(batch);
-  };
   const handleHeaderAction = () =>
     navigate({
       pathname: getProductionEditRoute(orderId),
@@ -723,33 +702,7 @@ const ProductionManageBatchPage = () => {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
-                            {currentManageStage === "AD" ? (
-                              <>
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-9 w-9 text-slate-500 hover:text-slate-900"
-                                  onClick={handleEditOrder}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-9 w-9 text-red-500 hover:text-red-600"
-                                  disabled={!displayedBatch || deleteBatchMutation.isPending}
-                                  onClick={() => {
-                                    if (displayedBatch) {
-                                      handleDeleteBatch(displayedBatch);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            ) : (
+                            {currentManageStage !== "AD" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -760,7 +713,7 @@ const ProductionManageBatchPage = () => {
                                 {currentManageStage === "BL" || currentManageStage === "GL" ? <Plus className="mr-2 h-3.5 w-3.5" /> : null}
                                 {headerActionLabel}
                               </Button>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>
