@@ -6,7 +6,7 @@ import { adminModuleDefinitions, getAdminMastersModulesFromMenu } from "@/featur
 import { useAuth } from "@/providers/AuthProvider";
 
 const AdminMastersLandingPage = () => {
-  const { adminMenu, isBootstrapping } = useAuth();
+  const { adminMenu, isBootstrapping, user } = useAuth();
 
   const modules = useMemo(() => {
     const modulesFromMenu = getAdminMastersModulesFromMenu(adminMenu);
@@ -15,12 +15,12 @@ const AdminMastersLandingPage = () => {
       return modulesFromMenu;
     }
 
-    if (adminMenu.length === 0) {
+    if (user?.is_staff && adminMenu.length === 0) {
       return adminModuleDefinitions;
     }
 
     return [];
-  }, [adminMenu]);
+  }, [adminMenu, user?.is_staff]);
 
   if (isBootstrapping) {
     return null;

@@ -85,6 +85,10 @@ export type LookupOption = {
   staff_code?: string;
   mobile?: string | null;
   email?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
+  role_id?: number | null;
+  role_name?: string | null;
 };
 
 export type MainScreenRecord = {
@@ -145,6 +149,47 @@ export type UserTypeWritePayload = {
   is_active: boolean;
 };
 
+export type StaffCreationRecord = {
+  id: number;
+  unique_id?: string;
+  staff_code?: string | null;
+  name: string;
+  age?: number | null;
+  department?: number | null;
+  department_name?: string | null;
+  role?: number | null;
+  role_name?: string | null;
+  designation?: string | null;
+  mobile?: string | null;
+  email?: string | null;
+  joining_date?: string | null;
+  gender?: "male" | "female" | "other" | null;
+  address?: string | null;
+  emergency_contact_no?: string | null;
+  photo?: string | null;
+  photo_url?: string | null;
+  is_active: boolean;
+  remarks?: string | null;
+};
+
+export type StaffCreationWritePayload = {
+  staff_code: string;
+  name: string;
+  age: number;
+  department: number;
+  role: number;
+  mobile: string;
+  email: string;
+  joining_date?: string | null;
+  gender?: "male" | "female" | "other" | "" | null;
+  address?: string | null;
+  emergency_contact_no?: string | null;
+  photo?: File | null;
+  photo_url?: string;
+  is_active: boolean;
+  remarks?: string | null;
+};
+
 export type UserCreationRecord = {
   id: number;
   unique_id?: string;
@@ -153,6 +198,8 @@ export type UserCreationRecord = {
   staff: number;
   staff_id?: string;
   full_name?: string;
+  user_type?: number | null;
+  user_type_name?: string | null;
   mobile_no?: string | null;
   email?: string | null;
   department?: number | null;
@@ -172,8 +219,7 @@ export type UserCreationRecord = {
 
 export type UserCreationWritePayload = {
   staff: number;
-  department: number;
-  role: number;
+  user_type: number;
   company: number;
   username: string;
   password?: string;
@@ -199,6 +245,13 @@ export type UserScreenPermissionRecord = {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+};
+
+export type UserScreenPermissionSummaryRecord = {
+  id: number;
+  user_type: number;
+  user_type_name?: string;
+  is_active: boolean;
 };
 
 export type PermissionAssignmentEntry = {

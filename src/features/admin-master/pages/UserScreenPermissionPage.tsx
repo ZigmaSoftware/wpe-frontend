@@ -12,7 +12,7 @@ import { adminMasterKeys } from "@/features/admin-master/api/queryKeys";
 import { useUserTypeOptions } from "@/features/admin-master/hooks/useAdminLookups";
 import { useAdminMutation } from "@/features/admin-master/hooks/useAdminMutations";
 import { useAdminTableSearchParams } from "@/features/admin-master/hooks/useAdminTableSearchParams";
-import type { AdminAction, UserScreenPermissionRecord } from "@/features/admin-master/types";
+import type { AdminAction, UserScreenPermissionSummaryRecord } from "@/features/admin-master/types";
 import { useDebouncedValue } from "@/features/common-master/hooks/useDebouncedValue";
 import MasterStatusBadge from "@/features/common-master/components/MasterStatusBadge";
 import MasterTable from "@/features/common-master/components/MasterTable";
@@ -21,21 +21,15 @@ import RowActions from "@/features/common-master/components/RowActions";
 
 const ACTIONS: AdminAction[] = ["add", "update", "list", "delete", "view", "print"];
 
-const getPermissionTargetLabel = (record: UserScreenPermissionRecord | null) =>
-  record?.user_screen_name || record?.screen_section_name || record?.main_screen_name || record?.user_type_name || "this permission";
-
-const formatScopeLabel = (value: UserScreenPermissionRecord["scope_type"]) =>
-  value
-    .split("_")
-    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(" ");
+const getPermissionTargetLabel = (record: UserScreenPermissionSummaryRecord | null) =>
+  record?.user_type_name || "this permission set";
 
 const UserScreenPermissionPage = () => {
   const navigate = useNavigate();
   const table = useAdminTableSearchParams();
   const debouncedSearch = useDebouncedValue(table.search);
-  const [toggleTarget, setToggleTarget] = useState<UserScreenPermissionRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<UserScreenPermissionRecord | null>(null);
+  const [toggleTarget, setToggleTarget] = useState<UserScreenPermissionSummaryRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserScreenPermissionSummaryRecord | null>(null);
   const [previewUserType, setPreviewUserType] = useState<number | null>(null);
   const [previewUserId, setPreviewUserId] = useState<number | null>(null);
 
@@ -51,7 +45,7 @@ const UserScreenPermissionPage = () => {
 
   const permissionsQuery = useQuery({
     queryKey: adminMasterKeys.entity(
-      "user-screen-permission",
+      "user-screen-permission-summary",
       table.page,
       table.pageSize,
       debouncedSearch,
@@ -59,7 +53,7 @@ const UserScreenPermissionPage = () => {
       "",
     ),
     queryFn: () =>
-      adminMasterApi.listUserScreenPermissions({
+      adminMasterApi.listUserScreenPermissionSummaries({
         page: table.page,
         pageSize: table.pageSize,
         search: debouncedSearch,
@@ -74,15 +68,15 @@ const UserScreenPermissionPage = () => {
   });
 
   const toggleMutation = useAdminMutation({
-    mutationFn: adminMasterApi.toggleUserScreenPermission,
-    queryKey: ["admin-master", "user-screen-permission"],
+    mutationFn: adminMasterApi.toggleUserScreenPermissionSummary,
+    queryKey: ["admin-master", "user-screen-permission-summary"],
     successMessage: "User type permission status updated.",
     errorMessage: "Unable to update user type permission status.",
   });
 
   const deleteMutation = useAdminMutation({
-    mutationFn: adminMasterApi.deleteUserScreenPermission,
-    queryKey: ["admin-master", "user-screen-permission"],
+    mutationFn: adminMasterApi.deleteUserScreenPermissionSummary,
+    queryKey: ["admin-master", "user-screen-permission-summary"],
     successMessage: "User type permission deleted successfully.",
     errorMessage: "Unable to delete user type permission.",
   });
@@ -111,24 +105,6 @@ const UserScreenPermissionPage = () => {
           <MasterTable
             columns={[
               { key: "user_type_name", title: "User Type", render: (record) => record.user_type_name || "-" },
-              {
-                key: "scope_type",
-                title: "Scope",
-                render: (record) => (
-                  <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                    {formatScopeLabel(record.scope_type)}
-                  </span>
-                ),
-              },
-              { key: "main_screen_name", title: "Main Screen", render: (record) => record.main_screen_name || "-" },
-              { key: "screen_section_name", title: "Section", render: (record) => record.screen_section_name || "-" },
-              { key: "user_screen_name", title: "User Screen", render: (record) => record.user_screen_name || "-" },
-              {
-                key: "actions",
-                title: "Granted Actions",
-                render: (record) =>
-                  ACTIONS.filter((action) => Boolean(record.action_permissions?.[action])).join(", ") || "-",
-              },
               { key: "is_active", title: "Status", render: (record) => <MasterStatusBadge active={record.is_active} /> },
               {
                 key: "row-actions",
@@ -136,7 +112,7 @@ const UserScreenPermissionPage = () => {
                 className: "w-[160px] text-right",
                 render: (record) => (
                   <RowActions
-                    onEdit={() => navigate(`/admin/user-screen-permission/${record.id}/edit`)}
+                    onEdit={() => navigate(`/admin/user-screen-permission/new?userType=${record.user_type}`)}
                     onToggle={() => setToggleTarget(record)}
                     onDelete={() => setDeleteTarget(record)}
                     isActive={record.is_active}
@@ -268,7 +244,7 @@ const UserScreenPermissionPage = () => {
         description={`Change the status for ${getPermissionTargetLabel(toggleTarget)}?`}
         onConfirm={() => {
           if (toggleTarget) {
-            toggleMutation.mutate(toggleTarget.id);
+            toggleMutation.mutate(toggleTarget.user_type);
           }
           setToggleTarget(null);
         }}
@@ -282,7 +258,7 @@ const UserScreenPermissionPage = () => {
         confirmLabel="Delete"
         onConfirm={() => {
           if (deleteTarget) {
-            deleteMutation.mutate(deleteTarget.id);
+            deleteMutation.mutate(deleteTarget.user_type);
           }
           setDeleteTarget(null);
         }}

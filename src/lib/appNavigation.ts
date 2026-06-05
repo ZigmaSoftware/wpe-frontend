@@ -43,6 +43,8 @@ import {
   WPE_PRODUCT_TYPES_ROUTE,
 } from "@/features/wpe-masters/constants";
 import { inventoryStoreModuleDefinitions } from "@/features/wpe-masters/utils/routes";
+import { hasAnyScreenAccess } from "@/features/admin-master/utils/permissions";
+import { getRouteScreenCodes } from "@/lib/routePermissions";
 
 export type AppNavItem = {
   to: string;
@@ -64,7 +66,7 @@ export type AppNavGroup = {
 };
 
 export type AppNavigation = {
-  dashboard: AppNavItem;
+  dashboard: AppNavItem | null;
   workspace: AppNavGroup[];
   masters: AppNavGroup[];
 };
@@ -116,32 +118,49 @@ export const isNavGroupActive = (pathname: string, group: AppNavGroup) =>
   Boolean(group.to && (pathname === group.to || pathname.startsWith(`${group.to}/`))) ||
   group.items.some((item) => isNavItemActive(pathname, item));
 
-export const buildAppNavigation = (adminMenu: AdminMenuMain[] = []): AppNavigation => {
+type BuildAppNavigationOptions = {
+  hasFullAccess?: boolean;
+};
+
+const filterAccessibleItems = (
+  items: AppNavItem[],
+  adminMenu: AdminMenuMain[],
+  hasFullAccess: boolean,
+) => items.filter((item) => hasFullAccess || hasAnyScreenAccess(adminMenu, getRouteScreenCodes(item.to)));
+
+export const buildAppNavigation = (
+  adminMenu: AdminMenuMain[] = [],
+  options: BuildAppNavigationOptions = {},
+): AppNavigation => {
+  const hasFullAccess = Boolean(options.hasFullAccess);
   const adminModules = getAdminMastersModulesFromMenu(adminMenu);
+  const dashboard = hasFullAccess || hasAnyScreenAccess(adminMenu, getRouteScreenCodes(dashboardItem.to))
+    ? dashboardItem
+    : null;
 
   const workspace: AppNavGroup[] = [
     {
       key: "inventory",
       label: "Inventory",
       icon: Boxes,
-      items: inventoryWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
+      items: filterAccessibleItems(inventoryWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
         to,
         icon,
         label,
         description,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "blending",
       label: "Blending",
       icon: Factory,
       to: BLENDING_ROUTE,
-      items: blendingWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
+      items: filterAccessibleItems(blendingWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
         to,
         icon,
         label,
         description,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "production",
@@ -149,71 +168,71 @@ export const buildAppNavigation = (adminMenu: AdminMenuMain[] = []): AppNavigati
       icon: Factory,
       tag: "MES",
       to: PRODUCTION_ROUTE,
-      items: productionWorkspaceModuleDefinitions.map(({ to, icon, label, description, activeMatchPaths }) => ({
+      items: filterAccessibleItems(productionWorkspaceModuleDefinitions.map(({ to, icon, label, description, activeMatchPaths }) => ({
         to,
         icon,
         label,
         description,
         activeMatchPaths,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "store",
       label: "Store",
       icon: Archive,
       to: STORE_ROUTE,
-      items: storeWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
+      items: filterAccessibleItems(storeWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
         to,
         icon,
         label,
         description,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "grn",
       label: "GRN",
       icon: Archive,
       to: GRN_ROUTE,
-      items: grnWorkspaceModuleDefinitions.map(({ to, icon, label, description, exact, activeMatchPaths }) => ({
+      items: filterAccessibleItems(grnWorkspaceModuleDefinitions.map(({ to, icon, label, description, exact, activeMatchPaths }) => ({
         to,
         icon,
         label,
         description,
         exact,
         activeMatchPaths,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "contacts",
       label: "Contacts",
       icon: Users,
-      items: [
+      items: filterAccessibleItems([
         {
           to: "/app/contacts",
           icon: Users,
           label: "Contacts",
           description: "Browse and maintain contact records and forms.",
         },
-      ],
+      ], adminMenu, hasFullAccess),
     },
     {
       key: "regrind",
       label: "Regrind",
       icon: Recycle,
-      items: [
+      items: filterAccessibleItems([
         {
           to: "/app/regrind",
           icon: Recycle,
           label: "Regrind",
           description: "Track regrind flow, usage, and related records.",
         },
-      ],
+      ], adminMenu, hasFullAccess),
     },
-  ];
+  ].filter((group) => group.items.length > 0);
 
   const masters: AppNavGroup[] = [];
 
-  if (adminModules.length > 0 || adminMenu.length === 0) {
+  if (adminModules.length > 0 || (hasFullAccess && adminMenu.length === 0)) {
     masters.push({
       key: "admin-masters",
       label: "Admin Masters",
@@ -234,82 +253,84 @@ export const buildAppNavigation = (adminMenu: AdminMenuMain[] = []): AppNavigati
       label: "Common Masters",
       icon: Database,
       to: COMMON_MASTERS_ROUTE,
-      items: commonModuleDefinitions.map(({ to, icon, label, description }) => ({
+      items: filterAccessibleItems(commonModuleDefinitions.map(({ to, icon, label, description }) => ({
         to,
         icon,
         label,
         description,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "inventory-store-masters",
       label: "Inventory & Store Masters",
       icon: inventoryStoreModuleDefinitions[0]?.icon ?? Database,
       to: INVENTORY_STORE_MASTERS_ROUTE,
-      items: inventoryStoreModuleDefinitions.map(({ to, icon, label, description, exact, activeMatchPaths }) => ({
+      items: filterAccessibleItems(inventoryStoreModuleDefinitions.map(({ to, icon, label, description, exact, activeMatchPaths }) => ({
         to,
         icon,
         label,
         description,
         exact,
         activeMatchPaths,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "production-masters",
       label: "Production Masters",
       icon: productionMasterModuleDefinitions[0]?.icon ?? Database,
       to: PRODUCTION_MASTERS_ROUTE,
-      items: productionMasterModuleDefinitions.map(({ to, icon, label, description }) => ({
+      items: filterAccessibleItems(productionMasterModuleDefinitions.map(({ to, icon, label, description }) => ({
         to,
         icon,
         label,
         description,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "recipe-bom-masters",
       label: "Recipe / BOM Masters",
       icon: recipeBomMasterModuleDefinitions[0]?.icon ?? Database,
       to: RECIPE_BOM_MASTERS_ROUTE,
-      items: recipeBomMasterModuleDefinitions.map(({ to, icon, label, description, exact, activeMatchPaths }) => ({
+      items: filterAccessibleItems(recipeBomMasterModuleDefinitions.map(({ to, icon, label, description, exact, activeMatchPaths }) => ({
         to,
         icon,
         label,
         description,
         exact,
         activeMatchPaths,
-      })),
+      })), adminMenu, hasFullAccess),
     },
     {
       key: "device-label-masters",
       label: "Device & Label Masters",
       icon: deviceLabelMasterModuleDefinitions[0]?.icon ?? Database,
       to: DEVICE_LABEL_MASTERS_ROUTE,
-      items: deviceLabelMasterModuleDefinitions.map(({ to, icon, label, description }) => ({
+      items: filterAccessibleItems(deviceLabelMasterModuleDefinitions.map(({ to, icon, label, description }) => ({
         to,
         icon,
         label,
         description,
-      })),
+      })), adminMenu, hasFullAccess),
     },
   );
 
   return {
-    dashboard: dashboardItem,
+    dashboard,
     workspace,
-    masters,
+    masters: masters.filter((group) => group.items.length > 0),
   };
 };
 
 export const flattenNavigationLinks = (navigation: AppNavigation): AppSearchLink[] => [
-  {
-    to: navigation.dashboard.to,
-    label: navigation.dashboard.label,
-    description: navigation.dashboard.description,
-    section: DASHBOARD_SECTION_LABEL,
-    icon: navigation.dashboard.icon,
-  },
+  ...(navigation.dashboard
+    ? [{
+      to: navigation.dashboard.to,
+      label: navigation.dashboard.label,
+      description: navigation.dashboard.description,
+      section: DASHBOARD_SECTION_LABEL,
+      icon: navigation.dashboard.icon,
+    }]
+    : []),
   ...navigation.workspace.flatMap((group) =>
     group.items.map((item) => ({
       to: item.to,
@@ -333,7 +354,7 @@ export const flattenNavigationLinks = (navigation: AppNavigation): AppSearchLink
 ];
 
 export const getTopLevelNavKey = (pathname: string, navigation: AppNavigation) => {
-  if (isNavItemActive(pathname, navigation.dashboard)) {
+  if (navigation.dashboard && isNavItemActive(pathname, navigation.dashboard)) {
     return "dashboard" as const;
   }
 
@@ -349,7 +370,7 @@ export const getTopLevelNavKey = (pathname: string, navigation: AppNavigation) =
 };
 
 export const buildBreadcrumbs = (pathname: string, navigation: AppNavigation): AppBreadcrumb[] => {
-  if (isNavItemActive(pathname, navigation.dashboard)) {
+  if (navigation.dashboard && isNavItemActive(pathname, navigation.dashboard)) {
     return [{ label: DASHBOARD_SECTION_LABEL }];
   }
 

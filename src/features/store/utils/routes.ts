@@ -24,7 +24,7 @@ export const storeWorkspaceModuleDefinitions: StoreWorkspaceModuleDefinition[] =
   {
     to: STORE_REQUEST_ROUTE,
     icon: FileText,
-    label: "Store Request",
+    label: "Request Approval's",
     description: "Review and action department store requests with approval workflow context.",
   },
   {

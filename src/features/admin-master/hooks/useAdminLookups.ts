@@ -52,10 +52,11 @@ export const useUserTypeDepartmentOptions = () =>
     queryFn: adminMasterApi.lookupUserTypeDepartments,
   });
 
-export const useUserTypeRoleOptions = () =>
+export const useUserTypeRoleOptions = (departmentId?: number | null) =>
   useQuery({
-    queryKey: adminMasterKeys.lookup("user-type-roles"),
-    queryFn: adminMasterApi.lookupUserTypeRoles,
+    queryKey: adminMasterKeys.lookup("user-type-roles", departmentId ?? "all"),
+    queryFn: () => adminMasterApi.lookupUserTypeRoles(departmentId),
+    enabled: Boolean(departmentId),
   });
 
 export const useCompanyOptions = () =>

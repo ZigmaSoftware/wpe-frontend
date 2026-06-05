@@ -38,6 +38,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [resolvedPermissions, setResolvedPermissions] = useState<ResolvedPermissionResponse | null>(null);
 
   const hydrateAdminPermissions = async () => {
+    setAdminMenu([]);
+    setResolvedPermissions(null);
+
     try {
       const [menu, resolved] = await Promise.all([
         adminMasterApi.fetchPermissionMenu(),
@@ -67,11 +70,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     bootstrapAuth()
-      .then((nextUser) => {
+      .then(async (nextUser) => {
         if (active) {
           setUser(nextUser);
           if (nextUser) {
-            hydrateAdminPermissions();
+            await hydrateAdminPermissions();
           }
         }
       })
@@ -96,7 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signIn: async (username: string, password: string) => {
         const response = await loginRequest(username, password);
         setUser(response.user);
-        void hydrateAdminPermissions();
+        await hydrateAdminPermissions();
       },
       signOut: async () => {
         await logoutRequest();

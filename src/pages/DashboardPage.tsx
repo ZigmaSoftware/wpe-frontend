@@ -18,8 +18,6 @@ import type {
   QcrRecord,
   StoreStockRecord,
 } from "@/lib/types";
-import { PRODUCTION_AD_WEIGHTAGE_ROUTE } from "@/features/production/utils/routes";
-import { GRN_PROCESS_ROUTE } from "@/features/grn/utils/routes";
 import { useAuth } from "@/providers/AuthProvider";
 
 const getListFromResponse = <T,>(payload: Contact[] | { data: Contact[] } | unknown) => {
@@ -47,8 +45,13 @@ const getGrnRecords = (payload: GrnListResponse) => {
 };
 
 const DashboardPage = () => {
-  const { adminMenu = [] } = useAuth();
-  const navigation = useMemo(() => buildAppNavigation(adminMenu), [adminMenu]);
+  const { adminMenu = [], user } = useAuth();
+  const navigation = useMemo(
+    () => buildAppNavigation(adminMenu, { hasFullAccess: Boolean(user?.is_staff) }),
+    [adminMenu, user?.is_staff],
+  );
+  const grnLink = navigation.workspace.find((group) => group.key === "grn")?.items[0]?.to ?? null;
+  const productionLink = navigation.workspace.find((group) => group.key === "production")?.items[0]?.to ?? null;
 
   const overviewQuery = useQuery({
     queryKey: ["dashboard-overview"],
@@ -115,12 +118,16 @@ const DashboardPage = () => {
         description="Current backend counts, active workspace routes, and receiving visibility from the live WPE application."
         actions={
           <>
-            <Button asChild variant="outline">
-              <Link to={GRN_PROCESS_ROUTE}>Open GRN</Link>
-            </Button>
-            <Button asChild>
-              <Link to={PRODUCTION_AD_WEIGHTAGE_ROUTE}>Open Production</Link>
-            </Button>
+            {grnLink ? (
+              <Button asChild variant="outline">
+                <Link to={grnLink}>Open GRN</Link>
+              </Button>
+            ) : null}
+            {productionLink ? (
+              <Button asChild>
+                <Link to={productionLink}>Open Production</Link>
+              </Button>
+            ) : null}
           </>
         }
       />

@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -38,7 +38,8 @@ const UserTypesPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<UserTypeRecord | null>(null);
   const form = useForm<UserTypeFormValues>({ resolver: zodResolver(userTypeSchema), defaultValues });
   const departmentOptions = useUserTypeDepartmentOptions();
-  const roleOptions = useUserTypeRoleOptions();
+  const selectedDepartmentId = form.watch("department");
+  const roleOptions = useUserTypeRoleOptions(selectedDepartmentId || undefined);
 
   const query = useQuery({
     queryKey: adminMasterKeys.entity("user-types", table.page, table.pageSize, debouncedSearch, table.ordering, ""),
@@ -55,10 +56,29 @@ const UserTypesPage = () => {
     return [record.department_name, record.role_name].filter(Boolean).join(" - ") || "this user type";
   };
 
+  useEffect(() => {
+    const currentRole = form.getValues("role");
+
+    if (!selectedDepartmentId) {
+      if (currentRole) {
+        form.setValue("role", 0, { shouldValidate: true });
+      }
+      return;
+    }
+
+    if (!roleOptions.data) {
+      return;
+    }
+
+    if (currentRole && !roleOptions.data.some((option) => option.id === currentRole)) {
+      form.setValue("role", 0, { shouldValidate: true });
+    }
+  }, [form, roleOptions.data, selectedDepartmentId]);
+
   return (
     <div className="space-y-6">
-      <PageHeader title="User Type Master" description="Map department and role combinations that drive RBAC user-type selection." />
-      <MasterToolbar search={table.search} onSearchChange={table.setSearch} createLabel="Add User Type" onCreate={() => { setEditing(null); form.reset(defaultValues); setDialogOpen(true); }} />
+      <PageHeader title="User Type / Role Mapping" description="Map department and role combinations that drive user-type selection and permission assignment." />
+      <MasterToolbar search={table.search} onSearchChange={table.setSearch} createLabel="Add Mapping" onCreate={() => { setEditing(null); form.reset(defaultValues); setDialogOpen(true); }} />
       <MasterTable
         columns={[
           { key: "department_name", title: "Department", render: (record) => <div className="font-medium">{record.department_name || "-"}</div> },
@@ -99,7 +119,7 @@ const UserTypesPage = () => {
         onPageSizeChange={table.setPageSize}
         onRetry={() => query.refetch()}
       />
-      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editing ? "Edit User Type" : "Create User Type"} description="Select the department and role pair that should be available as a user type.">
+      <MasterFormDialog open={dialogOpen} onOpenChange={setDialogOpen} title={editing ? "Edit Mapping" : "Create Mapping"} description="Select the department and role pair that should be available as a user type.">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(async (values) => {
             try {
@@ -116,14 +136,17 @@ const UserTypesPage = () => {
               name="department"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Department</FormLabel>
-                  <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
+                  <FormLabel>Department*</FormLabel>
+                  <Select value={String(field.value ?? 0)} onValueChange={(value) => field.onChange(Number(value))}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="0" disabled>
+                        Select department
+                      </SelectItem>
                       {(departmentOptions.data ?? []).map((option) => (
                         <SelectItem key={option.id} value={String(option.id)}>
                           {option.name}
@@ -140,14 +163,21 @@ const UserTypesPage = () => {
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Role</FormLabel>
-                  <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
+                  <FormLabel>Role*</FormLabel>
+                  <Select
+                    value={String(field.value ?? 0)}
+                    onValueChange={(value) => field.onChange(Number(value))}
+                    disabled={!selectedDepartmentId}
+                  >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select role" />
+                        <SelectValue placeholder={selectedDepartmentId ? "Select role" : "Select department first"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="0" disabled>
+                        {selectedDepartmentId ? "Select role" : "Select department first"}
+                      </SelectItem>
                       {(roleOptions.data ?? []).map((option) => (
                         <SelectItem key={option.id} value={String(option.id)}>
                           {option.name}
@@ -160,7 +190,7 @@ const UserTypesPage = () => {
               )}
             />
             <FormField control={form.control} name="is_active" render={({ field }) => <FormItem className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Active status</FormLabel></FormItem>} />
-            <div className="flex justify-end"><Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>{editing ? "Save Changes" : "Create User Type"}</Button></div>
+            <div className="flex justify-end"><Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>{editing ? "Save Changes" : "Create Mapping"}</Button></div>
           </form>
         </Form>
       </MasterFormDialog>
