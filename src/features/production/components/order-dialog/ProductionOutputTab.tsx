@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
-import { CheckCircle2, ChevronDown, ChevronRight, PackageCheck, Scale } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, PackageCheck, QrCode, Scale } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { useScannerInput } from "@/hooks/useScannerInput";
@@ -28,6 +28,7 @@ import {
 } from "./productionOutputCapture";
 import type { ProductionOrderFormValues } from "./productionOrderForm";
 import { useBomComponents } from "./useBomComponents";
+import QRLabelPreviewModal, { type QRLabelContext } from "./QRLabelPreviewModal";
 
 const TOLERANCE_PERCENT = 0.5;
 const DEFAULT_BATCH_AUTO_VALUE = "Generated on save";
@@ -102,6 +103,8 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   const formMaterials = form.watch("materials.rows");
   const selectedBomVariantId = form.watch("materials.selected_bom_variant_id");
   const productionId = form.watch("production_id");
+  const productionFor = form.watch("production_for");
+  const finishedGoods = form.watch("finished_goods");
   const batchAuto = form.watch("details.batch_auto");
   const outputStage = context?.stage ?? "AD";
   const isAdMode = outputStage === "AD";
@@ -132,6 +135,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   const [capturedWeights, setCapturedWeights] = useState<Map<string, OutputComponentCapture>>(new Map());
   const [capturedOutputs, setCapturedOutputs] = useState<CapturedOutputRecord[]>([]);
   const [expandedOutputIds, setExpandedOutputIds] = useState<Record<string, boolean>>({});
+  const [qrLabelRecord, setQrLabelRecord] = useState<CapturedOutputRecord | null>(null);
   const [adOutputBatchId, setAdOutputBatchId] = useState<number | null>(null);
   const [isSyncingCapture, setIsSyncingCapture] = useState(false);
   const [isFinalizingCapture, setIsFinalizingCapture] = useState(false);
@@ -890,6 +894,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   const activeCapture = activeComponent ? capturedWeights.get(activeComponent.id) ?? null : null;
 
   return (
+    <>
     <ProductionSectionCard title="Output Weight Capture" tone="emerald" icon={Scale}>
       <div className="space-y-4">
         <div className="overflow-hidden rounded-2xl border border-slate-700 bg-[#1a1a2e] shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
@@ -1188,6 +1193,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                   <th className="px-3 py-3">Date</th>
                   <th className="px-3 py-3">Time</th>
                   <th className="px-3 py-3">{">>"}</th>
+                  <th className="px-3 py-3">QR</th>
                   <th className="px-3 py-3">Scancode ID</th>
                   <th className="px-3 py-3 text-right">Qty</th>
                   <th className="px-3 py-3 text-right">Weight (kg)</th>
@@ -1231,6 +1237,17 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
                               }
                             >
                               {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            </button>
+                          </td>
+                          <td className="px-3 py-3">
+                            <button
+                              type="button"
+                              aria-label="Preview QR Label"
+                              title="Preview QR Label"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                              onClick={() => setQrLabelRecord(record)}
+                            >
+                              <QrCode className="h-3.5 w-3.5" />
                             </button>
                           </td>
                           <td className="px-3 py-3 font-mono text-[11px] font-semibold text-slate-900">{record.scancodeId}</td>
@@ -1323,6 +1340,20 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
         </div>
       </div>
     </ProductionSectionCard>
+
+    {qrLabelRecord ? (
+      <QRLabelPreviewModal
+        record={qrLabelRecord}
+        context={{
+          productionId,
+          productionFor: productionFor ?? "",
+          itemName: finishedGoods?.item_name ?? "",
+          itemCode: finishedGoods?.item_code ?? "",
+        } satisfies QRLabelContext}
+        onClose={() => setQrLabelRecord(null)}
+      />
+    ) : null}
+    </>
   );
 };
 
