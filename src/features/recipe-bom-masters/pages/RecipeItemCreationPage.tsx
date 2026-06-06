@@ -248,6 +248,7 @@ const RecipeItemsDialog = ({
       recipeBomMastersApi.recipes.saveItems(
         selectedRecipeId,
         draftComponents.map((component, index) => ({
+          id: component.id > 0 ? component.id : undefined,
           item: component.item,
           product_subtype: component.product_subtype,
           target_weight_grams: component.target_weight_grams,
