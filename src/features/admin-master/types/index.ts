@@ -85,6 +85,8 @@ export type LookupOption = {
   staff_code?: string;
   mobile?: string | null;
   email?: string | null;
+  designation_id?: number | null;
+  designation_name?: string | null;
   department_id?: number | null;
   department_name?: string | null;
   role_id?: number | null;

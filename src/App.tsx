@@ -20,10 +20,14 @@ import RoleMasterPage from "@/features/wpe-masters/pages/RoleMasterPage";
 import DepartmentMasterPage from "@/features/wpe-masters/pages/DepartmentMasterPage";
 import DesignationMasterPage from "@/features/wpe-masters/pages/DesignationMasterPage";
 import InventoryStoreMastersLandingPage from "@/features/wpe-masters/pages/InventoryStoreMastersLandingPage";
-import ItemCreationsPage from "@/features/wpe-masters/pages/ItemCreationsPage";
 import StoreMasterPage from "@/features/wpe-masters/pages/StoreMasterPage";
 import UnitMasterPage from "@/features/wpe-masters/pages/UnitMasterPage";
-import { INVENTORY_STORE_MASTERS_ROUTE, WPE_PRODUCT_TYPES_ROUTE } from "@/features/wpe-masters/constants";
+import {
+  INVENTORY_STORE_MASTERS_ROUTE,
+  WPE_ITEM_VARIANTS_ROUTE,
+  WPE_PRODUCT_SUBTYPES_ROUTE,
+  WPE_PRODUCT_TYPES_ROUTE,
+} from "@/features/wpe-masters/constants";
 import ProductionMastersLandingPage from "@/features/production-masters/pages/ProductionMastersLandingPage";
 import ProfileCreationsPage from "@/features/production-masters/pages/ProfileCreationsPage";
 import ProfileSizesPage from "@/features/production-masters/pages/ProfileSizesPage";
@@ -162,6 +166,34 @@ const LegacyGrnEditRedirect = () => {
 const LegacyGrnViewRedirect = () => {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={id ? getGrnProcessViewRoute(id) : GRN_PROCESS_ROUTE} replace />;
+};
+
+const LegacyProductSubtypeRedirect = () => {
+  const { categoryId, subtypeId } = useParams<{ categoryId?: string; subtypeId?: string }>();
+
+  if (categoryId && subtypeId) {
+    return <Navigate to={`${WPE_PRODUCT_TYPES_ROUTE}/${categoryId}/subtypes/${subtypeId}`} replace />;
+  }
+
+  if (categoryId) {
+    return <Navigate to={`${WPE_PRODUCT_TYPES_ROUTE}/${categoryId}`} replace />;
+  }
+
+  return <Navigate to={WPE_PRODUCT_TYPES_ROUTE} replace />;
+};
+
+const LegacyItemVariantRedirect = () => {
+  const { categoryId, subtypeId } = useParams<{ categoryId?: string; subtypeId?: string }>();
+
+  if (categoryId && subtypeId) {
+    return <Navigate to={`${WPE_PRODUCT_TYPES_ROUTE}/${categoryId}/subtypes/${subtypeId}`} replace />;
+  }
+
+  if (categoryId) {
+    return <Navigate to={`${WPE_PRODUCT_TYPES_ROUTE}/${categoryId}`} replace />;
+  }
+
+  return <Navigate to={WPE_PRODUCT_TYPES_ROUTE} replace />;
 };
 
 const WorkspaceGroupRedirect = ({ groupKey, fallback }: { groupKey: string; fallback: string }) => {
@@ -376,9 +408,16 @@ const App = () => (
                     <Route path="/wpe-masters/units" element={<UnitMasterPage />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_MASTER_SCREEN_CODES.itemCreations} />}>
-                    <Route path="/wpe-masters/item-creations" element={<ItemCreationsPage />} />
+                    <Route path="/wpe-masters/item-creations" element={<LegacyItemVariantRedirect />} />
+                    <Route path={WPE_ITEM_VARIANTS_ROUTE} element={<LegacyItemVariantRedirect />} />
+                    <Route path={`${WPE_ITEM_VARIANTS_ROUTE}/:categoryId`} element={<LegacyItemVariantRedirect />} />
+                    <Route path={`${WPE_ITEM_VARIANTS_ROUTE}/:categoryId/subtypes/:subtypeId`} element={<LegacyItemVariantRedirect />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={[...INVENTORY_STORE_MASTER_SCREEN_CODES.productTypes, ...INVENTORY_STORE_MASTER_SCREEN_CODES.productSubtypes]} />}>
+                    <Route path="/wpe-masters/product-types/subcategories" element={<Navigate to={WPE_PRODUCT_TYPES_ROUTE} replace />} />
+                    <Route path={WPE_PRODUCT_SUBTYPES_ROUTE} element={<LegacyProductSubtypeRedirect />} />
+                    <Route path={`${WPE_PRODUCT_SUBTYPES_ROUTE}/:categoryId`} element={<LegacyProductSubtypeRedirect />} />
+                    <Route path={`${WPE_PRODUCT_SUBTYPES_ROUTE}/:categoryId/subtypes/:subtypeId`} element={<LegacyProductSubtypeRedirect />} />
                     <Route path={`${WPE_PRODUCT_TYPES_ROUTE}/*`} element={<ProductTypesPage />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_MASTER_SCREEN_CODES.productionTypes} />}>

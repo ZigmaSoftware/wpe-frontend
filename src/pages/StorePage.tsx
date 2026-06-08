@@ -96,6 +96,25 @@ const getRequestApprovedQuantity = (row: StoreStockRequest) => formatDecimal(row
 
 const getRequestIssuedQuantity = (row: StoreStockRequest) => formatDecimal(row.total_issued_qty ?? null);
 
+const getRequestResponseLabel = (row: StoreStockRequest) => {
+  const responder = row.approved_by_username?.trim();
+  const respondedAt = row.approved_at ? formatDateTime(row.approved_at) : "";
+
+  if (responder && respondedAt) {
+    return { responder, respondedAt };
+  }
+
+  if (responder) {
+    return { responder, respondedAt: "-" };
+  }
+
+  if (respondedAt) {
+    return { responder: "-", respondedAt };
+  }
+
+  return { responder: "-", respondedAt: "-" };
+};
+
 const getTransactionDirection = (row: StoreTransactionRecord) => {
   const inwardQty = Number(row.inward_qty ?? 0);
   return inwardQty > 0 ? "Inwards" : "Outwards";
@@ -177,6 +196,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
 
   const [requestSearch, setRequestSearch] = useState("");
   const [requestPage, setRequestPage] = useState(1);
+  const [respondedRequestPage, setRespondedRequestPage] = useState(1);
   const [requestPageSize, setRequestPageSize] = useState<StorePageSizeValue>("10");
   const [requestDraftFilters, setRequestDraftFilters] = useState<RequestFilterState>(createDefaultRequestFilters);
   const [requestFilters, setRequestFilters] = useState<RequestFilterState>(createDefaultRequestFilters);
@@ -241,12 +261,20 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
     placeholderData: (previousData) => previousData,
   });
 
+  const showAllRequestStatuses = () => {
+    setRequestDraftFilters((current) => (current.status === "all" ? current : { ...current, status: "all" }));
+    setRequestFilters((current) => (current.status === "all" ? current : { ...current, status: "all" }));
+    setRequestPage(1);
+    setRespondedRequestPage(1);
+  };
+
   const approveRequestMutation = useMutation({
     mutationFn: async (requestId: number) => {
       const response = await coreApi.post(`/api/store/approve-request/${requestId}/`, {});
       return response.data;
     },
     onSuccess: () => {
+      showAllRequestStatuses();
       toast.success("Store request approved.");
       void queryClient.invalidateQueries({ queryKey: ["store"] });
     },
@@ -259,6 +287,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
       return response.data;
     },
     onSuccess: () => {
+      showAllRequestStatuses();
       toast.success("Store request rejected.");
       void queryClient.invalidateQueries({ queryKey: ["store"] });
     },
@@ -288,8 +317,11 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   const stockRows = stockQuery.data ?? [];
   const requestRows = requestsQuery.data ?? [];
   const transactionRows = filteredTransactions;
+  const pendingRequestRows = requestRows.filter((row) => row.status === "PENDING");
+  const respondedRequestRows = requestRows.filter((row) => row.status !== "PENDING");
 
-  const paginatedRequestRows = paginateRows(requestRows, requestPage, requestPageSize);
+  const paginatedRequestRows = paginateRows(pendingRequestRows, requestPage, requestPageSize);
+  const paginatedRespondedRequestRows = paginateRows(respondedRequestRows, respondedRequestPage, requestPageSize);
   const paginatedTransactionRows = paginateRows(transactionRows, transactionPage, transactionPageSize);
 
   useEffect(() => {
@@ -300,11 +332,18 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   }, [stockPage, stockPageSize, stockRows.length]);
 
   useEffect(() => {
-    const totalPages = getPageCount(requestPageSize, requestRows.length);
+    const totalPages = getPageCount(requestPageSize, pendingRequestRows.length);
     if (requestPage > totalPages) {
       setRequestPage(totalPages);
     }
-  }, [requestPage, requestPageSize, requestRows.length]);
+  }, [pendingRequestRows.length, requestPage, requestPageSize]);
+
+  useEffect(() => {
+    const totalPages = getPageCount(requestPageSize, respondedRequestRows.length);
+    if (respondedRequestPage > totalPages) {
+      setRespondedRequestPage(totalPages);
+    }
+  }, [requestPageSize, respondedRequestPage, respondedRequestRows.length]);
 
   useEffect(() => {
     const totalPages = getPageCount(transactionPageSize, transactionRows.length);
@@ -352,7 +391,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         { label: "Approved Qty", value: (row) => getRequestApprovedQuantity(row) },
         { label: "Issued Qty", value: (row) => getRequestIssuedQuantity(row) },
         { label: "Reason", value: (row) => row.request_reason || "-" },
-        { label: "Approved By", value: (row) => row.approved_by_username || "-" },
+        { label: "Responded By", value: (row) => row.approved_by_username || "-" },
+        { label: "Response Date", value: (row) => (row.approved_at ? formatDateTime(row.approved_at) : "-") },
       ];
 
       exportTableData({
@@ -444,107 +484,196 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
     }
 
     return (
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <div className="max-h-[calc(100vh-21rem)] overflow-auto">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
-              <TableRow className="hover:bg-card">
-                <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>Request</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="hidden lg:table-cell">Requested By</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden xl:table-cell">Approved By</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedRequestRows.map((row, index) => (
-                <TableRow key={row.id}>
-                  <TableCell className="text-center font-medium text-muted-foreground">
-                    {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
-                      <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
-                      <div className="text-xs text-muted-foreground">{row.requested_for_name || "General request"}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">{row.department}</TableCell>
-                  <TableCell>
-                    <div className="space-y-2">
-                      {row.items?.length ? (
-                        row.items.map((item) => (
-                          <div key={item.id} className="space-y-0.5">
-                            <div className="font-medium text-card-foreground">{item.item_name}</div>
-                            <div className="font-mono text-xs text-muted-foreground">{item.item_code}</div>
+      <div className="space-y-6">
+        {pendingRequestRows.length ? (
+          <div className="space-y-3">
+            <div className="px-1 text-sm font-semibold text-card-foreground">Pending Requests</div>
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                    <TableRow className="hover:bg-card">
+                      <TableHead className="w-16 text-center">S.No</TableHead>
+                      <TableHead>Request</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Items</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="hidden lg:table-cell">Requested By</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedRequestRows.map((row, index) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="text-center font-medium text-muted-foreground">
+                          {(requestPage - 1) * getPageSizeNumber(requestPageSize, pendingRequestRows.length) + index + 1}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
+                            <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
+                            <div className="text-xs text-muted-foreground">{row.requested_for_name || "General request"}</div>
                           </div>
-                        ))
-                      ) : (
-                        <div className="space-y-0.5">
-                          <div className="font-medium text-card-foreground">{readText(row.item_name)}</div>
-                          <div className="font-mono text-xs text-muted-foreground">{readText(row.item_code)}</div>
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <div className="space-y-0.5">
-                      <div>{row.requested_by_username}</div>
-                      <div className="text-xs text-muted-foreground" title={row.request_reason || "-"}>
-                        {row.request_reason || "-"}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={cn("font-medium", statusBadgeClassName(row.status))}>
-                      {row.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="hidden xl:table-cell">{row.approved_by_username || "-"}</TableCell>
-                  <TableCell className="text-right">
-                    {row.status === "PENDING" ? (
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8"
-                          onClick={() => approveRequestMutation.mutate(row.id)}
-                          disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
-                        >
-                          <Check className="mr-1.5 h-4 w-4" />
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8"
-                          onClick={() => rejectRequestMutation.mutate(row.id)}
-                          disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
-                        >
-                          <X className="mr-1.5 h-4 w-4" />
-                          Reject
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Closed</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <StoreTablePagination
-          page={requestPage}
-          pageSize={getPageSizeNumber(requestPageSize, requestRows.length)}
-          total={requestRows.length}
-          onPageChange={setRequestPage}
-        />
+                        </TableCell>
+                        <TableCell className="font-medium">{row.department}</TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            {row.items?.length ? (
+                              row.items.map((item) => (
+                                <div key={item.id} className="space-y-0.5">
+                                  <div className="font-medium text-card-foreground">{item.item_name}</div>
+                                  <div className="font-mono text-xs text-muted-foreground">{item.item_code}</div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="space-y-0.5">
+                                <div className="font-medium text-card-foreground">{readText(row.item_name)}</div>
+                                <div className="font-mono text-xs text-muted-foreground">{readText(row.item_code)}</div>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="space-y-0.5">
+                            <div>{row.requested_by_username}</div>
+                            <div className="text-xs text-muted-foreground" title={row.request_reason || "-"}>
+                              {row.request_reason || "-"}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn("font-medium", statusBadgeClassName(row.status))}>
+                            {row.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              onClick={() => approveRequestMutation.mutate(row.id)}
+                              disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
+                            >
+                              <Check className="mr-1.5 h-4 w-4" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              onClick={() => rejectRequestMutation.mutate(row.id)}
+                              disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
+                            >
+                              <X className="mr-1.5 h-4 w-4" />
+                              Reject
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <StoreTablePagination
+                page={requestPage}
+                pageSize={getPageSizeNumber(requestPageSize, pendingRequestRows.length)}
+                total={pendingRequestRows.length}
+                onPageChange={setRequestPage}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {respondedRequestRows.length ? (
+          <div className="space-y-3">
+            <div className="px-1 text-sm font-semibold text-card-foreground">Responded Requests</div>
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                    <TableRow className="hover:bg-card">
+                      <TableHead className="w-16 text-center">S.No</TableHead>
+                      <TableHead>Request</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Items</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="hidden lg:table-cell">Requested By</TableHead>
+                      <TableHead className="hidden xl:table-cell">Responded By and Date</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedRespondedRequestRows.map((row, index) => {
+                      const responseDetails = getRequestResponseLabel(row);
+
+                      return (
+                        <TableRow key={row.id}>
+                          <TableCell className="text-center font-medium text-muted-foreground">
+                            {(respondedRequestPage - 1) * getPageSizeNumber(requestPageSize, respondedRequestRows.length) + index + 1}
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
+                              <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
+                              <div className="text-xs text-muted-foreground">{row.requested_for_name || "General request"}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">{row.department}</TableCell>
+                          <TableCell>
+                            <div className="space-y-2">
+                              {row.items?.length ? (
+                                row.items.map((item) => (
+                                  <div key={item.id} className="space-y-0.5">
+                                    <div className="font-medium text-card-foreground">{item.item_name}</div>
+                                    <div className="font-mono text-xs text-muted-foreground">{item.item_code}</div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="space-y-0.5">
+                                  <div className="font-medium text-card-foreground">{readText(row.item_name)}</div>
+                                  <div className="font-mono text-xs text-muted-foreground">{readText(row.item_code)}</div>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            <div className="space-y-0.5">
+                              <div>{row.requested_by_username}</div>
+                              <div className="text-xs text-muted-foreground" title={row.request_reason || "-"}>
+                                {row.request_reason || "-"}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden xl:table-cell">
+                            <div className="space-y-0.5">
+                              <div>{responseDetails.responder}</div>
+                              <div className="text-xs text-muted-foreground">{responseDetails.respondedAt}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn("font-medium", statusBadgeClassName(row.status))}>
+                              {row.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <StoreTablePagination
+                page={respondedRequestPage}
+                pageSize={getPageSizeNumber(requestPageSize, respondedRequestRows.length)}
+                total={respondedRequestRows.length}
+                onPageChange={setRespondedRequestPage}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -673,6 +802,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
             onSearchChange={(value) => {
               setRequestSearch(value);
               setRequestPage(1);
+              setRespondedRequestPage(1);
             }}
             filterContent={
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_220px_auto]">
@@ -744,6 +874,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                       startRequestFilterTransition(() => {
                         setRequestFilters(requestDraftFilters);
                         setRequestPage(1);
+                        setRespondedRequestPage(1);
                       })
                     }
                     disabled={isRequestFilterPending}
@@ -757,9 +888,10 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
             onPageSizeChange={(value) => {
               setRequestPageSize(value);
               setRequestPage(1);
+              setRespondedRequestPage(1);
             }}
             onExport={handleRequestExport}
-            summaryText={`${requestRows.length} requests in the current queue`}
+            summaryText={`${pendingRequestRows.length} pending and ${respondedRequestRows.length} responded requests in the current result set`}
             isFetching={requestsQuery.isFetching || approveRequestMutation.isPending || rejectRequestMutation.isPending}
           />
           {renderRequestTable()}
