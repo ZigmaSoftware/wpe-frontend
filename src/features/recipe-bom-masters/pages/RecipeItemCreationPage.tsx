@@ -93,7 +93,6 @@ const RecipeItemsDialog = ({
 
   useEffect(() => {
     form.reset({ recipe: recipe?.id ?? 0 });
-    setDraftComponents([]);
     setHasUnsavedChanges(false);
     setSearchQuery("");
     setDebouncedSearchQuery("");
@@ -115,13 +114,12 @@ const RecipeItemsDialog = ({
   });
 
   useEffect(() => {
-    if (!detailQ.data) {
-      return;
-    }
-
-    setDraftComponents((detailQ.data.components ?? []).map((component, index) => toDraftBOMComponent(component, index + 1)));
-    setHasUnsavedChanges(false);
-  }, [detailQ.data]);
+    if (!open) return;
+    setDraftComponents(
+      (detailQ.data?.components ?? []).map((component, index) => toDraftBOMComponent(component, index + 1)),
+    );
+    if (detailQ.data) setHasUnsavedChanges(false);
+  }, [detailQ.data, open]);
 
   const subtypeSearchQ = useQuery({
     queryKey: ["recipe-bom-masters", "recipe-item-search", debouncedSearchQuery],
