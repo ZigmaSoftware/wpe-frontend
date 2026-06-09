@@ -141,6 +141,10 @@ export const wpeMastersApi = {
     ...resourceEntity<ItemMasterRecord, ItemMasterWritePayload>("item-creations"),
     nextCode: () => fetchNextCode(`${BASE}/item-creations/next-code/`),
   },
+  itemVariants: {
+    ...resourceEntity<ItemMasterRecord, ItemMasterWritePayload>("item-variants"),
+    nextCode: () => fetchNextCode(`${BASE}/item-creations/next-code/`),
+  },
   productTypeCategories: {
     list: (params: TableParams) => listResource<ProductTypeCategoryRecord>(`${BASE}/product-type-categories/`, params),
     lookup: () => lookupMaster(`${BASE}/product-type-categories/lookup/`),

@@ -45,6 +45,7 @@ const invalidateProductTypeQueries = async (queryClient: ReturnType<typeof useQu
     queryClient.invalidateQueries({ queryKey: productTypeKeys.categoriesRoot }),
     queryClient.invalidateQueries({ queryKey: productTypeKeys.subtypesRoot }),
     queryClient.invalidateQueries({ queryKey: productTypeKeys.categoryLookup }),
+    queryClient.invalidateQueries({ queryKey: ["wpe-masters", "product-type-categories", "tree"] }),
   ]);
 };
 

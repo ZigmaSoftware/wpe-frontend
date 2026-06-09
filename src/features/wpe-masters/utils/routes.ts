@@ -1,10 +1,8 @@
 import {
-  Boxes,
   Building2,
   Factory,
   Layers,
   MapPin,
-  PackagePlus,
   PackageSearch,
   Ruler,
   ShoppingCart,
@@ -16,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   INVENTORY_STORE_MASTERS_ROUTE,
+  WPE_ITEM_VARIANTS_ROUTE,
   WPE_PRODUCT_SUBTYPES_ROUTE,
   WPE_PRODUCT_TYPES_ROUTE,
 } from "@/features/wpe-masters/constants";
@@ -34,27 +33,14 @@ export const inventoryStoreModuleDefinitions: InventoryStoreModuleDefinition[] =
     to: WPE_PRODUCT_TYPES_ROUTE,
     icon: Layers,
     label: "Item Category",
-    description: "Manage parent item classification categories.",
-    exact: true,
-  },
-  {
-    to: WPE_PRODUCT_SUBTYPES_ROUTE,
-    icon: Boxes,
-    label: "Item Sub Category",
-    description: "Manage item sub categories mapped to item categories.",
-    activeMatchPaths: [WPE_PRODUCT_SUBTYPES_ROUTE, `${WPE_PRODUCT_TYPES_ROUTE}/`],
+    description: "Manage item categories, related sub categories, and their item variants.",
+    activeMatchPaths: [WPE_PRODUCT_TYPES_ROUTE, WPE_PRODUCT_SUBTYPES_ROUTE, WPE_ITEM_VARIANTS_ROUTE],
   },
   {
     to: "/wpe-masters/units",
     icon: Ruler,
     label: "Unit",
     description: "Manage unit of measurement records.",
-  },
-  {
-    to: "/wpe-masters/item-creations",
-    icon: PackagePlus,
-    label: "Item Creations",
-    description: "Create and maintain raw material, additive, packing, and finished goods items.",
   },
   {
     to: "/wpe-masters/stores",

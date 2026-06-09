@@ -13,8 +13,8 @@ const ProductionOrderPageLayout = ({
   onBack,
   backLabel = "Back to Production",
 }: ProductionOrderPageLayoutProps) => (
-  <div className="-m-4 min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.96),_rgba(244,248,252,0.98)_28%,_rgba(239,244,250,1)_100%)] px-4 py-3 lg:-m-6 lg:px-6 lg:py-4">
-    <div className="flex min-h-full w-full flex-col gap-4">
+  <div className="-m-4 min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.98),_rgba(245,249,255,0.98)_24%,_rgba(236,243,251,1)_100%)] px-4 py-4 lg:-m-6 lg:px-6 lg:py-5">
+    <div className="flex min-h-full w-full flex-col gap-5">
       <div className="flex items-center">
         <Button
           type="button"

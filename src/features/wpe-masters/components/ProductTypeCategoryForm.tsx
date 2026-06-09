@@ -26,7 +26,7 @@ const ProductTypeCategoryForm = ({
   <Form {...form}>
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
       <FormItem>
-        <FormLabel>Category Code*</FormLabel>
+        <FormLabel>Category Code</FormLabel>
         <FormControl>
           <Input value={codePreview} readOnly placeholder="Generating..." className="bg-muted/40 font-mono" />
         </FormControl>
@@ -49,9 +49,9 @@ const ProductTypeCategoryForm = ({
         name="description"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Details</FormLabel>
+            <FormLabel>Description</FormLabel>
             <FormControl>
-              <Textarea {...field} rows={3} placeholder="Add supporting details for downstream users." />
+              <Textarea {...field} rows={3} placeholder="Add a clear description for downstream users." />
             </FormControl>
             <FormMessage />
           </FormItem>

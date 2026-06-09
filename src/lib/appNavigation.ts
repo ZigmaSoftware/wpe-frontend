@@ -40,6 +40,8 @@ import {
 import { storeWorkspaceModuleDefinitions, STORE_ROUTE } from "@/features/store/utils/routes";
 import {
   INVENTORY_STORE_MASTERS_ROUTE,
+  WPE_ITEM_VARIANTS_ROUTE,
+  WPE_PRODUCT_SUBTYPES_ROUTE,
   WPE_PRODUCT_TYPES_ROUTE,
 } from "@/features/wpe-masters/constants";
 import { inventoryStoreModuleDefinitions } from "@/features/wpe-masters/utils/routes";
@@ -403,7 +405,52 @@ export const buildBreadcrumbs = (pathname: string, navigation: AppNavigation): A
       { label: MASTERS_SECTION_LABEL },
       { label: "Inventory & Store Masters", to: INVENTORY_STORE_MASTERS_ROUTE },
       { label: "Item Category", to: WPE_PRODUCT_TYPES_ROUTE },
-      { label: "Item Sub Category" },
+      { label: "Related Item Sub Categories" },
+    ];
+  }
+
+  if (/^\/wpe-masters\/product-types\/\d+\/subtypes\/\d+\/?$/.test(pathname)) {
+    return [
+      { label: MASTERS_SECTION_LABEL },
+      { label: "Inventory & Store Masters", to: INVENTORY_STORE_MASTERS_ROUTE },
+      { label: "Item Category", to: WPE_PRODUCT_TYPES_ROUTE },
+      { label: "Related Item Variants" },
+    ];
+  }
+
+  if (/^\/wpe-masters\/product-subtypes\/\d+\/?$/.test(pathname)) {
+    return [
+      { label: MASTERS_SECTION_LABEL },
+      { label: "Inventory & Store Masters", to: INVENTORY_STORE_MASTERS_ROUTE },
+      { label: "Item Sub Category", to: WPE_PRODUCT_SUBTYPES_ROUTE },
+      { label: "Selected Item Category" },
+    ];
+  }
+
+  if (/^\/wpe-masters\/product-subtypes\/\d+\/subtypes\/\d+\/?$/.test(pathname)) {
+    return [
+      { label: MASTERS_SECTION_LABEL },
+      { label: "Inventory & Store Masters", to: INVENTORY_STORE_MASTERS_ROUTE },
+      { label: "Item Sub Category", to: WPE_PRODUCT_SUBTYPES_ROUTE },
+      { label: "Selected Item Sub Category" },
+    ];
+  }
+
+  if (/^\/wpe-masters\/item-variants\/\d+\/?$/.test(pathname)) {
+    return [
+      { label: MASTERS_SECTION_LABEL },
+      { label: "Inventory & Store Masters", to: INVENTORY_STORE_MASTERS_ROUTE },
+      { label: "Item Variants", to: WPE_ITEM_VARIANTS_ROUTE },
+      { label: "Selected Item Category" },
+    ];
+  }
+
+  if (/^\/wpe-masters\/item-variants\/\d+\/subtypes\/\d+\/?$/.test(pathname)) {
+    return [
+      { label: MASTERS_SECTION_LABEL },
+      { label: "Inventory & Store Masters", to: INVENTORY_STORE_MASTERS_ROUTE },
+      { label: "Item Variants", to: WPE_ITEM_VARIANTS_ROUTE },
+      { label: "Selected Item Sub Category" },
     ];
   }
 
