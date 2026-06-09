@@ -55,6 +55,7 @@ export interface RecipeDetailRecord extends RecipeRecord {
 }
 
 export interface RecipeItemWritePayload {
+  id?: number;
   item?: number | null;
   product_subtype?: number | null;
   target_weight_grams: number | string;
