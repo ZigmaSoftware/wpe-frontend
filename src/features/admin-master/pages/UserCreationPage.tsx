@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Eye, EyeOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -135,6 +135,8 @@ const UserCreationPage = () => {
   const [editing, setEditing] = useState<UserCreationRecord | null>(null);
   const [toggleTarget, setToggleTarget] = useState<UserCreationRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserCreationRecord | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const form = useForm<UserCreationFormValues>({ resolver: zodResolver(userCreationSchema), defaultValues });
   const userCreationSelectOptions = useUserCreationSelectOptions();
   const userTypeOptions = useUserTypeOptions();
@@ -215,12 +217,16 @@ const UserCreationPage = () => {
 
   const openCreateDialog = () => {
     setEditing(null);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     form.reset(defaultValues);
     setDialogOpen(true);
   };
 
   const openEditDialog = (record: UserCreationRecord) => {
     setEditing(record);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     form.reset({
       ...defaultValues,
       staff: record.staff,
@@ -230,8 +236,8 @@ const UserCreationPage = () => {
       account_status: record.account_status,
       mobile_no: record.mobile_no ?? "",
       email: record.email ?? "",
-      password: "",
-      confirm_password: "",
+      password: record.password ?? "",
+      confirm_password: record.password ?? "",
     });
     setDialogOpen(true);
   };
@@ -290,9 +296,19 @@ const UserCreationPage = () => {
       />
       <MasterFormDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setShowPassword(false);
+            setShowConfirmPassword(false);
+          }
+        }}
         title={editing ? "Edit User" : "Create User"}
-        description="Passwords are required for new users and only needed on edit when you intend to change credentials."
+        description={
+          editing
+            ? "Use the eye icon to view the password, or edit it to change the user's login password."
+            : "Enter and confirm the password for the new user."
+        }
       >
         <Form {...form}>
           <form
@@ -409,7 +425,23 @@ const UserCreationPage = () => {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} value={field.value ?? ""} />
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          className="pr-10"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((current) => !current)}
+                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-slate-700"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -422,7 +454,23 @@ const UserCreationPage = () => {
                   <FormItem>
                     <FormLabel>Confirm password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} value={field.value ?? ""} />
+                      <div className="relative">
+                        <Input
+                          type={showConfirmPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          className="pr-10"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((current) => !current)}
+                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-slate-700"
+                          aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        >
+                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
