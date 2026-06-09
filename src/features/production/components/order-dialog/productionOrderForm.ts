@@ -326,7 +326,11 @@ export const createEmptyMaterialsState = (): ProductionOrderFormValues["material
   rows: [],
 });
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+};
 
 export const getShiftOption = (value: ProductionShiftValue) =>
   SHIFT_OPTIONS.find((option) => option.value === value) ?? SHIFT_OPTIONS[0];
