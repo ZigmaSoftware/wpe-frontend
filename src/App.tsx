@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import AuthGuard from "@/components/AuthGuard";
@@ -8,59 +8,15 @@ import PermissionRouteGuard from "@/components/PermissionRouteGuard";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import LocationMasterPage from "@/features/wpe-masters/pages/LocationMasterPage";
-import BranchMasterPage from "@/features/wpe-masters/pages/BranchMasterPage";
-import PriceBookMasterPage from "@/features/wpe-masters/pages/PriceBookMasterPage";
-import WarehouseMasterPage from "@/features/wpe-masters/pages/WarehouseMasterPage";
-import ProductionTypeMasterPage from "@/features/wpe-masters/pages/ProductionTypeMasterPage";
-import ProductTypesPage from "@/features/wpe-masters/pages/ProductTypesPage";
-import SaleTypeMasterPage from "@/features/wpe-masters/pages/SaleTypeMasterPage";
-import PurchaseTypeMasterPage from "@/features/wpe-masters/pages/PurchaseTypeMasterPage";
-import RoleMasterPage from "@/features/wpe-masters/pages/RoleMasterPage";
-import DepartmentMasterPage from "@/features/wpe-masters/pages/DepartmentMasterPage";
-import DesignationMasterPage from "@/features/wpe-masters/pages/DesignationMasterPage";
-import InventoryStoreMastersLandingPage from "@/features/wpe-masters/pages/InventoryStoreMastersLandingPage";
-import StoreMasterPage from "@/features/wpe-masters/pages/StoreMasterPage";
-import UnitMasterPage from "@/features/wpe-masters/pages/UnitMasterPage";
 import {
   INVENTORY_STORE_MASTERS_ROUTE,
   WPE_ITEM_VARIANTS_ROUTE,
   WPE_PRODUCT_SUBTYPES_ROUTE,
   WPE_PRODUCT_TYPES_ROUTE,
 } from "@/features/wpe-masters/constants";
-import ProductionMastersLandingPage from "@/features/production-masters/pages/ProductionMastersLandingPage";
-import ProfileCreationsPage from "@/features/production-masters/pages/ProfileCreationsPage";
-import ProfileSizesPage from "@/features/production-masters/pages/ProfileSizesPage";
-import ColorCreationsPage from "@/features/production-masters/pages/ColorCreationsPage";
-import MachineCreationsPage from "@/features/production-masters/pages/MachineCreationsPage";
-import WorkCentreCreationsPage from "@/features/production-masters/pages/WorkCentreCreationsPage";
-import ProductionLinePage from "@/features/production-masters/pages/ProductionLinePage";
-import BinCreationPage from "@/features/production-masters/pages/BinCreationPage";
-import BagCreationPage from "@/features/production-masters/pages/BagCreationPage";
-import PackingTypePage from "@/features/production-masters/pages/PackingTypePage";
-import PackingMaterialPage from "@/features/production-masters/pages/PackingMaterialPage";
 import { PRODUCTION_MASTERS_ROUTE } from "@/features/production-masters/utils/routes";
-import DeviceLabelMastersLandingPage from "@/features/device-label-masters/pages/DeviceLabelMastersLandingPage";
-import WeighmentScaleCreationPage from "@/features/device-label-masters/pages/WeighmentScaleCreationPage";
-import PrinterCreationPage from "@/features/device-label-masters/pages/PrinterCreationPage";
-import QRLabelTemplatePage from "@/features/device-label-masters/pages/QRLabelTemplatePage";
-import SerialPortConfigurationPage from "@/features/device-label-masters/pages/SerialPortConfigurationPage";
 import { DEVICE_LABEL_MASTERS_ROUTE } from "@/features/device-label-masters/utils/routes";
-import RecipeBomMastersLandingPage from "@/features/recipe-bom-masters/pages/RecipeBomMastersLandingPage";
-import RecipeCreationPage from "@/features/recipe-bom-masters/pages/RecipeCreationPage";
-import RecipeItemCreationPage from "@/features/recipe-bom-masters/pages/RecipeItemCreationPage";
-import BOMCreationPage from "@/features/recipe-bom-masters/pages/BOMCreationPage";
-import BOMItemCreationPage from "@/features/recipe-bom-masters/pages/BOMItemCreationPage";
 import { RECIPE_BOM_MASTERS_ROUTE } from "@/features/recipe-bom-masters/utils/routes";
-import AdminMastersLandingPage from "@/features/admin-master/pages/AdminMastersLandingPage";
-import MainScreensPage from "@/features/admin-master/pages/MainScreensPage";
-import ScreenSectionsPage from "@/features/admin-master/pages/ScreenSectionsPage";
-import StaffCreationPage from "@/features/admin-master/pages/StaffCreationPage";
-import UserCreationPage from "@/features/admin-master/pages/UserCreationPage";
-import UserScreenPermissionAssignmentPage from "@/features/admin-master/pages/UserScreenPermissionAssignmentPage";
-import UserScreenPermissionPage from "@/features/admin-master/pages/UserScreenPermissionPage";
-import UserScreensPage from "@/features/admin-master/pages/UserScreensPage";
-import UserTypesPage from "@/features/admin-master/pages/UserTypesPage";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import {
   BLENDING_ROUTE,
@@ -68,48 +24,14 @@ import {
   BLENDING_STORE_REQUEST_ROUTE,
   BLENDING_TRANSACTIONS_ROUTE,
 } from "@/features/blending/utils/routes";
-import BlendingPage from "@/pages/BlendingPage";
-import BlendingStockItemPage from "@/pages/BlendingStockItemPage";
-import BlendingTransactionPage from "@/pages/BlendingTransactionPage";
-import ContactsPage from "@/pages/ContactsPage";
-import ContactFormPage from "@/pages/ContactFormPage";
-import DashboardPage from "@/pages/DashboardPage";
-import GRNCreatePage from "@/pages/GRNCreatePage";
-import GRNDetailPage from "@/pages/GRNDetailPage";
-import GRNEditPage from "@/pages/GRNEditPage";
-import RegrindPage from "@/pages/RegrindPage";
-import CompaniesPage from "@/features/common-master/pages/CompaniesPage";
-import CommonMastersLandingPage from "@/features/common-master/pages/CommonMastersLandingPage";
-import ContinentsPage from "@/features/common-master/pages/ContinentsPage";
-import CountriesPage from "@/features/common-master/pages/CountriesPage";
-import CitiesPage from "@/features/common-master/pages/CitiesPage";
-import CurrenciesPage from "@/features/common-master/pages/CurrenciesPage";
-import CustomerDetailPage from "@/features/common-master/pages/CustomerDetailPage";
-import CustomersPage from "@/features/common-master/pages/CustomersPage";
-import ProjectsPage from "@/features/common-master/pages/ProjectsPage";
-import StatesPage from "@/features/common-master/pages/StatesPage";
-import SupplierDetailPage from "@/features/common-master/pages/SupplierDetailPage";
-import SuppliersPage from "@/features/common-master/pages/SuppliersPage";
-import TaxesPage from "@/features/common-master/pages/TaxesPage";
 import {
   BLENDING_INVENTORY_ROUTE,
   INVENTORY_ROUTE,
   PRODUCTION_INVENTORY_ROUTE,
   STORE_INVENTORY_ROUTE,
 } from "@/features/items/utils/routes";
-import GRNPage from "@/pages/GRNPage";
-import ItemsPage from "@/pages/ItemsPage";
-import ProductionInventoryPage from "@/pages/ProductionInventoryPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
-import ProductionManageBatchPage from "@/pages/ProductionManageBatchPage";
-import ProductionEditOrderPage from "@/pages/ProductionEditOrderPage";
-import ProductionNewOrderPage from "@/pages/ProductionNewOrderPage";
-import ProductionPage from "@/pages/ProductionPage";
-import ProductionStagePage from "@/pages/ProductionStagePage";
-import RequestsPage from "@/pages/RequestsPage";
-import StorePage from "@/pages/StorePage";
-import StoreStockItemPage from "@/pages/StoreStockItemPage";
 import {
   GRN_PROCESS_CREATE_ROUTE,
   GRN_PROCESS_ROUTE,
@@ -154,6 +76,89 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+const LocationMasterPage = lazy(() => import("@/features/wpe-masters/pages/LocationMasterPage"));
+const BranchMasterPage = lazy(() => import("@/features/wpe-masters/pages/BranchMasterPage"));
+const PriceBookMasterPage = lazy(() => import("@/features/wpe-masters/pages/PriceBookMasterPage"));
+const WarehouseMasterPage = lazy(() => import("@/features/wpe-masters/pages/WarehouseMasterPage"));
+const ProductionTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/ProductionTypeMasterPage"));
+const ProductTypesPage = lazy(() => import("@/features/wpe-masters/pages/ProductTypesPage"));
+const SaleTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/SaleTypeMasterPage"));
+const PurchaseTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/PurchaseTypeMasterPage"));
+const RoleMasterPage = lazy(() => import("@/features/wpe-masters/pages/RoleMasterPage"));
+const DepartmentMasterPage = lazy(() => import("@/features/wpe-masters/pages/DepartmentMasterPage"));
+const DesignationMasterPage = lazy(() => import("@/features/wpe-masters/pages/DesignationMasterPage"));
+const InventoryStoreMastersLandingPage = lazy(() => import("@/features/wpe-masters/pages/InventoryStoreMastersLandingPage"));
+const StoreMasterPage = lazy(() => import("@/features/wpe-masters/pages/StoreMasterPage"));
+const UnitMasterPage = lazy(() => import("@/features/wpe-masters/pages/UnitMasterPage"));
+const ProductionMastersLandingPage = lazy(() => import("@/features/production-masters/pages/ProductionMastersLandingPage"));
+const ProfileCreationsPage = lazy(() => import("@/features/production-masters/pages/ProfileCreationsPage"));
+const ProfileSizesPage = lazy(() => import("@/features/production-masters/pages/ProfileSizesPage"));
+const ColorCreationsPage = lazy(() => import("@/features/production-masters/pages/ColorCreationsPage"));
+const MachineCreationsPage = lazy(() => import("@/features/production-masters/pages/MachineCreationsPage"));
+const WorkCentreCreationsPage = lazy(() => import("@/features/production-masters/pages/WorkCentreCreationsPage"));
+const ProductionLinePage = lazy(() => import("@/features/production-masters/pages/ProductionLinePage"));
+const BinCreationPage = lazy(() => import("@/features/production-masters/pages/BinCreationPage"));
+const BagCreationPage = lazy(() => import("@/features/production-masters/pages/BagCreationPage"));
+const PackingTypePage = lazy(() => import("@/features/production-masters/pages/PackingTypePage"));
+const PackingMaterialPage = lazy(() => import("@/features/production-masters/pages/PackingMaterialPage"));
+const DeviceLabelMastersLandingPage = lazy(() => import("@/features/device-label-masters/pages/DeviceLabelMastersLandingPage"));
+const WeighmentScaleCreationPage = lazy(() => import("@/features/device-label-masters/pages/WeighmentScaleCreationPage"));
+const PrinterCreationPage = lazy(() => import("@/features/device-label-masters/pages/PrinterCreationPage"));
+const QRLabelTemplatePage = lazy(() => import("@/features/device-label-masters/pages/QRLabelTemplatePage"));
+const SerialPortConfigurationPage = lazy(() => import("@/features/device-label-masters/pages/SerialPortConfigurationPage"));
+const RecipeBomMastersLandingPage = lazy(() => import("@/features/recipe-bom-masters/pages/RecipeBomMastersLandingPage"));
+const RecipeCreationPage = lazy(() => import("@/features/recipe-bom-masters/pages/RecipeCreationPage"));
+const RecipeItemCreationPage = lazy(() => import("@/features/recipe-bom-masters/pages/RecipeItemCreationPage"));
+const BOMCreationPage = lazy(() => import("@/features/recipe-bom-masters/pages/BOMCreationPage"));
+const BOMItemCreationPage = lazy(() => import("@/features/recipe-bom-masters/pages/BOMItemCreationPage"));
+const AdminMastersLandingPage = lazy(() => import("@/features/admin-master/pages/AdminMastersLandingPage"));
+const MainScreensPage = lazy(() => import("@/features/admin-master/pages/MainScreensPage"));
+const ScreenSectionsPage = lazy(() => import("@/features/admin-master/pages/ScreenSectionsPage"));
+const StaffCreationPage = lazy(() => import("@/features/admin-master/pages/StaffCreationPage"));
+const UserCreationPage = lazy(() => import("@/features/admin-master/pages/UserCreationPage"));
+const UserScreenPermissionAssignmentPage = lazy(() => import("@/features/admin-master/pages/UserScreenPermissionAssignmentPage"));
+const UserScreenPermissionPage = lazy(() => import("@/features/admin-master/pages/UserScreenPermissionPage"));
+const UserScreensPage = lazy(() => import("@/features/admin-master/pages/UserScreensPage"));
+const UserTypesPage = lazy(() => import("@/features/admin-master/pages/UserTypesPage"));
+const BlendingPage = lazy(() => import("@/pages/BlendingPage"));
+const BlendingStockItemPage = lazy(() => import("@/pages/BlendingStockItemPage"));
+const BlendingTransactionPage = lazy(() => import("@/pages/BlendingTransactionPage"));
+const ContactsPage = lazy(() => import("@/pages/ContactsPage"));
+const ContactFormPage = lazy(() => import("@/pages/ContactFormPage"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const GRNCreatePage = lazy(() => import("@/pages/GRNCreatePage"));
+const GRNDetailPage = lazy(() => import("@/pages/GRNDetailPage"));
+const GRNEditPage = lazy(() => import("@/pages/GRNEditPage"));
+const RegrindPage = lazy(() => import("@/pages/RegrindPage"));
+const CompaniesPage = lazy(() => import("@/features/common-master/pages/CompaniesPage"));
+const CommonMastersLandingPage = lazy(() => import("@/features/common-master/pages/CommonMastersLandingPage"));
+const ContinentsPage = lazy(() => import("@/features/common-master/pages/ContinentsPage"));
+const CountriesPage = lazy(() => import("@/features/common-master/pages/CountriesPage"));
+const CitiesPage = lazy(() => import("@/features/common-master/pages/CitiesPage"));
+const CurrenciesPage = lazy(() => import("@/features/common-master/pages/CurrenciesPage"));
+const CustomerDetailPage = lazy(() => import("@/features/common-master/pages/CustomerDetailPage"));
+const CustomersPage = lazy(() => import("@/features/common-master/pages/CustomersPage"));
+const ProjectsPage = lazy(() => import("@/features/common-master/pages/ProjectsPage"));
+const StatesPage = lazy(() => import("@/features/common-master/pages/StatesPage"));
+const SupplierDetailPage = lazy(() => import("@/features/common-master/pages/SupplierDetailPage"));
+const SuppliersPage = lazy(() => import("@/features/common-master/pages/SuppliersPage"));
+const TaxesPage = lazy(() => import("@/features/common-master/pages/TaxesPage"));
+const GRNPage = lazy(() => import("@/pages/GRNPage"));
+const ItemsPage = lazy(() => import("@/pages/ItemsPage"));
+const ProductionInventoryPage = lazy(() => import("@/pages/ProductionInventoryPage"));
+const RequestsPage = lazy(() => import("@/pages/RequestsPage"));
+const StorePage = lazy(() => import("@/pages/StorePage"));
+const StoreStockItemPage = lazy(() => import("@/pages/StoreStockItemPage"));
+const ProductionManageBatchPage = lazy(() => import("@/pages/ProductionManageBatchPage"));
+const ProductionEditOrderPage = lazy(() => import("@/pages/ProductionEditOrderPage"));
+const ProductionNewOrderPage = lazy(() => import("@/pages/ProductionNewOrderPage"));
+const ProductionPage = lazy(() => import("@/pages/ProductionPage"));
+const ProductionStagePage = lazy(() => import("@/pages/ProductionStagePage"));
+
+const RouteLoadingFallback = () => (
+  <div className="p-6 text-sm text-muted-foreground">Loading production workspace...</div>
+);
 
 const LegacyGrnDetailRedirect = () => {
   const { id } = useParams<{ id: string }>();
@@ -265,22 +270,71 @@ const App = () => (
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.productionAdWeightage} />}>
-                    <Route path="/app/production/neworder" element={<ProductionNewOrderPage />} />
-                    <Route path="/app/production/manage-batch/:orderId" element={<ProductionManageBatchPage />} />
-                    <Route path="/app/production/:id/edit" element={<ProductionEditOrderPage />} />
-                    <Route path={PRODUCTION_AD_WEIGHTAGE_ROUTE} element={<ProductionPage />} />
+                    <Route
+                      path="/app/production/neworder"
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionNewOrderPage />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/app/production/manage-batch/:orderId"
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionManageBatchPage />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/app/production/:id/edit"
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionEditOrderPage />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path={PRODUCTION_AD_WEIGHTAGE_ROUTE}
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionPage />
+                        </Suspense>
+                      }
+                    />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.productionWorkspace} />}>
                     <Route path={PRODUCTION_ROUTE} element={<WorkspaceGroupRedirect groupKey="production" fallback={PRODUCTION_AD_WEIGHTAGE_ROUTE} />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.productionBlBlending} />}>
-                    <Route path={PRODUCTION_BL_BLENDING_ROUTE} element={<ProductionStagePage stage="BL" />} />
+                    <Route
+                      path={PRODUCTION_BL_BLENDING_ROUTE}
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionStagePage stage="BL" />
+                        </Suspense>
+                      }
+                    />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.productionGlGranulation} />}>
-                    <Route path={PRODUCTION_GL_GRANULATION_ROUTE} element={<ProductionStagePage stage="GL" />} />
+                    <Route
+                      path={PRODUCTION_GL_GRANULATION_ROUTE}
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionStagePage stage="GL" />
+                        </Suspense>
+                      }
+                    />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.productionPrProduction} />}>
-                    <Route path={PRODUCTION_PR_PRODUCTION_ROUTE} element={<ProductionStagePage stage="PR" />} />
+                    <Route
+                      path={PRODUCTION_PR_PRODUCTION_ROUTE}
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionStagePage stage="PR" />
+                        </Suspense>
+                      }
+                    />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.regrind} />}>
@@ -365,13 +419,15 @@ const App = () => (
 
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.adminMasters} />}>
                     <Route path="/admin/admin-masters" element={<AdminMastersLandingPage />} />
-                    <Route path="/wpe-masters/designations" element={<DesignationMasterPage />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={ADMIN_SCREEN_CODES.mainScreens} />}>
                     <Route path="/admin/main-screens" element={<MainScreensPage />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={ADMIN_SCREEN_CODES.screenSections} />}>
                     <Route path="/admin/screen-sections" element={<ScreenSectionsPage />} />
+                  </Route>
+                  <Route element={<PermissionRouteGuard screenCodes={ADMIN_SCREEN_CODES.designations} />}>
+                    <Route path="/wpe-masters/designations" element={<DesignationMasterPage />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={ADMIN_SCREEN_CODES.staffCreation} />}>
                     <Route path="/admin/staff-creation" element={<StaffCreationPage />} />

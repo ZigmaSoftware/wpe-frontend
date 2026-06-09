@@ -159,9 +159,10 @@ export type StaffCreationRecord = {
   age?: number | null;
   department?: number | null;
   department_name?: string | null;
+  designation?: number | null;
+  designation_name?: string | null;
   role?: number | null;
   role_name?: string | null;
-  designation?: string | null;
   mobile?: string | null;
   email?: string | null;
   joining_date?: string | null;
@@ -178,8 +179,7 @@ export type StaffCreationWritePayload = {
   staff_code: string;
   name: string;
   age: number;
-  department: number;
-  role: number;
+  designation: number;
   mobile: string;
   email: string;
   joining_date?: string | null;

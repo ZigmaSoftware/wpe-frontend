@@ -1,4 +1,4 @@
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import { NotebookText } from "lucide-react";
 import { FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ type ProductionNotesSectionProps = {
 };
 
 const ProductionNotesSection = ({ form }: ProductionNotesSectionProps) => {
-  const notesValue = form.watch("notes");
+  const notesValue = useWatch({ control: form.control, name: "notes" }) ?? "";
 
   return (
     <ProductionSectionCard

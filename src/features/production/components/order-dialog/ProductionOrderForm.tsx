@@ -1,21 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Loader2, Menu, RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import type { LookupItem } from "@/features/wpe-masters/types";
 import { coreApi } from "@/lib/api";
 import type { ProductionBatch, ProductionMachine } from "@/lib/types";
-import ProductionGeneralTab from "./ProductionGeneralTab";
-import ProductionMaterialsTab from "./ProductionMaterialsTab";
-import ProductionOutputTab from "./ProductionOutputTab";
-import ProductionPlaceholderTab from "./ProductionPlaceholderTab";
+import GeneralTab from "./GeneralTab";
 import ProductionTabs from "./ProductionTabs";
 import {
   buildActualStartDateTimeValue,
@@ -56,6 +52,13 @@ type ProductionOrderFormProps = {
   };
   showFooterActions?: boolean;
 };
+
+const MaterialsTab = lazy(() => import("./MaterialsTab"));
+const StagesTab = lazy(() => import("./StagesTab"));
+const OutputTab = lazy(() => import("./OutputTab"));
+const ScrapTab = lazy(() => import("./ScrapTab"));
+const CostTab = lazy(() => import("./CostTab"));
+const ResourcesTab = lazy(() => import("./ResourcesTab"));
 
 const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
 const REQUIRED_PRODUCTION_TYPE_OPTIONS = [DEFAULT_PRODUCTION_TYPE, "WPE Blend Production"] as const;
@@ -131,6 +134,15 @@ export const buildInchargeOptions = (users: LookupItem[]): NamedOption[] =>
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
+const ProductionTabLoadingState = ({ label }: { label: string }) => (
+  <div className="rounded-[28px] border border-slate-200/85 bg-white/90 px-5 py-10 text-center shadow-[0_28px_64px_-54px_rgba(15,23,42,0.36)] backdrop-blur">
+    <div className="flex items-center justify-center gap-2 text-sm font-medium text-slate-500">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Loading {label} section...
+    </div>
+  </div>
+);
+
 const ProductionOrderForm = ({
   onSubmit,
   onCancel,
@@ -166,6 +178,7 @@ const ProductionOrderForm = ({
   const locationsQuery = useQuery({
     queryKey: ["production-order-form", "locations"],
     queryFn: () => wpeMastersApi.locations.lookup(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const workCentresQuery = useQuery({
@@ -180,11 +193,13 @@ const ProductionOrderForm = ({
   const usersQuery = useQuery({
     queryKey: ["production-order-form", "wpe-users"],
     queryFn: () => wpeMastersApi.users.lookup(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const productionTypesQuery = useQuery({
     queryKey: ["production-order-form", "production-types"],
     queryFn: () => wpeMastersApi.productionTypes.lookup(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const isCreateMode = !initialValues;
@@ -216,10 +231,10 @@ const ProductionOrderForm = ({
     setMobileSectionsOpen(false);
   }, [activeTab]);
 
-  const productionDate = form.watch("resources.production_date");
-  const shift = form.watch("resources.shift");
-  const productionType = form.watch("production_type");
-  const productionId = form.watch("production_id");
+  const productionDate = useWatch({ control: form.control, name: "resources.production_date" }) ?? "";
+  const shift = useWatch({ control: form.control, name: "resources.shift" }) ?? "";
+  const productionType = useWatch({ control: form.control, name: "production_type" }) ?? "";
+  const productionId = useWatch({ control: form.control, name: "production_id" }) ?? "";
 
   useEffect(() => {
     form.setValue(
@@ -325,6 +340,69 @@ const ProductionOrderForm = ({
   const resolvedSubmitLabel = submitLabel ?? "Create Production Order";
   const showSectionNavigation = enabledTabs.length > 1;
   const activeTabLabel = enabledTabs.find((tab) => tab.value === activeTab)?.label ?? "Section";
+  const handleTabChange = useCallback((value: ProductionDialogTab) => {
+    startTransition(() => {
+      setActiveTab(value);
+    });
+  }, []);
+
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case "general":
+        return (
+          <GeneralTab
+            form={form}
+            productionTypeOptions={productionTypeOptions}
+            facilityOptions={facilityOptions}
+            workCenterOptions={workCenterOptions}
+            inchargeOptions={inchargeOptions}
+            machines={machines}
+            productionTypesLoading={productionTypesQuery.isLoading}
+            machinesLoading={machinesLoading}
+            lookupsLoading={lookupsLoading}
+            lookupError={lookupError}
+          />
+        );
+      case "materials":
+        return (
+          <Suspense fallback={<ProductionTabLoadingState label="Materials" />}>
+            <MaterialsTab form={form} isActive />
+          </Suspense>
+        );
+      case "stages":
+        return (
+          <Suspense fallback={<ProductionTabLoadingState label="Stages" />}>
+            <StagesTab />
+          </Suspense>
+        );
+      case "output":
+        return (
+          <Suspense fallback={<ProductionTabLoadingState label="Output" />}>
+            <OutputTab form={form} context={outputContext} isActive />
+          </Suspense>
+        );
+      case "scrap":
+        return (
+          <Suspense fallback={<ProductionTabLoadingState label="Scrap" />}>
+            <ScrapTab />
+          </Suspense>
+        );
+      case "cost":
+        return (
+          <Suspense fallback={<ProductionTabLoadingState label="Cost" />}>
+            <CostTab />
+          </Suspense>
+        );
+      case "resources":
+        return (
+          <Suspense fallback={<ProductionTabLoadingState label="Resources" />}>
+            <ResourcesTab />
+          </Suspense>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="flex min-h-full flex-col">
@@ -333,11 +411,7 @@ const ProductionOrderForm = ({
           onSubmit={form.handleSubmit((values) => onSubmit(toProductionOrderPayload(values, machines)))}
           className="flex min-h-full flex-col"
         >
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value as ProductionDialogTab)}
-            className="flex min-h-full flex-col gap-6"
-          >
+          <div className="flex min-h-full flex-col gap-6">
             <div className="rounded-[32px] border border-slate-200/85 bg-white/90 px-5 py-5 shadow-[0_34px_80px_-58px_rgba(15,23,42,0.38)] backdrop-blur sm:px-6 lg:px-7">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                 <div className="flex min-w-0 items-start gap-4">
@@ -423,17 +497,17 @@ const ProductionOrderForm = ({
             </div>
 
             {showSectionNavigation ? (
-              <Sheet open={mobileSectionsOpen} onOpenChange={setMobileSectionsOpen}>
-                <SheetContent side="left" className="w-[288px] border-slate-200 bg-white p-0 sm:max-w-[288px]">
-                  <SheetHeader className="border-b border-slate-200 px-5 py-4 text-left">
-                    <SheetTitle className="text-base font-semibold text-slate-950">Production Sections</SheetTitle>
-                  </SheetHeader>
-                  <div className="px-4 py-4">
-                    <ProductionTabs value={activeTab} onValueChange={setActiveTab} tabs={enabledTabs} />
-                  </div>
-                </SheetContent>
-              </Sheet>
-            ) : null}
+                <Sheet open={mobileSectionsOpen} onOpenChange={setMobileSectionsOpen}>
+                  <SheetContent side="left" className="w-[288px] border-slate-200 bg-white p-0 sm:max-w-[288px]">
+                    <SheetHeader className="border-b border-slate-200 px-5 py-4 text-left">
+                      <SheetTitle className="text-base font-semibold text-slate-950">Production Sections</SheetTitle>
+                    </SheetHeader>
+                    <div className="px-4 py-4">
+                      <ProductionTabs value={activeTab} onValueChange={handleTabChange} tabs={enabledTabs} />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              ) : null}
 
             <div className={`grid gap-6 ${showSectionNavigation ? "lg:grid-cols-[248px_minmax(0,1fr)]" : ""}`}>
               {showSectionNavigation ? (
@@ -444,57 +518,14 @@ const ProductionOrderForm = ({
                       <p className="mt-2 text-sm text-slate-500">Navigate each area of the production form from here.</p>
                     </div>
                     <div className="px-3 py-3">
-                      <ProductionTabs value={activeTab} onValueChange={setActiveTab} tabs={enabledTabs} />
+                      <ProductionTabs value={activeTab} onValueChange={handleTabChange} tabs={enabledTabs} />
                     </div>
                   </div>
                 </aside>
               ) : null}
 
               <div className="min-w-0">
-                <TabsContent value="general" className="mt-0 outline-none">
-                  <ProductionGeneralTab
-                    form={form}
-                    productionTypeOptions={productionTypeOptions}
-                    facilityOptions={facilityOptions}
-                    workCenterOptions={workCenterOptions}
-                    inchargeOptions={inchargeOptions}
-                    machines={machines}
-                    productionTypesLoading={productionTypesQuery.isLoading}
-                    machinesLoading={machinesLoading}
-                    lookupsLoading={lookupsLoading}
-                    lookupError={lookupError}
-                  />
-                </TabsContent>
-                <TabsContent value="materials" className="mt-0 outline-none">
-                  <ProductionMaterialsTab form={form} />
-                </TabsContent>
-                <TabsContent value="stages" className="mt-0 outline-none">
-                  <ProductionPlaceholderTab
-                    title="Stages"
-                    description="Stage routing, checkpoints, and execution controls are prepared here."
-                  />
-                </TabsContent>
-                <TabsContent value="output" forceMount className="mt-0 outline-none">
-                  <ProductionOutputTab form={form} context={outputContext} isActive={activeTab === "output"} />
-                </TabsContent>
-                <TabsContent value="scrap" className="mt-0 outline-none">
-                  <ProductionPlaceholderTab
-                    title="Scrap"
-                    description="Scrap classification, yield loss, and recovery handling will fit into this tab."
-                  />
-                </TabsContent>
-                <TabsContent value="cost" className="mt-0 outline-none">
-                  <ProductionPlaceholderTab
-                    title="Cost"
-                    description="Cost rollups, overhead allocation, and ERP cost traceability can be layered in next."
-                  />
-                </TabsContent>
-                <TabsContent value="resources" className="mt-0 outline-none">
-                  <ProductionPlaceholderTab
-                    title="Resources"
-                    description="Resource calendars, labor assignment, and machine loading will be added here."
-                  />
-                </TabsContent>
+                {renderActiveTab()}
               </div>
             </div>
 
@@ -530,7 +561,7 @@ const ProductionOrderForm = ({
                 </div>
               </div>
             ) : null}
-          </Tabs>
+          </div>
         </form>
       </Form>
     </div>

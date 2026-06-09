@@ -47,6 +47,7 @@ const ProductionNewOrderPage = () => {
       const res = await coreApi.get<unknown>("/api/production/machines/");
       return normalizeListResponse<ProductionMachine>(res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const createOrderMutation = useMutation({
