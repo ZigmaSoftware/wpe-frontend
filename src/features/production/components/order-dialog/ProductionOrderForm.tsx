@@ -1,11 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Loader2, RefreshCw } from "lucide-react";
+import { FileText, Loader2, Menu, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import type { LookupItem } from "@/features/wpe-masters/types";
@@ -156,6 +157,7 @@ const ProductionOrderForm = ({
     [enabledTabs, initialTab],
   );
   const [activeTab, setActiveTab] = useState<ProductionDialogTab>(initialActiveTab);
+  const [mobileSectionsOpen, setMobileSectionsOpen] = useState(false);
   const form = useForm<ProductionOrderFormValues>({
     resolver: zodResolver(productionOrderFormSchema),
     defaultValues: initialValues ?? createProductionOrderDefaultValues(),
@@ -210,9 +212,14 @@ const ProductionOrderForm = ({
     }
   }, [activeTab, enabledTabs, initialActiveTab]);
 
+  useEffect(() => {
+    setMobileSectionsOpen(false);
+  }, [activeTab]);
+
   const productionDate = form.watch("resources.production_date");
   const shift = form.watch("resources.shift");
   const productionType = form.watch("production_type");
+  const productionId = form.watch("production_id");
 
   useEffect(() => {
     form.setValue(
@@ -316,6 +323,8 @@ const ProductionOrderForm = ({
 
   const resolvedTitle = formTitle ?? "New Production Order";
   const resolvedSubmitLabel = submitLabel ?? "Create Production Order";
+  const showSectionNavigation = enabledTabs.length > 1;
+  const activeTabLabel = enabledTabs.find((tab) => tab.value === activeTab)?.label ?? "Section";
 
   return (
     <div className="flex min-h-full flex-col">
@@ -327,27 +336,58 @@ const ProductionOrderForm = ({
           <Tabs
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as ProductionDialogTab)}
-            className="flex min-h-full flex-col gap-4"
+            className="flex min-h-full flex-col gap-6"
           >
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px] xl:items-start">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#ffd9c1] bg-[#fff3eb] text-[#ff6b00] shadow-[0_18px_32px_-28px_rgba(255,107,0,0.7)]">
-                  <FileText className="h-6 w-6" />
-                </div>
-                <div className="space-y-1">
-                  <h1 className="text-[2.35rem] font-semibold leading-none tracking-[-0.05em] text-slate-950">
-                    {resolvedTitle}
-                  </h1>
-                </div>
-              </div>
+            <div className="rounded-[32px] border border-slate-200/85 bg-white/90 px-5 py-5 shadow-[0_34px_80px_-58px_rgba(15,23,42,0.38)] backdrop-blur sm:px-6 lg:px-7">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex min-w-0 items-start gap-4">
+                  {showSectionNavigation ? (
+                    <button
+                      type="button"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.35)] transition-colors hover:border-slate-300 hover:text-slate-900 lg:hidden"
+                      aria-label="Open section navigation"
+                      onClick={() => setMobileSectionsOpen(true)}
+                    >
+                      <Menu className="h-5 w-5" />
+                    </button>
+                  ) : null}
 
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#dbeafe] bg-[#eff6ff] text-[#2563eb] shadow-[0_18px_32px_-28px_rgba(37,99,235,0.7)]">
+                    <FileText className="h-6 w-6" />
+                  </div>
+
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {showSectionNavigation ? (
+                        <span className="rounded-full border border-[#dbeafe] bg-[#eff6ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2563eb]">
+                          {activeTabLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1">
+                      <h1 className="text-[2rem] font-semibold leading-tight tracking-[-0.04em] text-slate-950 sm:text-[2.35rem]">
+                        {resolvedTitle}
+                      </h1>
+                      <p className="text-sm text-slate-500">
+                        Revamped fullscreen production form with section-based navigation.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`w-full max-w-full ${showSectionNavigation ? "xl:max-w-[290px]" : "xl:max-w-[340px]"}`}>
                   <div className={productionMetricCardClassName}>
                     <FormField
                       control={form.control}
                       name="production_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className={productionFieldLabelClassName}>Production ID*</FormLabel>
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <FormLabel className={productionFieldLabelClassName}>Production ID*</FormLabel>
+                            <span className="text-[11px] font-medium text-slate-400">
+                              {productionId?.trim() ? "Live" : "Pending"}
+                            </span>
+                          </div>
                           <FormControl>
                             <div className="relative">
                               <Input
@@ -356,12 +396,12 @@ const ProductionOrderForm = ({
                                 className={productionCompactInputClassName}
                                 disabled={isCreateMode && nextCodeQuery.isLoading}
                               />
-                              
+
                               {isCreateMode ? (
                                 <button
                                   type="button"
                                   title="Regenerate ID"
-                                  className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
+                                  className="absolute inset-y-0 right-2 flex items-center text-slate-400 transition-colors hover:text-slate-700"
                                   onClick={() => {
                                     nextCodeQuery.refetch().then((result) => {
                                       if (result.data) form.setValue("production_id", result.data, { shouldDirty: true });
@@ -378,88 +418,115 @@ const ProductionOrderForm = ({
                       )}
                     />
                   </div>
+                </div>
               </div>
+            </div>
 
-            {enabledTabs.length > 1 ? (
-              <div className="rounded-[24px] border border-slate-200/90 bg-white px-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:px-5 lg:px-6">
-                <ProductionTabs value={activeTab} onValueChange={setActiveTab} tabs={enabledTabs} />
-              </div>
+            {showSectionNavigation ? (
+              <Sheet open={mobileSectionsOpen} onOpenChange={setMobileSectionsOpen}>
+                <SheetContent side="left" className="w-[288px] border-slate-200 bg-white p-0 sm:max-w-[288px]">
+                  <SheetHeader className="border-b border-slate-200 px-5 py-4 text-left">
+                    <SheetTitle className="text-base font-semibold text-slate-950">Production Sections</SheetTitle>
+                  </SheetHeader>
+                  <div className="px-4 py-4">
+                    <ProductionTabs value={activeTab} onValueChange={setActiveTab} tabs={enabledTabs} />
+                  </div>
+                </SheetContent>
+              </Sheet>
             ) : null}
 
-            <div className="flex-1">
-              <TabsContent value="general" className="mt-0 outline-none">
-                <ProductionGeneralTab
-                  form={form}
-                  productionTypeOptions={productionTypeOptions}
-                  facilityOptions={facilityOptions}
-                  workCenterOptions={workCenterOptions}
-                  inchargeOptions={inchargeOptions}
-                  machines={machines}
-                  productionTypesLoading={productionTypesQuery.isLoading}
-                  machinesLoading={machinesLoading}
-                  lookupsLoading={lookupsLoading}
-                  lookupError={lookupError}
-                />
-              </TabsContent>
-              <TabsContent value="materials" className="mt-0 outline-none">
-                <ProductionMaterialsTab form={form} />
-              </TabsContent>
-              <TabsContent value="stages" className="mt-0 outline-none">
-                <ProductionPlaceholderTab
-                  title="Stages"
-                  description="Stage routing, checkpoints, and execution controls are prepared here."
-                />
-              </TabsContent>
-              <TabsContent value="output" forceMount className="mt-0 outline-none">
-                <ProductionOutputTab form={form} context={outputContext} />
-              </TabsContent>
-              <TabsContent value="scrap" className="mt-0 outline-none">
-                <ProductionPlaceholderTab
-                  title="Scrap"
-                  description="Scrap classification, yield loss, and recovery handling will fit into this tab."
-                />
-              </TabsContent>
-              <TabsContent value="cost" className="mt-0 outline-none">
-                <ProductionPlaceholderTab
-                  title="Cost"
-                  description="Cost rollups, overhead allocation, and ERP cost traceability can be layered in next."
-                />
-              </TabsContent>
-              <TabsContent value="resources" className="mt-0 outline-none">
-                <ProductionPlaceholderTab
-                  title="Resources"
-                  description="Resource calendars, labor assignment, and machine loading will be added here."
-                />
-              </TabsContent>
+            <div className={`grid gap-6 ${showSectionNavigation ? "lg:grid-cols-[248px_minmax(0,1fr)]" : ""}`}>
+              {showSectionNavigation ? (
+                <aside className="hidden lg:block">
+                  <div className="sticky top-5 overflow-hidden rounded-[28px] border border-slate-200/85 bg-white/90 shadow-[0_28px_64px_-54px_rgba(15,23,42,0.36)] backdrop-blur">
+                    <div className="border-b border-slate-200/80 px-5 py-4">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">Sections</div>
+                      <p className="mt-2 text-sm text-slate-500">Navigate each area of the production form from here.</p>
+                    </div>
+                    <div className="px-3 py-3">
+                      <ProductionTabs value={activeTab} onValueChange={setActiveTab} tabs={enabledTabs} />
+                    </div>
+                  </div>
+                </aside>
+              ) : null}
+
+              <div className="min-w-0">
+                <TabsContent value="general" className="mt-0 outline-none">
+                  <ProductionGeneralTab
+                    form={form}
+                    productionTypeOptions={productionTypeOptions}
+                    facilityOptions={facilityOptions}
+                    workCenterOptions={workCenterOptions}
+                    inchargeOptions={inchargeOptions}
+                    machines={machines}
+                    productionTypesLoading={productionTypesQuery.isLoading}
+                    machinesLoading={machinesLoading}
+                    lookupsLoading={lookupsLoading}
+                    lookupError={lookupError}
+                  />
+                </TabsContent>
+                <TabsContent value="materials" className="mt-0 outline-none">
+                  <ProductionMaterialsTab form={form} />
+                </TabsContent>
+                <TabsContent value="stages" className="mt-0 outline-none">
+                  <ProductionPlaceholderTab
+                    title="Stages"
+                    description="Stage routing, checkpoints, and execution controls are prepared here."
+                  />
+                </TabsContent>
+                <TabsContent value="output" forceMount className="mt-0 outline-none">
+                  <ProductionOutputTab form={form} context={outputContext} />
+                </TabsContent>
+                <TabsContent value="scrap" className="mt-0 outline-none">
+                  <ProductionPlaceholderTab
+                    title="Scrap"
+                    description="Scrap classification, yield loss, and recovery handling will fit into this tab."
+                  />
+                </TabsContent>
+                <TabsContent value="cost" className="mt-0 outline-none">
+                  <ProductionPlaceholderTab
+                    title="Cost"
+                    description="Cost rollups, overhead allocation, and ERP cost traceability can be layered in next."
+                  />
+                </TabsContent>
+                <TabsContent value="resources" className="mt-0 outline-none">
+                  <ProductionPlaceholderTab
+                    title="Resources"
+                    description="Resource calendars, labor assignment, and machine loading will be added here."
+                  />
+                </TabsContent>
+              </div>
             </div>
 
             {showFooterActions ? (
-              <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200/90 bg-white px-4 py-4 shadow-[0_26px_54px_-48px_rgba(15,23,42,0.32)] sm:px-5 lg:px-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 rounded-2xl border-slate-200 bg-white px-6 text-[15px] font-semibold text-slate-800 hover:bg-slate-50"
-                    onClick={onCancel}
-                    disabled={isSubmitting}
-                  >
-                    Cancel
-                  </Button>
+              <div className="sticky bottom-0 z-20 -mx-1 border-t border-slate-200/85 bg-white/95 px-1 pb-1 pt-4 backdrop-blur">
+                <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200/90 bg-white px-4 py-4 shadow-[0_24px_48px_-42px_rgba(15,23,42,0.4)] sm:px-5 lg:px-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 rounded-2xl border-slate-200 bg-white px-6 text-[15px] font-semibold text-slate-800 hover:bg-slate-50"
+                      onClick={onCancel}
+                      disabled={isSubmitting}
+                    >
+                      Cancel
+                    </Button>
 
-                  <Button
-                    type="submit"
-                    className="h-11 rounded-2xl bg-[linear-gradient(135deg,#ff8f1f_0%,#ff6b00_100%)] px-6 text-[15px] font-semibold text-white shadow-[0_22px_34px_-24px_rgba(255,107,0,0.95)] hover:opacity-95"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {`${resolvedSubmitLabel}...`}
-                      </>
-                    ) : (
-                      resolvedSubmitLabel
-                    )}
-                  </Button>
+                    <Button
+                      type="submit"
+                      className="h-11 rounded-2xl bg-[linear-gradient(135deg,#ff8f1f_0%,#ff6b00_100%)] px-6 text-[15px] font-semibold text-white shadow-[0_22px_34px_-24px_rgba(255,107,0,0.95)] hover:opacity-95"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {`${resolvedSubmitLabel}...`}
+                        </>
+                      ) : (
+                        resolvedSubmitLabel
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : null}
