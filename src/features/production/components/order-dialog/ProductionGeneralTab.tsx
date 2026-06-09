@@ -190,7 +190,6 @@ const ProductionGeneralTab = ({
                     onChange={(value) => field.onChange(value)}
                     error={fieldState.error?.message}
                   />
-                  <p className="mt-2 text-[12px] text-slate-500">Search by item code or item name.</p>
                   <FormMessage />
                 </FormItem>
               )}
@@ -210,7 +209,7 @@ const ProductionGeneralTab = ({
       />
     </div>
 
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+    <div className="grid gap-5 xl:grid-cols-2">
       <ProductionPlanTable form={form} />
       <ProductionBaseOrderSection
         form={form}

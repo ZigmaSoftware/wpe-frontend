@@ -5,6 +5,12 @@ export type AuthUser = {
   first_name?: string;
   last_name?: string;
   is_staff?: boolean;
+  user_type?: number | null;
+  user_type_name?: string | null;
+  department?: number | null;
+  department_name?: string | null;
+  role?: number | null;
+  role_name?: string | null;
   auth_type?: string;
 };
 

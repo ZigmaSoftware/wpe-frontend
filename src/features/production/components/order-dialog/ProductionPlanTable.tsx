@@ -1,12 +1,11 @@
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { useEffect } from "react";
+import { ClipboardList } from "lucide-react";
 import { useFieldArray, type UseFormReturn } from "react-hook-form";
-import { Button } from "@/components/ui/button";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
-  createEmptyPlanRow,
   parseNumericInput,
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
@@ -20,10 +19,12 @@ type ProductionPlanTableProps = {
 };
 
 const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
-  const { fields, append, remove } = useFieldArray({
+  const { fields, replace } = useFieldArray({
     control: form.control,
     name: "plan_rows",
   });
+
+  const visibleFields = fields.slice(0, 1);
 
   const rows = form.watch("plan_rows");
   const totals = rows.reduce(
@@ -35,24 +36,18 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
     { length: 0, quantity: 0, packets: 0 },
   );
 
+  useEffect(() => {
+    if (rows.length > 1) {
+      replace(rows.slice(0, 1));
+    }
+  }, [replace, rows]);
+
   return (
     <ProductionSectionCard
       title="Production Plan"
       description="Define the compact production plan for this order."
       tone="violet"
       icon={ClipboardList}
-      action={
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-9 rounded-2xl border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700"
-          onClick={() => append(createEmptyPlanRow())}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Row
-        </Button>
-      }
     >
       <div className="overflow-hidden rounded-[20px] border border-slate-200/90 bg-white">
         <Table>
@@ -62,11 +57,10 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Length (Mts)</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Qty</TableHead>
               <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Packets</TableHead>
-              <TableHead className="w-20 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {fields.map((field, index) => (
+            {visibleFields.map((field, index) => (
               <TableRow key={field.id} className="align-top hover:bg-slate-50/50">
                 <TableCell className="pt-4 text-sm font-semibold text-slate-700">{index + 1}</TableCell>
                 <TableCell className="min-w-[220px]">
@@ -120,18 +114,6 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
                     )}
                   />
                 </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 rounded-xl text-[#ff6b00] hover:bg-[#fff3eb] hover:text-[#ff6b00]"
-                    onClick={() => remove(index)}
-                    disabled={fields.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
               </TableRow>
             ))}
             <TableRow className="bg-[#fbfdff] hover:bg-[#fbfdff]">
@@ -139,7 +121,6 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
               <TableCell className="text-sm font-semibold text-slate-950">{totals.length.toFixed(3)}</TableCell>
               <TableCell className="text-sm font-semibold text-slate-950">{totals.quantity.toFixed(3)}</TableCell>
               <TableCell className="text-sm font-semibold text-slate-950">{totals.packets.toFixed(0)}</TableCell>
-              <TableCell />
             </TableRow>
           </TableBody>
         </Table>

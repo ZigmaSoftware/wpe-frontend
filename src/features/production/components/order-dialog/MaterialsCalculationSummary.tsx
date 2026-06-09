@@ -2,7 +2,6 @@ import { BarChart3, CheckCircle2, IndianRupee, PackageCheck, ShoppingCart, Truck
 import { formatNumberInputValue } from "./productionOrderForm";
 import {
   productionFieldLabelClassName,
-  productionMetricCardClassName,
 } from "./productionOrderFormStyles";
 
 type MaterialsCalculationSummaryProps = {
@@ -84,12 +83,15 @@ const MaterialsCalculationSummary = ({
   ];
 
   return (
-    <div className="grid gap-3 xl:grid-cols-6">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
       {cards.map((card) => {
         const Icon = card.icon;
 
         return (
-          <div key={card.key} className={`${productionMetricCardClassName} h-full`}>
+          <div
+            key={card.key}
+            className="h-full rounded-[18px] border border-slate-200/90 bg-white px-4 py-3 shadow-[0_16px_32px_-28px_rgba(15,23,42,0.28)]"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className={productionFieldLabelClassName}>{card.label}</div>

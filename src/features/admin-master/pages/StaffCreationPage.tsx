@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -17,6 +17,7 @@ import { useAdminTableSearchParams } from "@/features/admin-master/hooks/useAdmi
 import { staffCreationSchema, type StaffCreationFormValues } from "@/features/admin-master/schemas";
 import type { StaffCreationRecord, StaffCreationWritePayload } from "@/features/admin-master/types";
 import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
+import type { LookupItem } from "@/features/wpe-masters/types";
 import MasterFormDialog from "@/features/common-master/components/MasterFormDialog";
 import MasterTable from "@/features/common-master/components/MasterTable";
 import MasterToolbar from "@/features/common-master/components/MasterToolbar";
@@ -29,8 +30,7 @@ const defaultValues: StaffCreationFormValues = {
   staff_code: "",
   name: "",
   age: 0,
-  department: 0,
-  role: 0,
+  designation: 0,
   mobile: "",
   email: "",
   joining_date: "",
@@ -41,6 +41,24 @@ const defaultValues: StaffCreationFormValues = {
   photo_url: "",
   is_active: true,
   remarks: "",
+};
+
+const getDesignationOptionLabel = (option: LookupItem) => {
+  const designationName = option.designation_name?.trim();
+  const roleName = option.name?.trim();
+  const departmentName = option.department_name?.trim();
+
+  if (designationName) {
+    const suffix = [
+      roleName && roleName !== designationName ? roleName : null,
+      departmentName || null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return suffix ? `${designationName} (${suffix})` : designationName;
+  }
+
+  return [roleName, departmentName].filter(Boolean).join(" · ") || "Unknown designation";
 };
 
 const StaffCreationPage = () => {
@@ -55,7 +73,6 @@ const StaffCreationPage = () => {
     resolver: zodResolver(staffCreationSchema),
     defaultValues,
   });
-  const selectedDepartmentId = form.watch("department");
 
   const query = useQuery({
     queryKey: adminMasterKeys.entity("staff-creation", table.page, table.pageSize, debouncedSearch, table.ordering, ""),
@@ -67,38 +84,10 @@ const StaffCreationPage = () => {
         ordering: table.ordering,
       }),
   });
-  const departmentOptionsQuery = useQuery({
-    queryKey: adminMasterKeys.lookup("staff-departments"),
-    queryFn: () => wpeMastersApi.departments.lookup(),
+  const designationOptionsQuery = useQuery({
+    queryKey: adminMasterKeys.lookup("staff-designations"),
+    queryFn: () => wpeMastersApi.roles.lookup(),
   });
-  const roleOptionsQuery = useQuery({
-    queryKey: adminMasterKeys.lookup("staff-roles", selectedDepartmentId || "all"),
-    queryFn: () =>
-      wpeMastersApi.roles.lookup(
-        selectedDepartmentId
-          ? { department: selectedDepartmentId, department_id: selectedDepartmentId }
-          : undefined,
-      ),
-  });
-
-  useEffect(() => {
-    const currentRole = form.getValues("role");
-
-    if (!selectedDepartmentId) {
-      if (currentRole) {
-        form.setValue("role", 0, { shouldValidate: true });
-      }
-      return;
-    }
-
-    if (!roleOptionsQuery.data) {
-      return;
-    }
-
-    if (currentRole && !roleOptionsQuery.data.some((option) => option.id === currentRole)) {
-      form.setValue("role", 0, { shouldValidate: true });
-    }
-  }, [form, roleOptionsQuery.data, selectedDepartmentId]);
 
   const createMutation = useAdminMutation({
     mutationFn: adminMasterApi.createStaffCreation,
@@ -138,8 +127,7 @@ const StaffCreationPage = () => {
       staff_code: record.staff_code ?? "",
       name: record.name,
       age: record.age ?? 0,
-      department: record.department ?? 0,
-      role: record.role ?? 0,
+      designation: record.role ?? 0,
       mobile: record.mobile ?? "",
       email: record.email ?? "",
       joining_date: record.joining_date ?? "",
@@ -166,7 +154,7 @@ const StaffCreationPage = () => {
           { key: "staff_code", title: "Employee ID", render: (record) => <div className="font-medium">{record.staff_code || "-"}</div> },
           { key: "name", title: "Name", render: (record) => record.name },
           { key: "department_name", title: "Department", render: (record) => record.department_name || "-" },
-          { key: "role_name", title: "Role", render: (record) => record.role_name || record.designation || "-" },
+          { key: "designation", title: "Designation", render: (record) => record.designation || record.role_name || "-" },
           { key: "mobile", title: "Phone No", render: (record) => record.mobile || "-" },
           { key: "email", title: "E-mail ID", render: (record) => record.email || "-" },
           {
@@ -215,8 +203,24 @@ const StaffCreationPage = () => {
           <form
             onSubmit={form.handleSubmit(async (values) => {
               try {
+                const selectedDesignation = (designationOptionsQuery.data ?? []).find((option) => option.id === values.designation);
+
+                if (!selectedDesignation?.department_id) {
+                  form.setError("designation", {
+                    type: "manual",
+                    message: "Selected designation is missing a department mapping.",
+                  });
+                  return;
+                }
+
                 const payload: StaffCreationWritePayload = {
-                  ...values,
+                  staff_code: values.staff_code,
+                  name: values.name,
+                  age: values.age,
+                  department: selectedDesignation.department_id,
+                  role: values.designation,
+                  mobile: values.mobile,
+                  email: values.email,
                   joining_date: values.joining_date || null,
                   gender: values.gender || null,
                   address: values.address || null,
@@ -278,54 +282,23 @@ const StaffCreationPage = () => {
               />
               <FormField
                 control={form.control}
-                name="department"
+                name="designation"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Department*</FormLabel>
+                    <FormLabel>Designation*</FormLabel>
                     <Select value={String(field.value ?? 0)} onValueChange={(value) => field.onChange(Number(value))}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select department" />
+                          <SelectValue placeholder="Select designation" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="0" disabled>
-                          Select department
+                          Select designation
                         </SelectItem>
-                        {(departmentOptionsQuery.data ?? []).map((option) => (
+                        {(designationOptionsQuery.data ?? []).map((option) => (
                           <SelectItem key={option.id} value={String(option.id)}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role*</FormLabel>
-                    <Select
-                      value={String(field.value ?? 0)}
-                      onValueChange={(value) => field.onChange(Number(value))}
-                      disabled={!selectedDepartmentId}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={selectedDepartmentId ? "Select role" : "Select department first"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="0" disabled>
-                          {selectedDepartmentId ? "Select role" : "Select department first"}
-                        </SelectItem>
-                        {(roleOptionsQuery.data ?? []).map((option) => (
-                          <SelectItem key={option.id} value={String(option.id)}>
-                            {option.name}
+                            {getDesignationOptionLabel(option)}
                           </SelectItem>
                         ))}
                       </SelectContent>

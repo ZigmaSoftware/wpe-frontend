@@ -8,7 +8,12 @@ import { PRODUCTION_MASTERS_ROUTE } from "@/features/production-masters/utils/ro
 import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_BL_BLENDING_ROUTE, PRODUCTION_GL_GRANULATION_ROUTE, PRODUCTION_PR_PRODUCTION_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
 import { RECIPE_BOM_MASTERS_ROUTE } from "@/features/recipe-bom-masters/utils/routes";
 import { STORE_REQUEST_ROUTE, STORE_ROUTE, STORE_STOCK_ROUTE, STORE_TRANSACTIONS_ROUTE } from "@/features/store/utils/routes";
-import { INVENTORY_STORE_MASTERS_ROUTE, WPE_PRODUCT_SUBTYPES_ROUTE, WPE_PRODUCT_TYPES_ROUTE } from "@/features/wpe-masters/constants";
+import {
+  INVENTORY_STORE_MASTERS_ROUTE,
+  WPE_ITEM_VARIANTS_ROUTE,
+  WPE_PRODUCT_SUBTYPES_ROUTE,
+  WPE_PRODUCT_TYPES_ROUTE,
+} from "@/features/wpe-masters/constants";
 
 export const DASHBOARD_SCREEN_CODES = ["dashboard-home"] as const;
 
@@ -225,6 +230,7 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   [INVENTORY_STORE_MASTERS_ROUTE]: MASTER_GROUP_SCREEN_CODES.inventoryStore,
   [WPE_PRODUCT_TYPES_ROUTE]: INVENTORY_STORE_MASTER_SCREEN_CODES.productTypes,
   [WPE_PRODUCT_SUBTYPES_ROUTE]: INVENTORY_STORE_MASTER_SCREEN_CODES.productSubtypes,
+  [WPE_ITEM_VARIANTS_ROUTE]: INVENTORY_STORE_MASTER_SCREEN_CODES.itemCreations,
   "/wpe-masters/units": INVENTORY_STORE_MASTER_SCREEN_CODES.units,
   "/wpe-masters/item-creations": INVENTORY_STORE_MASTER_SCREEN_CODES.itemCreations,
   "/wpe-masters/stores": INVENTORY_STORE_MASTER_SCREEN_CODES.stores,

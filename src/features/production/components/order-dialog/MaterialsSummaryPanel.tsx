@@ -37,7 +37,7 @@ const MaterialsSummaryPanel = ({
     tone="amber"
     icon={Package2}
   >
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_220px_260px_280px] xl:items-end">
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_210px_250px_260px] xl:items-end">
       <div className="flex h-full flex-col justify-end space-y-2">
         <div className={productionFieldLabelClassName}>Manufacture Item*</div>
         <div className="relative">
@@ -60,7 +60,12 @@ const MaterialsSummaryPanel = ({
       <div className="flex h-full flex-col justify-end space-y-2">
         <div className={productionFieldLabelClassName}>Production Qty*</div>
         <div className="relative">
-          <div className={cn(productionInputClassName, "flex items-center justify-between pr-4 text-[1.05rem] font-semibold tracking-[-0.03em] text-slate-950")}>
+          <div
+            className={cn(
+              productionInputClassName,
+              "flex items-center justify-between pr-4 text-[1.05rem] font-semibold tracking-[-0.03em] text-slate-950",
+            )}
+          >
             <span>{formatNumberInputValue(productionQty, 3, 3)}</span>
             <span className="text-sm font-medium text-slate-400">{finishedGoods?.unit || "kg"}</span>
           </div>
@@ -81,19 +86,17 @@ const MaterialsSummaryPanel = ({
         {bomMultiplierError ? <FormMessage>{bomMultiplierError}</FormMessage> : null}
       </FormItem>
 
-      <div className="h-full min-h-[172px] rounded-[22px] border border-slate-200/90 bg-[#fbfdff] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.94)]">
+      <div className="rounded-[22px] border border-slate-200/90 bg-[#fbfdff] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.94)]">
         <div className="flex h-full flex-col justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fff3eb] text-[#ff6b00]">
-                <RefreshCw className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-[1rem] font-semibold tracking-[-0.02em] text-slate-950">BOM Calculation</div>
-                <p className="mt-1 text-[12px] leading-5 text-slate-500">
-                  Recalculate BOM and required quantities based on the production quantity.
-                </p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fff3eb] text-[#ff6b00]">
+              <RefreshCw className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-[1rem] font-semibold tracking-[-0.02em] text-slate-950">BOM Calculation</div>
+              <p className="mt-1 text-[12px] leading-5 text-slate-500">
+                Recalculate BOM and required quantities based on the production quantity.
+              </p>
             </div>
           </div>
 

@@ -90,7 +90,7 @@ const ProductCategoryList = ({
             </p>
             <div className="text-lg font-semibold text-slate-950">{panelTitle ?? "Item Categories"}</div>
             <p className="text-sm text-slate-500">
-              {panelDescription ?? "Click an item category to open its dedicated item sub category workspace."}
+              {panelDescription ?? "Click an item category to open a dedicated page with its related item sub categories."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

@@ -4,6 +4,7 @@ import type { ProductionMachine } from "@/lib/types";
 import { buildInchargeOptions } from "./ProductionOrderForm";
 import {
   createProductionOrderDefaultValues,
+  isMaterialRowConfigured,
   mapOrderDetailToFormValues,
   productionOrderFormSchema,
   toProductionOrderPayload,
@@ -52,7 +53,7 @@ describe("productionOrderForm create flow", () => {
         is_manual: true,
         bom_variant: null,
         bom_component: null,
-        item: null,
+        item: 501,
         product_subtype: 99,
         item_code: "RM-001",
         item_name: "Recycle Resin",
@@ -83,6 +84,8 @@ describe("productionOrderForm create flow", () => {
       expect.objectContaining({
         sequence: 1,
         source_type: "PRODUCT_SUBTYPE",
+        item: 501,
+        product_subtype: 99,
         item_code: "RM-001",
         per_unit_quantity: "1.500",
         bom_quantity: "60.000",
@@ -123,6 +126,13 @@ describe("productionOrderForm create flow", () => {
       expect.objectContaining({ id: "3", name: "fallback-user", description: "fallback-user" }),
       expect.objectContaining({ id: "2", name: "Operator", description: "operator1" }),
     ]);
+  });
+
+  it("treats incomplete transient material rows as not configured", () => {
+    expect(isMaterialRowConfigured(undefined)).toBe(false);
+    expect(isMaterialRowConfigured({ item_code: undefined, item_name: "Wood Powder" })).toBe(false);
+    expect(isMaterialRowConfigured({ item_code: "RM-001", item_name: undefined })).toBe(false);
+    expect(isMaterialRowConfigured({ item_code: "RM-001", item_name: "Wood Powder" })).toBe(true);
   });
 
   it("restores saved work center and BOM variant selections from order detail", () => {

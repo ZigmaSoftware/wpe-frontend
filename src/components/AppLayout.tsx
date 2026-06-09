@@ -27,6 +27,14 @@ import {
 
 type MegaSectionKey = "workspace" | "masters" | null;
 
+const normalizeRoutePath = (value: string) => {
+  const normalized = value.replace(/\/+$/, "");
+  return normalized || "/";
+};
+
+const isTargetWithin = (target: EventTarget | null, selectors: string[]) =>
+  target instanceof Element && selectors.some((selector) => Boolean(target.closest(selector)));
+
 const fullscreenMatchers = [
   /^\/app\/production\/neworder\/?$/,
   /^\/app\/production\/[^/]+\/edit\/?$/,
@@ -77,7 +85,7 @@ const AppLayout = () => {
     setOpenMega(null);
     setMobileOpen(false);
     setSearchOpen(false);
-  }, [location.pathname]);
+  }, [location.key]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -102,10 +110,62 @@ const AppLayout = () => {
     }
   };
 
+  const handleRouteOpen = (to: string) => {
+    setOpenMega(null);
+    setMobileOpen(false);
+    setSearchOpen(false);
+
+    const currentPath = normalizeRoutePath(location.pathname);
+    const targetPath = normalizeRoutePath(to);
+
+    if (currentPath === targetPath && !location.search && !location.hash) {
+      navigate(to, {
+        state: {
+          __reopenedAt: Date.now(),
+        },
+      });
+      return;
+    }
+
+    navigate(to);
+  };
+
   const handleSearchNavigate = (to: string) => {
     setSearchQuery("");
-    setSearchOpen(false);
-    navigate(to);
+    handleRouteOpen(to);
+  };
+
+  const handleMegaBlankClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      !openMega ||
+      isTargetWithin(event.target, [
+        ".wpe-mega-link",
+        ".wpe-mega-list-link",
+        ".wpe-mega-col-head",
+      ])
+    ) {
+      return;
+    }
+
+    setOpenMega(null);
+  };
+
+  const handleTopbarBlankClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      !openMega ||
+      isTargetWithin(event.target, [
+        ".wpe-brand",
+        ".wpe-nav-item",
+        ".wpe-search-shell",
+        ".wpe-session-chip",
+        ".wpe-toolbar-iconbtn",
+        ".wpe-avatar",
+      ])
+    ) {
+      return;
+    }
+
+    setOpenMega(null);
   };
 
   const initials = (user?.username ?? "U")
@@ -126,7 +186,7 @@ const AppLayout = () => {
   }
 
   const renderWorkspaceMega = () => (
-    <div className={`wpe-mega ${openMega === "workspace" ? "is-open" : ""}`}>
+    <div className={`wpe-mega ${openMega === "workspace" ? "is-open" : ""}`} onClick={handleMegaBlankClick}>
       <div className="wpe-mega-inner">
         <div className="wpe-mega-main">
           {navigation.workspace.map((group) => (
@@ -143,7 +203,15 @@ const AppLayout = () => {
                   const active = isNavItemActive(location.pathname, item);
 
                   return (
-                    <Link key={item.to} to={item.to} className={`wpe-mega-link ${active ? "is-active" : ""}`}>
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className={`wpe-mega-link ${active ? "is-active" : ""}`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        handleRouteOpen(item.to);
+                      }}
+                    >
                       <span className="wpe-mega-link-icon">
                         <item.icon className="h-4 w-4" />
                       </span>
@@ -163,7 +231,7 @@ const AppLayout = () => {
   );
 
   const renderMastersMega = () => (
-    <div className={`wpe-mega ${openMega === "masters" ? "is-open" : ""}`}>
+    <div className={`wpe-mega ${openMega === "masters" ? "is-open" : ""}`} onClick={handleMegaBlankClick}>
       <div className="wpe-mega-inner">
         <div className="wpe-mega-main wpe-mega-main--masters">
           {navigation.masters.map((group) => (
@@ -184,6 +252,10 @@ const AppLayout = () => {
                       key={item.to}
                       to={item.to}
                       className={`wpe-mega-list-link ${active ? "is-active" : ""}`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        handleRouteOpen(item.to);
+                      }}
                     >
                       <span className="wpe-mega-list-dot" />
                       <span>{item.label}</span>
@@ -209,7 +281,15 @@ const AppLayout = () => {
         </div>
       <div className="wpe-mobile-links">
         {group.items.map((item) => (
-          <Link key={item.to} to={item.to} className="wpe-mobile-link" onClick={() => setMobileOpen(false)}>
+          <Link
+            key={item.to}
+            to={item.to}
+            className="wpe-mobile-link"
+            onClick={(event) => {
+              event.preventDefault();
+              handleRouteOpen(item.to);
+            }}
+          >
             <span className="wpe-mobile-link-copy">
               <span className="wpe-mobile-link-title">{item.label}</span>
               <span className="wpe-mobile-link-description">{item.description}</span>
@@ -224,7 +304,7 @@ const AppLayout = () => {
   return (
     <div className="wpe-app-shell">
       <header className="wpe-topnav">
-        <div className="wpe-topnav-inner">
+        <div className="wpe-topnav-inner" onClick={handleTopbarBlankClick}>
           <button
             type="button"
             className="wpe-toolbar-iconbtn wpe-mobile-trigger"
@@ -234,18 +314,23 @@ const AppLayout = () => {
             {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
 
-          <Link className="wpe-brand" to={homePath}>
-            <img src="/zigma.png" alt="Zigma WPE ERP" className="h-9 w-auto object-contain" />
-          </Link>
+          <div className="wpe-topnav-left">
+            <Link className="wpe-brand" to={homePath}>
+              <img src="/zigma.png" alt="Zigma WPE ERP" className="h-9 w-auto object-contain" />
+            </Link>
 
-          <span className="wpe-nav-sep wpe-desktop-only" />
+            <span className="wpe-nav-sep wpe-desktop-only" />
+          </div>
 
           <nav className="wpe-nav-primary wpe-desktop-only">
             {navigation.dashboard ? (
               <Link
                 className={`wpe-nav-item ${topLevelKey === "dashboard" ? "is-active" : ""}`}
                 to={navigation.dashboard.to}
-                onClick={() => setOpenMega(null)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleRouteOpen(navigation.dashboard!.to);
+                }}
               >
                 <LayoutDashboard className="h-4 w-4" />
                 <span>{DASHBOARD_SECTION_LABEL}</span>
@@ -374,7 +459,14 @@ const AppLayout = () => {
       <div className={`wpe-mobile-sheet ${mobileOpen ? "is-open" : ""}`}>
         <div className="wpe-mobile-sheet-inner">
           {navigation.dashboard ? (
-            <Link className="wpe-mobile-dashboard" to={navigation.dashboard.to} onClick={() => setMobileOpen(false)}>
+            <Link
+              className="wpe-mobile-dashboard"
+              to={navigation.dashboard.to}
+              onClick={(event) => {
+                event.preventDefault();
+                handleRouteOpen(navigation.dashboard!.to);
+              }}
+            >
               <LayoutDashboard className="h-4 w-4" />
               <span>{DASHBOARD_SECTION_LABEL}</span>
             </Link>
@@ -411,7 +503,7 @@ const AppLayout = () => {
             </div>
           ) : null}
 
-          <Outlet />
+          <Outlet key={location.key} />
         </div>
       </main>
     </div>

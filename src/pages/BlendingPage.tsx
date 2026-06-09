@@ -47,6 +47,7 @@ import { getPageCount, getPageSerialNumber, paginateRows } from "@/features/stor
 import { toast } from "@/components/ui/sonner";
 import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
 import type { StoreStockRecord, StoreStockRequest } from "@/lib/types";
+import { useAuth } from "@/providers/AuthProvider";
 
 type BlendingPageModule = "stock" | "requests" | "transactions";
 type RequestStatusFilter = "all" | "pending" | "approved" | "partially_approved" | "cancelled";
@@ -95,9 +96,9 @@ const additiveRequestSchema = z.object({
 
 type AdditiveRequestValues = z.infer<typeof additiveRequestSchema>;
 
-const createAdditiveRequestDefaults = (): AdditiveRequestValues => ({
+const createAdditiveRequestDefaults = (department: string): AdditiveRequestValues => ({
   items: [],
-  department: BLENDING_DEPARTMENT,
+  department,
   request_date: getTodayDateInputValue(),
   require_date: "",
   require_time: "",
@@ -220,6 +221,7 @@ type BlendingPageProps = {
 
 const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [productPickerItem, setProductPickerItem] = useState<StoreStockRecord | null>(null);
@@ -248,10 +250,11 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   const deferredStockSearch = useDeferredValue(stockSearch.trim());
   const deferredRequestSearch = useDeferredValue(requestSearch.trim());
   const deferredTransactionSearch = useDeferredValue(transactionSearch.trim());
+  const requestDepartment = user?.department_name?.trim() || BLENDING_DEPARTMENT;
 
   const form = useForm<AdditiveRequestValues>({
     resolver: zodResolver(additiveRequestSchema),
-    defaultValues: createAdditiveRequestDefaults(),
+    defaultValues: createAdditiveRequestDefaults(requestDepartment),
     mode: "onChange",
   });
   const itemsFieldArray = useFieldArray({
@@ -267,7 +270,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   });
 
   const requestsQuery = useQuery({
-    queryKey: ["blending", "requests", requestFilters, deferredRequestSearch],
+    queryKey: ["blending", "requests", requestDepartment, requestFilters, deferredRequestSearch],
     queryFn: () =>
       blendingApi.listRequests({
         search: deferredRequestSearch,
@@ -275,14 +278,14 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
         dateFrom: requestFilters.fromDate,
         dateTo: requestFilters.toDate,
         requestType: "ADDITIVE",
-        department: BLENDING_DEPARTMENT,
+        department: requestDepartment,
       }),
     enabled: module === "requests",
     placeholderData: (previousData) => previousData,
   });
 
   const transactionsQuery = useQuery({
-    queryKey: ["blending", "transactions", transactionFilters, deferredTransactionSearch],
+    queryKey: ["blending", "transactions", requestDepartment, transactionFilters, deferredTransactionSearch],
     queryFn: () =>
       blendingApi.listRequests({
         search: deferredTransactionSearch,
@@ -290,7 +293,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
         dateFrom: transactionFilters.fromDate,
         dateTo: transactionFilters.toDate,
         requestType: "ADDITIVE",
-        department: BLENDING_DEPARTMENT,
+        department: requestDepartment,
       }),
     enabled: module === "transactions",
     placeholderData: (previousData) => previousData,
@@ -343,6 +346,12 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   const transactionRows = transactionsQuery.data ?? [];
 
   useEffect(() => {
+    if (form.getValues("department") !== requestDepartment) {
+      form.setValue("department", requestDepartment, { shouldValidate: true });
+    }
+  }, [form, requestDepartment]);
+
+  useEffect(() => {
     const totalPages = getPageCount(stockPageSize, stockRows.length);
     if (stockPage > totalPages) {
       setStockPage(totalPages);
@@ -390,7 +399,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
     setDialogOpen(open);
 
     if (!open) {
-      form.reset(createAdditiveRequestDefaults());
+      form.reset(createAdditiveRequestDefaults(requestDepartment));
       setProductPickerItem(null);
       setProductPickerResetKey(0);
       setSelectedAdditiveItems([]);
@@ -400,13 +409,13 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   useEffect(() => {
     if (module !== "requests") {
       setDialogOpen(false);
-      form.reset(createAdditiveRequestDefaults());
+      form.reset(createAdditiveRequestDefaults(requestDepartment));
       setProductPickerItem(null);
       setProductPickerResetKey(0);
       setSelectedAdditiveItems([]);
       setPreviewRequest(null);
     }
-  }, [form, module]);
+  }, [form, module, requestDepartment]);
 
   const handlePickerItemChange = (item: StoreStockRecord | null) => {
     if (!item) {

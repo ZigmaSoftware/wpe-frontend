@@ -466,6 +466,19 @@ export const createMaterialRowFromItem = (
 
 export const createMaterialRowFromSubtype = createMaterialRowFromItem;
 
+type MaterialRowConfigurationCandidate = {
+  item_code?: string | null;
+  item_name?: string | null;
+};
+
+export const isMaterialRowConfigured = (
+  row?: MaterialRowConfigurationCandidate | null,
+): row is MaterialRowConfigurationCandidate & { item_code: string; item_name: string } =>
+  typeof row?.item_code === "string" &&
+  row.item_code.trim().length > 0 &&
+  typeof row.item_name === "string" &&
+  row.item_name.trim().length > 0;
+
 export const getMaterialRowIdentity = (row: Pick<ProductionOrderMaterialRowForm, "source_type" | "item" | "product_subtype" | "item_code">) => {
   if (row.source_type === "PRODUCT_SUBTYPE" && row.product_subtype) {
     return `PRODUCT_SUBTYPE:${row.product_subtype}`;

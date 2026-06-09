@@ -8,7 +8,6 @@ import { toast } from "@/components/ui/sonner";
 import BomVariantSelector from "./BomVariantSelector";
 import MaterialComponentsTable from "./MaterialComponentsTable";
 import MaterialItemSearch from "./MaterialItemSearch";
-import MaterialsCalculationSummary from "./MaterialsCalculationSummary";
 import MaterialsSummaryPanel from "./MaterialsSummaryPanel";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
@@ -16,6 +15,7 @@ import {
   createMaterialRowFromBomComponent,
   createMaterialRowFromSubtype,
   getMaterialRowIdentity,
+  isMaterialRowConfigured,
   type ProductionItemOption,
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
@@ -31,17 +31,17 @@ type ProductionMaterialsTabProps = {
 const selectedBomVariantFromList = (variants: BOMVariant[], selectedBomVariantId: number | null) =>
   variants.find((variant) => variant.id === selectedBomVariantId) ?? null;
 
-const materialRowSignature = (row: ProductionOrderFormValues["materials"]["rows"][number]) =>
+const materialRowSignature = (row?: Partial<ProductionOrderFormValues["materials"]["rows"][number]> | null) =>
   [
-    row.client_id,
-    row.sequence,
-    row.source_type,
-    row.is_bom_derived ? "1" : "0",
-    row.is_manual ? "1" : "0",
-    row.bom_variant ?? "",
-    row.bom_component ?? "",
-    row.item ?? "",
-    row.product_subtype ?? "",
+    row?.client_id ?? "",
+    row?.sequence ?? "",
+    row?.source_type ?? "",
+    row?.is_bom_derived ? "1" : "0",
+    row?.is_manual ? "1" : "0",
+    row?.bom_variant ?? "",
+    row?.bom_component ?? "",
+    row?.item ?? "",
+    row?.product_subtype ?? "",
   ].join("|");
 
 const haveSameMaterialRowShape = (
@@ -79,10 +79,20 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
   }, [finishedGoods?.id, form]);
 
   useEffect(() => {
-    const currentRows = form.getValues("materials.rows");
+    const currentRows = form.getValues("materials.rows") ?? [];
+    const sanitizedRows = currentRows
+      .filter(isMaterialRowConfigured)
+      .map((row, index) => ({ ...row, sequence: index + 1 }));
+
+    if (!haveSameMaterialRowShape(currentRows, sanitizedRows)) {
+      replace(sanitizedRows);
+      return;
+    }
 
     if (!bomVariantId) {
-      const manualRows = currentRows.filter((row) => row.is_manual).map((row, index) => ({ ...row, sequence: index + 1 }));
+      const manualRows = sanitizedRows
+        .filter((row) => row.is_manual)
+        .map((row, index) => ({ ...row, sequence: index + 1 }));
       if (!haveSameMaterialRowShape(currentRows, manualRows)) {
         replace(manualRows);
       }
@@ -96,7 +106,7 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
     const selectedVariantId = bomComponentsQuery.data.id;
     const bomRows = bomComponentsQuery.data.components?.map((component, index) => createMaterialRowFromBomComponent(component, index + 1, selectedVariantId)) ?? [];
     const bomIdentities = new Set(bomRows.map((row) => getMaterialRowIdentity(row)));
-    const preservedManualRows = currentRows
+    const preservedManualRows = sanitizedRows
       .filter((row) => row.is_manual)
       .filter((row) => !bomIdentities.has(getMaterialRowIdentity(row)))
       .map((row, index) => ({
@@ -109,17 +119,24 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
     if (!haveSameMaterialRowShape(currentRows, nextRows)) {
       replace(nextRows);
     }
-  }, [bomComponentsQuery.data, bomVariantId, form, replace]);
+  }, [bomComponentsQuery.data, bomVariantId, form, materialsState.rows, replace]);
 
   const currentBomVariant = useMemo(
     () => selectedBomVariantFromList(bomVariantsQuery.data ?? [], bomVariantId),
     [bomVariantId, bomVariantsQuery.data],
   );
+  const visibleRows = useMemo(
+    () =>
+      calculations.computedRows.flatMap((row, index) =>
+        isMaterialRowConfigured(row) ? [{ fieldIndex: index, row }] : [],
+      ),
+    [calculations.computedRows],
+  );
 
   const handleManualItemAdd = (item: ProductTypeSubtypeLookupItem) => {
-    const materialRows = form.getValues("materials.rows");
+    const materialRows = form.getValues("materials.rows") ?? [];
     const candidateRow = createMaterialRowFromSubtype(item, materialRows.length + 1, bomVariantId);
-    const duplicate = materialRows.some((row) => getMaterialRowIdentity(row) === getMaterialRowIdentity(candidateRow));
+    const duplicate = materialRows.some((row) => isMaterialRowConfigured(row) && getMaterialRowIdentity(row) === getMaterialRowIdentity(candidateRow));
 
     if (duplicate) {
       toast.error("This material item is already present in the table.");
@@ -140,14 +157,14 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
       };
     }
 
-    if (bomVariantId && bomComponentsQuery.isSuccess && (bomComponentsQuery.data?.components?.length ?? 0) === 0 && calculations.computedRows.length === 0) {
+    if (bomVariantId && bomComponentsQuery.isSuccess && (bomComponentsQuery.data?.components?.length ?? 0) === 0 && visibleRows.length === 0) {
       return {
         title: "No material components found",
         description: "No material components found for the selected BOM variant.",
       };
     }
 
-    if (calculations.computedRows.length === 0) {
+    if (visibleRows.length === 0) {
       return {
         title: "No material rows yet",
         description: "Select a BOM variant or add manual material items to start planning.",
@@ -155,11 +172,7 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
     }
 
     return null;
-  }, [bomComponentsQuery.data?.components?.length, bomComponentsQuery.isSuccess, bomVariantId, bomVariantsQuery.data, bomVariantsQuery.isSuccess, calculations.computedRows.length, finishedGoods]);
-
-  const completedRowCount = calculations.computedRows.filter((row) => row.remaining_quantity <= 0 && row.required_quantity > 0).length;
-  const completionPercent =
-    calculations.computedRows.length > 0 ? (completedRowCount / calculations.computedRows.length) * 100 : 0;
+  }, [bomComponentsQuery.data?.components?.length, bomComponentsQuery.isSuccess, bomVariantId, bomVariantsQuery.data, bomVariantsQuery.isSuccess, finishedGoods, visibleRows.length]);
 
   return (
     <div className="space-y-4">
@@ -189,7 +202,9 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
             <MaterialItemSearch
               onSelect={handleManualItemAdd}
-              existingItems={materialsState.rows.map((row) => ({ product_subtype: row.product_subtype, item_code: row.item_code }))}
+              existingItems={materialsState.rows
+                .filter(isMaterialRowConfigured)
+                .map((row) => ({ product_subtype: row.product_subtype, item_code: row.item_code }))}
             />
             <FormField
               control={form.control}
@@ -220,18 +235,7 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
             </div>
           ) : null}
 
-          <MaterialsCalculationSummary
-            requiredQuantity={calculations.totals.requiredQuantity}
-            receivedQuantity={calculations.totals.receivedQuantity}
-            remainingQuantity={calculations.totals.remainingQuantity}
-            requestQuantity={calculations.totals.requestQuantity}
-            amount={calculations.totals.amount}
-            bomDerivedCount={calculations.bomDerivedCount}
-            manualCount={calculations.manualCount}
-            completionPercent={completionPercent}
-          />
-
-          <MaterialComponentsTable form={form} rows={calculations.computedRows} emptyState={emptyState} />
+          <MaterialComponentsTable form={form} rows={visibleRows} emptyState={emptyState} />
         </div>
       </ProductionSectionCard>
     </div>

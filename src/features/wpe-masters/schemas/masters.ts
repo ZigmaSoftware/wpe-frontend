@@ -45,8 +45,10 @@ export const unitMasterSchema = z.object({
 
 export const itemMasterSchema = z.object({
   code: z.string().optional().default(""),
-  item_name: trimmedRequired("Item name"),
+  item_name: trimmedRequired("Variant name"),
+  category: z.coerce.number().min(1, "Item category is required."),
   sub_category: z.coerce.number().min(1, "Item sub category is required."),
+  description: z.string().trim().optional().default(""),
   item_type: z.enum(["RM", "ADDITIVE", "PACKING", "FG"], {
     required_error: "Item type is required.",
   }),

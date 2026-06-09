@@ -87,6 +87,7 @@ export interface ItemMasterRecord {
   sub_category_name: string;
   category: number;
   category_name: string;
+  description: string;
   item_type: "RM" | "ADDITIVE" | "PACKING" | "FG";
   uom: number;
   uom_code: string;
@@ -104,6 +105,7 @@ export interface ItemMasterRecord {
 export interface ItemMasterWritePayload {
   item_name: string;
   sub_category: number;
+  description?: string;
   item_type: "RM" | "ADDITIVE" | "PACKING" | "FG";
   uom: number;
   hsn_code?: string;
@@ -142,6 +144,7 @@ export interface ProductTypeSubtypeRecord {
   name: string;
   code: string;
   description: string;
+  variant_count: number;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -222,6 +225,10 @@ export interface LookupItem {
   uom_code?: string | null;
   decimal_allowed?: boolean;
   decimal_places?: number;
+  designation_id?: number | null;
+  designation_name?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
 }
 
 export type ProductTypeStatusFilterValue = "all" | "active" | "inactive";
