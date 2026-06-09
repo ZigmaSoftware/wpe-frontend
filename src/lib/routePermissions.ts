@@ -6,6 +6,7 @@ import { GRN_PROCESS_ROUTE, GRN_ROUTE, GRN_STATUS_ROUTE } from "@/features/grn/u
 import { INVENTORY_ROUTE, PRODUCTION_INVENTORY_ROUTE, STORE_INVENTORY_ROUTE } from "@/features/items/utils/routes";
 import { PRODUCTION_MASTERS_ROUTE } from "@/features/production-masters/utils/routes";
 import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_BL_BLENDING_ROUTE, PRODUCTION_GL_GRANULATION_ROUTE, PRODUCTION_PR_PRODUCTION_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
+import { REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
 import { RECIPE_BOM_MASTERS_ROUTE } from "@/features/recipe-bom-masters/utils/routes";
 import { STORE_REQUEST_ROUTE, STORE_ROUTE, STORE_STOCK_ROUTE, STORE_TRANSACTIONS_ROUTE } from "@/features/store/utils/routes";
 import {
@@ -33,7 +34,11 @@ export const WORKSPACE_SCREEN_CODES = {
   storeInventory: ["inventory-store-inventory-workspace"] as const,
   productionInventory: ["inventory-production-inventory-workspace"] as const,
   blendingStock: ["blending-stock-workspace"] as const,
-  blendingStoreRequest: ["blending-store-request-workspace"] as const,
+  requestsStoreRequest: [
+    "requests-store-request-workspace",
+    "store-request",
+    "blending-store-request-workspace",
+  ] as const,
   blendingTransactions: ["blending-transactions-workspace"] as const,
   productionAdWeightage: ["production-ad-weightage-workspace"] as const,
   productionBlBlending: ["production-bl-blending-workspace"] as const,
@@ -105,11 +110,8 @@ const uniqueCodes = (...groups: ReadonlyArray<readonly string[]>) =>
 
 export const WORKSPACE_GROUP_SCREEN_CODES = {
   inventory: uniqueCodes(WORKSPACE_SCREEN_CODES.storeInventory, WORKSPACE_SCREEN_CODES.productionInventory),
-  blending: uniqueCodes(
-    WORKSPACE_SCREEN_CODES.blendingStock,
-    WORKSPACE_SCREEN_CODES.blendingStoreRequest,
-    WORKSPACE_SCREEN_CODES.blendingTransactions,
-  ),
+  blending: uniqueCodes(WORKSPACE_SCREEN_CODES.blendingStock, WORKSPACE_SCREEN_CODES.blendingTransactions),
+  requests: uniqueCodes(WORKSPACE_SCREEN_CODES.requestsStoreRequest),
   production: uniqueCodes(
     WORKSPACE_SCREEN_CODES.productionAdWeightage,
     WORKSPACE_SCREEN_CODES.productionBlBlending,
@@ -194,12 +196,13 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   [STORE_INVENTORY_ROUTE]: WORKSPACE_SCREEN_CODES.storeInventory,
   [PRODUCTION_INVENTORY_ROUTE]: WORKSPACE_SCREEN_CODES.productionInventory,
   [BLENDING_STOCK_ROUTE]: WORKSPACE_SCREEN_CODES.blendingStock,
-  [BLENDING_STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.blendingStoreRequest,
+  [BLENDING_STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.requestsStoreRequest,
   [BLENDING_TRANSACTIONS_ROUTE]: WORKSPACE_SCREEN_CODES.blendingTransactions,
   [PRODUCTION_AD_WEIGHTAGE_ROUTE]: WORKSPACE_SCREEN_CODES.productionAdWeightage,
   [PRODUCTION_BL_BLENDING_ROUTE]: WORKSPACE_SCREEN_CODES.productionBlBlending,
   [PRODUCTION_GL_GRANULATION_ROUTE]: WORKSPACE_SCREEN_CODES.productionGlGranulation,
   [PRODUCTION_PR_PRODUCTION_ROUTE]: WORKSPACE_SCREEN_CODES.productionPrProduction,
+  [REQUESTS_STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.requestsStoreRequest,
   [STORE_STOCK_ROUTE]: WORKSPACE_SCREEN_CODES.storeStock,
   [STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.storeRequest,
   [STORE_TRANSACTIONS_ROUTE]: WORKSPACE_SCREEN_CODES.storeTransactions,
@@ -264,10 +267,33 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
 
 export const getRouteScreenCodes = (path: string) => routeScreenCodeMap[path] ?? [];
 
+const screenCodeRoutePathMap = {
+  ...Object.entries(routeScreenCodeMap).reduce<Record<string, string>>((acc, [path, codes]) => {
+    for (const code of codes) {
+      acc[code] = path;
+    }
+    return acc;
+  }, {}),
+  "dashboard-home": "/app/dashboard",
+  "item-creation-master": WPE_ITEM_VARIANTS_ROUTE,
+  "requests-store-request-workspace": REQUESTS_STORE_REQUEST_ROUTE,
+  "store-request": REQUESTS_STORE_REQUEST_ROUTE,
+  "blending-store-request-workspace": REQUESTS_STORE_REQUEST_ROUTE,
+};
+
+export const getRoutePathForScreenCode = (screenCode: string, backendRoutePath?: string | null) => {
+  if (backendRoutePath && backendRoutePath.trim().startsWith("/")) {
+    return backendRoutePath.trim();
+  }
+
+  return screenCodeRoutePathMap[screenCode] ?? "/dashboard";
+};
+
 export const appRouteScreenCodeGroups = {
   dashboard: DASHBOARD_SCREEN_CODES,
   inventoryWorkspace: WORKSPACE_GROUP_SCREEN_CODES.inventory,
   blendingWorkspace: WORKSPACE_GROUP_SCREEN_CODES.blending,
+  requestsWorkspace: WORKSPACE_GROUP_SCREEN_CODES.requests,
   productionWorkspace: WORKSPACE_GROUP_SCREEN_CODES.production,
   storeWorkspace: WORKSPACE_GROUP_SCREEN_CODES.store,
   grnWorkspace: WORKSPACE_GROUP_SCREEN_CODES.grn,
@@ -286,6 +312,7 @@ export const appRoutePaths = {
   blendingRoot: BLENDING_ROUTE,
   inventoryRoot: INVENTORY_ROUTE,
   productionRoot: PRODUCTION_ROUTE,
+  requestsRoot: REQUESTS_ROUTE,
   storeRoot: STORE_ROUTE,
   grnRoot: GRN_ROUTE,
 };

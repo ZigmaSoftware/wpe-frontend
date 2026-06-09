@@ -22,8 +22,8 @@ import type {
   UserScreenPermissionRecord,
   UserScreenRecord,
 } from "@/features/admin-master/types";
-import { resolveAdminRoutePath } from "@/features/admin-master/utils/routes";
 import { getApiErrorMessage } from "@/lib/api-helpers";
+import { getRoutePathForScreenCode } from "@/lib/routePermissions";
 import { cn } from "@/lib/utils";
 
 const ACTIONS: AdminAction[] = ["add", "view", "list", "update", "delete", "print"];
@@ -1132,7 +1132,7 @@ const UserScreenPermissionAssignmentPage = () => {
                                 <div className="min-w-0">
                                   <div className="font-medium text-slate-900">{screen.screen_name}</div>
                                   <div className="truncate text-xs text-slate-500">
-                                    {resolveAdminRoutePath(screen.code ?? "", screen.route_path)}
+                                    {getRoutePathForScreenCode(screen.code ?? "", screen.route_path)}
                                   </div>
                                 </div>
                                 {currentEntry ? (

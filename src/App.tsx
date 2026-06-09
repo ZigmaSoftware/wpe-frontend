@@ -107,6 +107,7 @@ import ProductionEditOrderPage from "@/pages/ProductionEditOrderPage";
 import ProductionNewOrderPage from "@/pages/ProductionNewOrderPage";
 import ProductionPage from "@/pages/ProductionPage";
 import ProductionStagePage from "@/pages/ProductionStagePage";
+import RequestsPage from "@/pages/RequestsPage";
 import StorePage from "@/pages/StorePage";
 import StoreStockItemPage from "@/pages/StoreStockItemPage";
 import {
@@ -118,6 +119,7 @@ import {
   getGrnProcessEditRoute,
   getGrnProcessViewRoute,
 } from "@/features/grn/utils/routes";
+import { REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
 import {
   STORE_REQUEST_ROUTE,
   STORE_ROUTE,
@@ -249,12 +251,17 @@ const App = () => (
                     <Route path={BLENDING_STOCK_ROUTE} element={<BlendingPage module="stock" />} />
                     <Route path={`${BLENDING_STOCK_ROUTE}/:itemId`} element={<BlendingStockItemPage />} />
                   </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.blendingStoreRequest} />}>
-                    <Route path={BLENDING_STORE_REQUEST_ROUTE} element={<BlendingPage module="requests" />} />
-                  </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.blendingTransactions} />}>
                     <Route path={BLENDING_TRANSACTIONS_ROUTE} element={<BlendingPage module="transactions" />} />
                     <Route path={`${BLENDING_TRANSACTIONS_ROUTE}/:requestId`} element={<BlendingTransactionPage />} />
+                  </Route>
+
+                  <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.requestsWorkspace} />}>
+                    <Route path={REQUESTS_ROUTE} element={<WorkspaceGroupRedirect groupKey="requests" fallback={REQUESTS_STORE_REQUEST_ROUTE} />} />
+                  </Route>
+                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.requestsStoreRequest} />}>
+                    <Route path={BLENDING_STORE_REQUEST_ROUTE} element={<Navigate to={REQUESTS_STORE_REQUEST_ROUTE} replace />} />
+                    <Route path={REQUESTS_STORE_REQUEST_ROUTE} element={<RequestsPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.productionAdWeightage} />}>
