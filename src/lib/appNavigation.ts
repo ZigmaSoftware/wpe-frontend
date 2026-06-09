@@ -3,6 +3,7 @@ import {
   Boxes,
   Database,
   Factory,
+  FileText,
   LayoutDashboard,
   Recycle,
   Shield,
@@ -37,6 +38,7 @@ import {
   recipeBomMasterModuleDefinitions,
   RECIPE_BOM_MASTERS_ROUTE,
 } from "@/features/recipe-bom-masters/utils/routes";
+import { REQUESTS_ROUTE, requestsWorkspaceModuleDefinitions } from "@/features/requests/utils/routes";
 import { storeWorkspaceModuleDefinitions, STORE_ROUTE } from "@/features/store/utils/routes";
 import {
   INVENTORY_STORE_MASTERS_ROUTE,
@@ -87,9 +89,9 @@ export type AppSearchLink = {
   icon: LucideIcon;
 };
 
-export const DASHBOARD_SECTION_LABEL = "Dashboard";
-export const WORKSPACE_SECTION_LABEL = "WPE Workspace";
-export const MASTERS_SECTION_LABEL = "Masters";
+export const DASHBOARD_SECTION_LABEL: AppSearchLink["section"] = "Dashboard";
+export const WORKSPACE_SECTION_LABEL: AppSearchLink["section"] = "WPE Workspace";
+export const MASTERS_SECTION_LABEL: AppSearchLink["section"] = "Masters";
 
 const dashboardItem: AppNavItem = {
   to: "/app/dashboard",
@@ -230,6 +232,18 @@ export const buildAppNavigation = (
         },
       ], adminMenu, hasFullAccess),
     },
+    {
+      key: "requests",
+      label: "Requests",
+      icon: FileText,
+      to: REQUESTS_ROUTE,
+      items: filterAccessibleItems(requestsWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
+        to,
+        icon,
+        label,
+        description,
+      })), adminMenu, hasFullAccess),
+    },
   ].filter((group) => group.items.length > 0);
 
   const masters: AppNavGroup[] = [];
@@ -323,8 +337,8 @@ export const buildAppNavigation = (
   };
 };
 
-export const flattenNavigationLinks = (navigation: AppNavigation): AppSearchLink[] => [
-  ...(navigation.dashboard
+export const flattenNavigationLinks = (navigation: AppNavigation): AppSearchLink[] => {
+  const dashboardLinks: AppSearchLink[] = navigation.dashboard
     ? [{
       to: navigation.dashboard.to,
       label: navigation.dashboard.label,
@@ -332,8 +346,9 @@ export const flattenNavigationLinks = (navigation: AppNavigation): AppSearchLink
       section: DASHBOARD_SECTION_LABEL,
       icon: navigation.dashboard.icon,
     }]
-    : []),
-  ...navigation.workspace.flatMap((group) =>
+    : [];
+
+  const workspaceLinks: AppSearchLink[] = navigation.workspace.flatMap((group) =>
     group.items.map((item) => ({
       to: item.to,
       label: item.label,
@@ -342,8 +357,9 @@ export const flattenNavigationLinks = (navigation: AppNavigation): AppSearchLink
       group: group.label,
       icon: item.icon,
     })),
-  ),
-  ...navigation.masters.flatMap((group) =>
+  );
+
+  const masterLinks: AppSearchLink[] = navigation.masters.flatMap((group) =>
     group.items.map((item) => ({
       to: item.to,
       label: item.label,
@@ -352,8 +368,10 @@ export const flattenNavigationLinks = (navigation: AppNavigation): AppSearchLink
       group: group.label,
       icon: item.icon,
     })),
-  ),
-];
+  );
+
+  return [...dashboardLinks, ...workspaceLinks, ...masterLinks];
+};
 
 export const getTopLevelNavKey = (pathname: string, navigation: AppNavigation) => {
   if (navigation.dashboard && isNavItemActive(pathname, navigation.dashboard)) {

@@ -1,4 +1,4 @@
-import { Blend, Box, FileText, Route, type LucideIcon } from "lucide-react";
+import { Blend, Box, Route, type LucideIcon } from "lucide-react";
 
 export const BLENDING_ROUTE = "/app/blending";
 export const BLENDING_STOCK_ROUTE = `${BLENDING_ROUTE}/stock`;
@@ -18,12 +18,6 @@ export const blendingWorkspaceModuleDefinitions: BlendingWorkspaceModuleDefiniti
     icon: Box,
     label: "Blending Stock",
     description: "Monitor current blending stock balances and stock movement.",
-  },
-  {
-    to: BLENDING_STORE_REQUEST_ROUTE,
-    icon: FileText,
-    label: "Store Request",
-    description: "Raise and manage blending store requests for material needs.",
   },
   {
     to: BLENDING_TRANSACTIONS_ROUTE,

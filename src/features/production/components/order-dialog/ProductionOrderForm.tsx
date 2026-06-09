@@ -475,7 +475,7 @@ const ProductionOrderForm = ({
                   />
                 </TabsContent>
                 <TabsContent value="output" forceMount className="mt-0 outline-none">
-                  <ProductionOutputTab form={form} context={outputContext} />
+                  <ProductionOutputTab form={form} context={outputContext} isActive={activeTab === "output"} />
                 </TabsContent>
                 <TabsContent value="scrap" className="mt-0 outline-none">
                   <ProductionPlaceholderTab

@@ -47,7 +47,9 @@ vi.mock("./ProductionMaterialsTab", () => ({
 }));
 
 vi.mock("./ProductionOutputTab", () => ({
-  default: () => <div>Output Section Content</div>,
+  default: ({ isActive }: { isActive?: boolean }) => (
+    <div data-testid="output-section-state">{isActive ? "Output Section Active" : "Output Section Inactive"}</div>
+  ),
 }));
 
 vi.mock("./ProductionPlaceholderTab", () => ({
@@ -105,10 +107,21 @@ describe("ProductionOrderForm UI shell", () => {
       showFooterActions: false,
     });
 
-    await waitFor(() => expect(screen.getByText("Output Section Content")).toBeVisible());
+    await waitFor(() => expect(screen.getByTestId("output-section-state")).toHaveTextContent("Output Section Active"));
 
     expect(screen.queryByText("Sections")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /general/i })).not.toBeInTheDocument();
-    expect(screen.getByText("Output Section Content")).toBeVisible();
+    expect(screen.getByTestId("output-section-state")).toHaveTextContent("Output Section Active");
+  });
+
+  it("keeps the output section inactive until the output tab is selected", async () => {
+    renderForm();
+
+    await waitFor(() => expect(screen.getByText("General Section Content")).toBeVisible());
+    expect(screen.getByTestId("output-section-state")).toHaveTextContent("Output Section Inactive");
+
+    fireEvent.click(screen.getByRole("button", { name: /output/i }));
+
+    await waitFor(() => expect(screen.getByTestId("output-section-state")).toHaveTextContent("Output Section Active"));
   });
 });

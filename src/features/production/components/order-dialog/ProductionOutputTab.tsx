@@ -64,6 +64,7 @@ type ProductionOutputTabProps = {
     batchId?: number | null;
     requireFinalCaptureConfirmation?: boolean;
   };
+  isActive?: boolean;
 };
 
 const parseNumericValue = (value?: string | null) => {
@@ -97,7 +98,7 @@ const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCapture
   );
 };
 
-const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
+const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutputTabProps) => {
   const queryClient = useQueryClient();
   const { id: orderIdParam } = useParams<{ id?: string }>();
   const formMaterials = form.watch("materials.rows");
@@ -436,7 +437,7 @@ const ProductionOutputTab = ({ form, context }: ProductionOutputTabProps) => {
   const { weight, connected, tare } = useWeightStream({
     deviceId: "output-scale-1",
     tolerancePercent: TOLERANCE_PERCENT,
-    enabled: true,
+    enabled: isActive,
   });
 
   const tolerance =

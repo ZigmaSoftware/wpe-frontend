@@ -30,15 +30,49 @@ export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0
   const [weight, setWeight]       = useState<WeightData | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError]         = useState<string | null>(null);
+  const [isDocumentVisible, setIsDocumentVisible] = useState(
+    () => typeof document === "undefined" || document.visibilityState === "visible",
+  );
   const intervalRef               = useRef<ReturnType<typeof setInterval>>();
+  const isPollingEnabled = enabled && isDocumentVisible;
 
   useEffect(() => {
-    if (!enabled) return;
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const syncVisibility = () => {
+      setIsDocumentVisible(document.visibilityState === "visible");
+    };
+
+    syncVisibility();
+    document.addEventListener("visibilitychange", syncVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", syncVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isPollingEnabled) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = undefined;
+      }
+      setConnected(false);
+      return;
+    }
+
+    let cancelled = false;
 
     const poll = async () => {
       try {
         const res = await coreApi.get<ScaleApiResponse>("/api/scale/weight/latest/");
         const d   = res.data;
+
+        if (cancelled) {
+          return;
+        }
 
         const isConnected = d.status !== "disconnected" && d.status !== "error";
         setConnected(isConnected);
@@ -57,6 +91,9 @@ export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0
           }
         }
       } catch (err) {
+        if (cancelled) {
+          return;
+        }
         setConnected(false);
         setError(err instanceof Error ? err.message : "Scale endpoint unreachable");
       }
@@ -66,10 +103,14 @@ export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0
     intervalRef.current = setInterval(poll, 1000);
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      cancelled = true;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = undefined;
+      }
       setConnected(false);
     };
-  }, [deviceId, enabled]);
+  }, [deviceId, isPollingEnabled]);
 
   const checkTolerance = useCallback(
     (expected: number): { withinTolerance: boolean; deviation: number; deviationPercent: number } => {
