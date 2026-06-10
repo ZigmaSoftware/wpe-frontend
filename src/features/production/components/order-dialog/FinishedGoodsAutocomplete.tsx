@@ -92,14 +92,19 @@ const FinishedGoodsAutocomplete = ({
     queryKey: ["production-finished-goods-search", debouncedSearch],
     enabled: open && debouncedSearch.length >= 2,
     queryFn: async () => {
-      const response = await coreApi.get<unknown>("/api/items/items/", {
+      const response = await coreApi.get<unknown>("/api/wpe-masters/item-creations/", {
         params: {
           search: debouncedSearch,
           page_size: 20,
         },
       });
 
-      return normalizeListResponse<ProductionItemOption>(response.data);
+      return normalizeListResponse<Record<string, unknown>>(response.data).map((item) => ({
+        id: item.id as number,
+        item_code: item.item_code as string,
+        item_name: item.item_name as string,
+        unit: (item.uom_code ?? item.unit ?? "") as string,
+      })) as ProductionItemOption[];
     },
   });
 

@@ -14,35 +14,26 @@ import {
   getGrnProcessDetailRoute,
 } from "@/features/grn/utils/routes";
 import { grnApi } from "@/lib/api";
-import { getApiErrorMessage, normalizeGrnResponse } from "@/lib/api-helpers";
-import type { GrnListResponse, GrnRecord } from "@/lib/types";
+import { getApiErrorMessage } from "@/lib/api-helpers";
+import type { GrnRecord } from "@/lib/types";
 
 const GRNEditPage = () => {
   const { id } = useParams<{ id: string }>();
   const recordId = Number(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const hasValidRecordId = Number.isFinite(recordId);
 
-  const activeQuery = useQuery({
-    queryKey: ["grn-active"],
+  const detailQuery = useQuery({
+    queryKey: ["grn-detail", recordId],
+    enabled: hasValidRecordId,
     queryFn: async () => {
-      const response = await grnApi.get<GrnListResponse>("/api/grn/");
-      return normalizeGrnResponse(response.data);
+      const response = await grnApi.get<GrnUpdateResponse>(`/api/grn/${recordId}/`);
+      return response.data;
     },
   });
 
-  const movedQuery = useQuery({
-    queryKey: ["grn-moved"],
-    queryFn: async () => {
-      const response = await grnApi.get<GrnListResponse>("/api/grn/moved/");
-      return normalizeGrnResponse(response.data);
-    },
-  });
-
-  const record: GrnRecord | null =
-    activeQuery.data?.data.find((entry) => entry.id === recordId) ??
-    movedQuery.data?.data.find((entry) => entry.id === recordId) ??
-    null;
+  const record: GrnRecord | null = detailQuery.data?.data ?? null;
 
   const updateMutation = useMutation({
     mutationFn: async (values: GrnFormValues) => {
@@ -59,7 +50,7 @@ const GRNEditPage = () => {
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update GRN details.")),
   });
 
-  if (activeQuery.isLoading || movedQuery.isLoading) {
+  if (detailQuery.isLoading) {
     return (
       <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
         <LoadingState label="Loading GRN record..." />
@@ -67,7 +58,7 @@ const GRNEditPage = () => {
     );
   }
 
-  if (activeQuery.isError || movedQuery.isError || !record) {
+  if (!hasValidRecordId || detailQuery.isError || !record) {
     return (
       <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
         <ErrorState description="Could not load the GRN record for editing." />

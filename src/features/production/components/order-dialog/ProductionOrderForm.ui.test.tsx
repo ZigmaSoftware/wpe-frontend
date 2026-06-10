@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
-import ProductionOrderForm from "./ProductionOrderForm";
+import ProductionOrderForm, { buildWorkCenterOptions } from "./ProductionOrderForm";
 
 const { coreApiGet } = vi.hoisted(() => ({
   coreApiGet: vi.fn(async (url: string) => {
@@ -88,6 +88,22 @@ const renderForm = (props: Partial<ComponentProps<typeof ProductionOrderForm>> =
 };
 
 describe("ProductionOrderForm UI shell", () => {
+  it("falls back to location records when dedicated work center master is empty", () => {
+    const options = buildWorkCenterOptions(
+      [
+        { id: 10, name: "Coimbatore Plant" },
+        { id: 11, name: "New Line Additive Work Center WIP" },
+        { id: 12, name: "Blending Work Center WIP" },
+      ],
+      [],
+    );
+
+    expect(options).toEqual([
+      { id: "11", name: "New Line Additive Work Center WIP" },
+      { id: "12", name: "Blending Work Center WIP" },
+    ]);
+  });
+
   it("shows sidebar navigation in full form mode and does not render the old top tab list", async () => {
     renderForm();
 

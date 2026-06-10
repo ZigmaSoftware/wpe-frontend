@@ -123,6 +123,16 @@ const buildFacilityOptions = (locations: LookupItem[]) => {
   return mapNamedOptions(source);
 };
 
+export const buildWorkCenterOptions = (locations: LookupItem[], workCenters: LookupItem[]) => {
+  const explicitWorkCenters = mapNamedOptions(workCenters);
+  if (explicitWorkCenters.length > 0) {
+    return explicitWorkCenters;
+  }
+
+  const locationWorkCenters = locations.filter((location) => /work center/i.test(location.name));
+  return mapNamedOptions(locationWorkCenters);
+};
+
 
 export const buildInchargeOptions = (users: LookupItem[]): NamedOption[] =>
   users
@@ -254,8 +264,8 @@ const ProductionOrderForm = ({
   );
 
   const workCenterOptions = useMemo(
-    () => mapNamedOptions(workCentresQuery.data ?? []),
-    [workCentresQuery.data],
+    () => buildWorkCenterOptions(locationsQuery.data ?? [], workCentresQuery.data ?? []),
+    [locationsQuery.data, workCentresQuery.data],
   );
 
   const inchargeOptions = useMemo(

@@ -16,6 +16,7 @@ import {
   createMaterialRowFromSubtype,
   getMaterialRowIdentity,
   isMaterialRowConfigured,
+  mergeBomDerivedMaterialRow,
   type ProductionItemOption,
   type ProductionOrderFormValues,
 } from "./productionOrderForm";
@@ -105,7 +106,18 @@ const ProductionMaterialsTab = ({ form, isActive = true }: ProductionMaterialsTa
     }
 
     const selectedVariantId = bomComponentsQuery.data.id;
-    const bomRows = bomComponentsQuery.data.components?.map((component, index) => createMaterialRowFromBomComponent(component, index + 1, selectedVariantId)) ?? [];
+    const existingBomRowsByComponentId = new Map(
+      sanitizedRows
+        .filter((row) => row.is_bom_derived && row.bom_component !== null)
+        .map((row) => [row.bom_component as number, row]),
+    );
+    const bomRows =
+      bomComponentsQuery.data.components?.map((component, index) =>
+        mergeBomDerivedMaterialRow(
+          createMaterialRowFromBomComponent(component, index + 1, selectedVariantId),
+          existingBomRowsByComponentId.get(component.id),
+        ),
+      ) ?? [];
     const bomIdentities = new Set(bomRows.map((row) => getMaterialRowIdentity(row)));
     const preservedManualRows = sanitizedRows
       .filter((row) => row.is_manual)
