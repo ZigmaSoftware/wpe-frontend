@@ -3,9 +3,14 @@ import { coreApi } from "@/lib/api";
 import { normalizeListResponse } from "@/lib/api-helpers";
 import type { BOMVariant } from "@/lib/types";
 
-export const useBomVariants = (productItemId: number | null) =>
+type UseBomVariantsOptions = {
+  enabled?: boolean;
+};
+
+export const useBomVariants = (productItemId: number | null, options: UseBomVariantsOptions = {}) =>
   useQuery({
     queryKey: ["production-material-bom-variants", productItemId],
+    enabled: options.enabled ?? true,
     queryFn: async () => {
       const response = await coreApi.get<unknown>("/api/production/bom-variants/");
       const variants = normalizeListResponse<BOMVariant>(response.data);
@@ -21,4 +26,5 @@ export const useBomVariants = (productItemId: number | null) =>
         return left.variant_code.localeCompare(right.variant_code);
       });
     },
+    staleTime: 5 * 60 * 1000,
   });

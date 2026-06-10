@@ -65,7 +65,7 @@ const StoreTableToolbar = ({
       </div>
     </div>
 
-    {hasFilter ? (
+    {hasFilter && filterOpen ? (
       <div
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-200 ease-out",

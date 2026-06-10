@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Boxes, Coins, FileText, Layers3, Package, RefreshCcw, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PRODUCTION_ORDER_TABS, type ProductionDialogTab } from "./productionOrderForm";
@@ -69,4 +70,4 @@ const ProductionTabs = ({
   </nav>
 );
 
-export default ProductionTabs;
+export default memo(ProductionTabs);

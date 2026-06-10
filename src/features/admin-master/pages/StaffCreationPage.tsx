@@ -44,21 +44,15 @@ const defaultValues: StaffCreationFormValues = {
 };
 
 const getDesignationOptionLabel = (option: LookupItem) => {
-  const designationName = option.designation_name?.trim();
-  const roleName = option.name?.trim();
+  const designationName = option.name?.trim();
   const departmentName = option.department_name?.trim();
 
   if (designationName) {
-    const suffix = [
-      roleName && roleName !== designationName ? roleName : null,
-      departmentName || null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
+    const suffix = [departmentName || null].filter(Boolean).join(" · ");
     return suffix ? `${designationName} (${suffix})` : designationName;
   }
 
-  return [roleName, departmentName].filter(Boolean).join(" · ") || "Unknown designation";
+  return [departmentName].filter(Boolean).join(" · ") || "Unknown desigination";
 };
 
 const StaffCreationPage = () => {
@@ -75,7 +69,7 @@ const StaffCreationPage = () => {
   });
 
   const query = useQuery({
-    queryKey: adminMasterKeys.entity("staff-creation", table.page, table.pageSize, debouncedSearch, table.ordering, ""),
+    queryKey: adminMasterKeys.entity("staff", table.page, table.pageSize, debouncedSearch, table.ordering, ""),
     queryFn: () =>
       adminMasterApi.listStaffCreations({
         page: table.page,
@@ -86,7 +80,7 @@ const StaffCreationPage = () => {
   });
   const designationOptionsQuery = useQuery({
     queryKey: adminMasterKeys.lookup("staff-designations"),
-    queryFn: () => wpeMastersApi.roles.lookup(),
+    queryFn: () => wpeMastersApi.designations.lookup(),
   });
 
   const createMutation = useAdminMutation({
@@ -127,7 +121,7 @@ const StaffCreationPage = () => {
       staff_code: record.staff_code ?? "",
       name: record.name,
       age: record.age ?? 0,
-      designation: record.role ?? 0,
+      designation: record.designation ?? 0,
       mobile: record.mobile ?? "",
       email: record.email ?? "",
       joining_date: record.joining_date ?? "",
@@ -154,7 +148,7 @@ const StaffCreationPage = () => {
           { key: "staff_code", title: "Employee ID", render: (record) => <div className="font-medium">{record.staff_code || "-"}</div> },
           { key: "name", title: "Name", render: (record) => record.name },
           { key: "department_name", title: "Department", render: (record) => record.department_name || "-" },
-          { key: "designation", title: "Designation", render: (record) => record.designation || record.role_name || "-" },
+          { key: "designation_name", title: "Desigination", render: (record) => record.designation_name || "-" },
           { key: "mobile", title: "Phone No", render: (record) => record.mobile || "-" },
           { key: "email", title: "E-mail ID", render: (record) => record.email || "-" },
           {
@@ -208,7 +202,7 @@ const StaffCreationPage = () => {
                 if (!selectedDesignation?.department_id) {
                   form.setError("designation", {
                     type: "manual",
-                    message: "Selected designation is missing a department mapping.",
+                    message: "Selected desigination is missing a department mapping.",
                   });
                   return;
                 }
@@ -217,14 +211,14 @@ const StaffCreationPage = () => {
                   staff_code: values.staff_code,
                   name: values.name,
                   age: values.age,
-                  department: selectedDesignation.department_id,
-                  role: values.designation,
+                  designation: values.designation,
                   mobile: values.mobile,
                   email: values.email,
                   joining_date: values.joining_date || null,
                   gender: values.gender || null,
                   address: values.address || null,
                   emergency_contact_no: values.emergency_contact_no || null,
+                  is_active: values.is_active,
                   remarks: values.remarks || null,
                 };
                 if (editing) {
@@ -285,16 +279,16 @@ const StaffCreationPage = () => {
                 name="designation"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Designation*</FormLabel>
+                    <FormLabel>Desigination*</FormLabel>
                     <Select value={String(field.value ?? 0)} onValueChange={(value) => field.onChange(Number(value))}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select designation" />
+                          <SelectValue placeholder="Select desigination" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="0" disabled>
-                          Select designation
+                          Select desigination
                         </SelectItem>
                         {(designationOptionsQuery.data ?? []).map((option) => (
                           <SelectItem key={option.id} value={String(option.id)}>
