@@ -41,7 +41,7 @@ const fullscreenMatchers = [
   /^\/app\/production\/manage-batch\/[^/]+\/?$/,
   /^\/app\/grn\/new\/?$/,
   /^\/app\/grn\/[^/]+\/edit\/?$/,
-  /^\/app\/grn\/[^/]+\/?$/,
+  /^\/app\/grn\/\d+\/?$/,
 ];
 
 const AppLayout = () => {

@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, FileSpreadsheet, MoveRight, Plus, RefreshCw, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileSpreadsheet, MoreHorizontal, MoveRight, Plus, RefreshCw, XCircle } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1927,32 +1928,18 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                 <TableHead>Status</TableHead>
                 <TableHead>Moved To QCR</TableHead>
                 <TableHead>Moved By</TableHead>
+                <TableHead className="w-16 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedRows.map((record, index) => (
-                <TableRow
-                  key={record.id}
-                  className="cursor-pointer transition-colors hover:bg-muted/50"
-                  onClick={() => setQcrDetailRecord(record)}
-                >
+                <TableRow key={record.id} className="transition-colors hover:bg-muted/50">
                   <TableCell className="text-center font-medium text-muted-foreground">
                     {getPageSerialNumber(pageByTab[tab], pageSizeByTab[tab], records.length, index)}
                   </TableCell>
                   <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
                   <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
-                  <TableCell>
-                    <button
-                      type="button"
-                      className="text-left transition-colors hover:text-primary"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setQcrDetailRecord(record);
-                      }}
-                    >
-                      {readText(getQcrField(record, "product_description"))}
-                    </button>
-                  </TableCell>
+                  <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
                   <TableCell>{readText(getQcrField(record, "quantity"))}</TableCell>
                   <TableCell>
                     <Badge
@@ -1970,6 +1957,37 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                   </TableCell>
                   <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
                   <TableCell>{record.moved_to_qcr_by || "-"}</TableCell>
+                  <TableCell className="text-right">
+                    {record.status === "Active" ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() =>
+                              qcrStatusMutation.mutate({ id: record.id, action: "move_to_grn" })
+                            }
+                            disabled={qcrStatusMutation.isPending}
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4 text-success" />
+                            Approve
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => openQcrRejectDialog(record)}
+                            disabled={qcrStatusMutation.isPending}
+                          >
+                            <XCircle className="mr-2 h-4 w-4 text-destructive" />
+                            Not Approve
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -2071,6 +2089,19 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
 
   return (
     <div className="space-y-6">
+      {module === "status" ? (
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto rounded-none px-0 text-sm font-semibold text-slate-600 hover:bg-transparent hover:text-slate-950"
+            onClick={() => navigate(-1)}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
+      ) : null}
       <PageHeader
         title={GRN_MODULE_META[module].title}
         description={GRN_MODULE_META[module].description}
@@ -2680,39 +2711,10 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>{qcrDetailRecord?.grn_reference_no}</DialogTitle>
-            <DialogDescription>QCR record details, source GRN data, and snapshot.</DialogDescription>
+            <DialogDescription>QCR record status and details.</DialogDescription>
           </DialogHeader>
           {qcrDetailRecord ? (
-            <div className="max-h-[70vh] space-y-4 overflow-y-auto">
-              {qcrDetailRecord.status === "Active" ? (
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={qcrStatusMutation.isPending}
-                    onClick={() => {
-                      qcrStatusMutation.mutate(
-                        { id: qcrDetailRecord.id, action: "move_to_grn" },
-                        { onSuccess: () => setQcrDetailRecord(null) },
-                      );
-                    }}
-                  >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Approve
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setQcrDetailRecord(null);
-                      openQcrRejectDialog(qcrDetailRecord);
-                    }}
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Not Approve
-                  </Button>
-                </div>
-              ) : null}
+            <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="Status" value={qcrDetailRecord.status} />
                 <StatCard label="Unique Id" value={qcrDetailRecord.unique_id} />
@@ -2725,20 +2727,6 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                   <p className="text-sm text-foreground">{qcrDetailRecord.remarks}</p>
                 </div>
               ) : null}
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold text-foreground">Source GRN Data</h3>
-                  <pre className="overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">
-                    {JSON.stringify(qcrDetailRecord.source_grn_data, null, 2)}
-                  </pre>
-                </div>
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold text-foreground">Snapshot</h3>
-                  <pre className="overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">
-                    {JSON.stringify(qcrDetailRecord.snapshot, null, 2)}
-                  </pre>
-                </div>
-              </div>
             </div>
           ) : null}
         </DialogContent>

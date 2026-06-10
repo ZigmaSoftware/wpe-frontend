@@ -160,10 +160,7 @@ const GRNDetailPage = () => {
                         Edit GRN
                       </Button>
                     )}
-                    <Button variant="outline" className="rounded-full" onClick={() => setPayloadOpen(true)}>
-                      <FileJson className="mr-2 h-4 w-4" />
-                      View Payload
-                    </Button>
+
                     {!isViewOnly && isActiveRecord ? (
                       <Button variant="outline" className="rounded-full" onClick={() => setMoveConfirmOpen(true)}>
                         <MoveRight className="mr-2 h-4 w-4" />
