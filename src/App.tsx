@@ -61,6 +61,7 @@ import {
   COMMON_MASTER_SCREEN_CODES,
   DASHBOARD_SCREEN_CODES,
   DEVICE_LABEL_MASTER_SCREEN_CODES,
+  INVENTORY_STORE_ITEM_HIERARCHY_SCREEN_CODES,
   INVENTORY_STORE_MASTER_SCREEN_CODES,
   PRODUCTION_MASTER_SCREEN_CODES,
   RECIPE_BOM_MASTER_SCREEN_CODES,
@@ -470,13 +471,11 @@ const App = () => (
                   <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_MASTER_SCREEN_CODES.units} />}>
                     <Route path="/wpe-masters/units" element={<UnitMasterPage />} />
                   </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_MASTER_SCREEN_CODES.itemCreations} />}>
+                  <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_ITEM_HIERARCHY_SCREEN_CODES} />}>
                     <Route path="/wpe-masters/item-creations" element={<LegacyItemVariantRedirect />} />
                     <Route path={WPE_ITEM_VARIANTS_ROUTE} element={<LegacyItemVariantRedirect />} />
                     <Route path={`${WPE_ITEM_VARIANTS_ROUTE}/:categoryId`} element={<LegacyItemVariantRedirect />} />
                     <Route path={`${WPE_ITEM_VARIANTS_ROUTE}/:categoryId/subtypes/:subtypeId`} element={<LegacyItemVariantRedirect />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={[...INVENTORY_STORE_MASTER_SCREEN_CODES.productTypes, ...INVENTORY_STORE_MASTER_SCREEN_CODES.productSubtypes]} />}>
                     <Route path="/wpe-masters/product-types/subcategories" element={<Navigate to={WPE_PRODUCT_TYPES_ROUTE} replace />} />
                     <Route path={WPE_PRODUCT_SUBTYPES_ROUTE} element={<LegacyProductSubtypeRedirect />} />
                     <Route path={`${WPE_PRODUCT_SUBTYPES_ROUTE}/:categoryId`} element={<LegacyProductSubtypeRedirect />} />

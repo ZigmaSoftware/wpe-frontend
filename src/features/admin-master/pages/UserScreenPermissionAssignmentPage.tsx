@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -891,7 +892,7 @@ const UserScreenPermissionAssignmentPage = () => {
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
           <Card className="rounded-2xl border-slate-200 shadow-sm">
             <CardHeader className="pb-4">
@@ -900,7 +901,7 @@ const UserScreenPermissionAssignmentPage = () => {
                 Select the user type first, then configure one or more module sections before the final save.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <CardContent className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
               <div className="space-y-2">
                 <div className="text-sm font-medium text-slate-700">User Type</div>
                 <Select
@@ -941,7 +942,7 @@ const UserScreenPermissionAssignmentPage = () => {
             </CardContent>
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
             <Card className="rounded-2xl border-slate-200 shadow-sm">
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg">Module Filters</CardTitle>
@@ -1003,7 +1004,7 @@ const UserScreenPermissionAssignmentPage = () => {
                   Applies to the selected rows in the current main screen and user section.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="flex h-full flex-col gap-4">
                 <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
                   <div>
                     <div className="text-sm font-medium text-slate-900">Current Section Status</div>
@@ -1018,7 +1019,7 @@ const UserScreenPermissionAssignmentPage = () => {
                   />
                 </div>
 
-                <div className="text-xs text-slate-500">
+                <div className="text-xs leading-5 text-slate-500">
                   {currentContextKey
                     ? `${selectedMainScreenLabel} / ${selectedSectionLabel} is currently set to ${currentContextStatus ? "Active" : "Inactive"}.`
                     : "No section selected."}
@@ -1037,7 +1038,7 @@ const UserScreenPermissionAssignmentPage = () => {
                   </CardDescription>
                 </div>
 
-                <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                   <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50">
                     {selectedMainScreenLabel}
                   </Badge>
@@ -1092,7 +1093,7 @@ const UserScreenPermissionAssignmentPage = () => {
                   description="Add user screens to this section before assigning permissions."
                 />
               ) : (
-                <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                   <Table className="min-w-[880px]">
                     <TableHeader className="bg-slate-100/80">
                       <TableRow className="hover:bg-slate-100/80">
@@ -1127,9 +1128,9 @@ const UserScreenPermissionAssignmentPage = () => {
 
                         return (
                           <TableRow key={screen.id} className="hover:bg-slate-50/80">
-                            <TableCell className="space-y-1">
+                            <TableCell className="space-y-1 py-4">
                               <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="font-medium text-slate-900">{screen.screen_name}</div>
                                   <div className="truncate text-xs text-slate-500">
                                     {getRoutePathForScreenCode(screen.code ?? "", screen.route_path)}
@@ -1183,8 +1184,8 @@ const UserScreenPermissionAssignmentPage = () => {
           </Card>
         </div>
 
-        <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          <Card className="rounded-2xl border-slate-200 shadow-sm">
+        <div className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+          <Card className="overflow-hidden rounded-2xl border-slate-200 shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600">
@@ -1198,7 +1199,7 @@ const UserScreenPermissionAssignmentPage = () => {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="grid gap-4 xl:max-h-[calc(100vh-11rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3">
                   <div className="text-xs uppercase tracking-wide text-slate-500">User Type</div>
@@ -1224,42 +1225,44 @@ const UserScreenPermissionAssignmentPage = () => {
                   description="Select a main screen and user section, then check actions in the permission matrix."
                 />
               ) : (
-                <div className="space-y-3">
-                  {summaryGroups.map((group) => (
-                    <div key={group.contextKey} className="rounded-xl border border-slate-200 px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="font-medium text-slate-900">{group.mainScreenName}</div>
-                          <div className="text-sm text-slate-500">{group.sectionName}</div>
+                <ScrollArea className="min-h-0 xl:h-full">
+                  <div className="space-y-3 pr-3">
+                    {summaryGroups.map((group) => (
+                      <div key={group.contextKey} className="rounded-xl border border-slate-200 px-4 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <div className="font-medium text-slate-900">{group.mainScreenName}</div>
+                            <div className="text-sm text-slate-500">{group.sectionName}</div>
+                          </div>
+                          <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50">
+                            {group.screenCount} screen{group.screenCount === 1 ? "" : "s"}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50">
-                          {group.screenCount} screen{group.screenCount === 1 ? "" : "s"}
-                        </Badge>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                            {group.actionCount} action{group.actionCount === 1 ? "" : "s"}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                            {group.activeCount} active row{group.activeCount === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-1 text-xs text-slate-500">
+                          {group.screenNames.slice(0, 4).map((screenName) => (
+                            <div key={screenName} className="flex items-center gap-2">
+                              <CheckSquare className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                              <span className="truncate">{screenName}</span>
+                            </div>
+                          ))}
+                          {group.screenNames.length > 4 ? (
+                            <div className="pl-5 text-[11px] text-slate-400">
+                              +{group.screenNames.length - 4} more screen{group.screenNames.length - 4 === 1 ? "" : "s"}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                          {group.actionCount} action{group.actionCount === 1 ? "" : "s"}
-                        </span>
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                          {group.activeCount} active row{group.activeCount === 1 ? "" : "s"}
-                        </span>
-                      </div>
-                      <div className="mt-3 space-y-1 text-xs text-slate-500">
-                        {group.screenNames.slice(0, 4).map((screenName) => (
-                          <div key={screenName} className="flex items-center gap-2">
-                            <CheckSquare className="h-3.5 w-3.5 text-slate-400" />
-                            <span className="truncate">{screenName}</span>
-                          </div>
-                        ))}
-                        {group.screenNames.length > 4 ? (
-                          <div className="pl-5 text-[11px] text-slate-400">
-                            +{group.screenNames.length - 4} more screen{group.screenNames.length - 4 === 1 ? "" : "s"}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               )}
             </CardContent>
           </Card>

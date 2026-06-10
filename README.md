@@ -29,12 +29,12 @@ npm run build
 
 - `src/lib/api.ts`: dual Axios clients, bearer token injection, refresh-on-401, token persistence.
 - `src/providers/AuthProvider.tsx`: app auth bootstrap, login/logout state, forced logout handling.
-- `src/pages/*`: module pages for Login, Dashboard, Contacts, Items, Blending, Presales, GRN, and QCR.
+- `src/pages/*`: module pages for Login, Dashboard, Contacts, Items, Blending, GRN, and QCR.
 - `src/components/*`: shared layout, page headers, stat cards, error/loading states, and confirm dialog.
 
 ## Backend Assumptions Preserved
 
-- Exact duplicated backend paths are used as-is, including `/api/items/items/`, `/api/contacts/contacts/`, `/api/presales/presales/`, `/api/grn/`, and `/api/qcr/`.
+- Exact duplicated backend paths are used as-is, including `/api/items/items/`, `/api/contacts/contacts/`, `/api/grn/`, and `/api/qcr/`.
 - Core and GRN services share the same JWT bearer token.
 - GRN list responses are normalized from `{ status, message, count, data }`.
 - QCR list responses are treated as plain arrays.
