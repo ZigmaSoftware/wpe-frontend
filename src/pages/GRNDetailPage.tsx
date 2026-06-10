@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Boxes, FileJson, FileText, MoveRight, Wallet } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMatch, useNavigate, useParams } from "react-router-dom";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { ErrorState, LoadingState } from "@/components/QueryState";
@@ -29,8 +29,9 @@ import {
   getGrnProcessEditRoute,
 } from "@/features/grn/utils/routes";
 import { grnApi } from "@/lib/api";
-import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeGrnResponse } from "@/lib/api-helpers";
-import type { GrnListResponse, GrnRecord } from "@/lib/types";
+import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
+import type { GrnRecord } from "@/lib/types";
+import type { GrnUpdateResponse } from "@/features/grn/grnShared";
 
 const DetailField = ({
   label,
@@ -55,32 +56,19 @@ const GRNDetailPage = () => {
   const isViewOnly = Boolean(useMatch("/app/grn/process/:id/view"));
   const [payloadOpen, setPayloadOpen] = useState(false);
   const [moveConfirmOpen, setMoveConfirmOpen] = useState(false);
+  const hasValidRecordId = Number.isFinite(recordId);
 
-  const activeQuery = useQuery({
-    queryKey: ["grn-active"],
+  const detailQuery = useQuery({
+    queryKey: ["grn-detail", recordId],
+    enabled: hasValidRecordId,
     queryFn: async () => {
-      const response = await grnApi.get<GrnListResponse>("/api/grn/");
-      return normalizeGrnResponse(response.data);
+      const response = await grnApi.get<GrnUpdateResponse>(`/api/grn/${recordId}/`);
+      return response.data;
     },
   });
 
-  const movedQuery = useQuery({
-    queryKey: ["grn-moved"],
-    queryFn: async () => {
-      const response = await grnApi.get<GrnListResponse>("/api/grn/moved/");
-      return normalizeGrnResponse(response.data);
-    },
-  });
-
-  const detailRecord = useMemo<GrnRecord | null>(
-    () =>
-      activeQuery.data?.data.find((entry) => entry.id === recordId) ??
-      movedQuery.data?.data.find((entry) => entry.id === recordId) ??
-      null,
-    [activeQuery.data?.data, movedQuery.data?.data, recordId],
-  );
-
-  const isActiveRecord = Boolean(activeQuery.data?.data.some((entry) => entry.id === recordId));
+  const detailRecord: GrnRecord | null = detailQuery.data?.data ?? null;
+  const isActiveRecord = detailRecord?.process_status === "GRN Process";
 
   const moveMutation = useMutation({
     mutationFn: async () => {
@@ -97,7 +85,7 @@ const GRNDetailPage = () => {
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move GRN to QCR.")),
   });
 
-  if (activeQuery.isLoading || movedQuery.isLoading) {
+  if (detailQuery.isLoading) {
     return (
       <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
         <LoadingState label="Loading GRN details..." />
@@ -105,7 +93,7 @@ const GRNDetailPage = () => {
     );
   }
 
-  if (activeQuery.isError || movedQuery.isError || !detailRecord) {
+  if (!hasValidRecordId || detailQuery.isError || !detailRecord) {
     return (
       <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
         <ErrorState description="Could not load the selected GRN record." />
@@ -152,7 +140,7 @@ const GRNDetailPage = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {!isViewOnly && (
+                    {!isViewOnly && isActiveRecord && (
                       <Button
                         className="rounded-full bg-[linear-gradient(135deg,#2d6cdf_0%,#1953bc_100%)] text-white hover:opacity-95"
                         onClick={() => navigate(getGrnProcessEditRoute(detailRecord.id))}

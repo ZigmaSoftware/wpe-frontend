@@ -58,7 +58,7 @@ const MaterialVariantSelect = ({ index, row, form }: MaterialVariantSelectProps)
             shouldTouch: true,
             shouldValidate: true,
           });
-          form.setValue(`materials.rows.${index}.unit`, selectedVariant?.uom_code?.trim() || "g", {
+          form.setValue(`materials.rows.${index}.unit`, selectedVariant?.uom_code?.trim() || row.unit || "g", {
             shouldDirty: true,
             shouldTouch: true,
             shouldValidate: true,

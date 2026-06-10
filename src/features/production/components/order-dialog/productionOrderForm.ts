@@ -470,6 +470,29 @@ export const createMaterialRowFromItem = (
 
 export const createMaterialRowFromSubtype = createMaterialRowFromItem;
 
+export const mergeBomDerivedMaterialRow = (
+  baseRow: ProductionOrderMaterialRowForm,
+  existingRow?: ProductionOrderMaterialRowForm | null,
+): ProductionOrderMaterialRowForm => {
+  if (!existingRow || existingRow.bom_component !== baseRow.bom_component) {
+    return baseRow;
+  }
+
+  const shouldPreserveSelectedVariant =
+    baseRow.source_type === "PRODUCT_SUBTYPE" &&
+    existingRow.item !== null;
+
+  return {
+    ...baseRow,
+    item: shouldPreserveSelectedVariant ? existingRow.item : baseRow.item,
+    unit: shouldPreserveSelectedVariant ? existingRow.unit || baseRow.unit : baseRow.unit,
+    received_quantity: existingRow.received_quantity,
+    request_quantity: existingRow.request_quantity,
+    rate: existingRow.rate,
+    notes: existingRow.notes,
+  };
+};
+
 type MaterialRowConfigurationCandidate = {
   item_code?: string | null;
   item_name?: string | null;

@@ -6,6 +6,7 @@ import {
   createProductionOrderDefaultValues,
   isMaterialRowConfigured,
   mapOrderDetailToFormValues,
+  mergeBomDerivedMaterialRow,
   productionOrderFormSchema,
   toProductionOrderPayload,
 } from "./productionOrderForm";
@@ -182,5 +183,55 @@ describe("productionOrderForm create flow", () => {
     expect(values.materials.selected_bom_variant_id).toBe("77");
     expect(values.materials.bom_multiplier).toBe("3");
     expect(values.materials.rows).toHaveLength(1);
+  });
+
+  it("preserves a selected item variant when subtype-based BOM rows are rebuilt", () => {
+    const mergedRow = mergeBomDerivedMaterialRow(
+      {
+        client_id: "bom-77-101",
+        sequence: 1,
+        source_type: "PRODUCT_SUBTYPE",
+        is_bom_derived: true,
+        is_manual: false,
+        bom_variant: 77,
+        bom_component: 101,
+        item: null,
+        product_subtype: 99,
+        item_code: "blending-wood-powder",
+        item_name: "Wood Powder",
+        unit: "kg",
+        per_unit_quantity: "10.000",
+        received_quantity: "0",
+        request_quantity: "0",
+        rate: "0",
+        notes: "",
+      },
+      {
+        client_id: "bom-77-101",
+        sequence: 1,
+        source_type: "PRODUCT_SUBTYPE",
+        is_bom_derived: true,
+        is_manual: false,
+        bom_variant: 77,
+        bom_component: 101,
+        item: 501,
+        product_subtype: 99,
+        item_code: "blending-wood-powder",
+        item_name: "Wood Powder",
+        unit: "g",
+        per_unit_quantity: "10.000",
+        received_quantity: "2.500",
+        request_quantity: "1.250",
+        rate: "3.000",
+        notes: "Keep selected variant",
+      },
+    );
+
+    expect(mergedRow.item).toBe(501);
+    expect(mergedRow.unit).toBe("g");
+    expect(mergedRow.received_quantity).toBe("2.500");
+    expect(mergedRow.request_quantity).toBe("1.250");
+    expect(mergedRow.rate).toBe("3.000");
+    expect(mergedRow.notes).toBe("Keep selected variant");
   });
 });
