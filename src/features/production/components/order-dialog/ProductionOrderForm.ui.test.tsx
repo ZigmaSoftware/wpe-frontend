@@ -38,22 +38,32 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-vi.mock("./ProductionGeneralTab", () => ({
+vi.mock("./GeneralTab", () => ({
   default: () => <div>General Section Content</div>,
 }));
 
-vi.mock("./ProductionMaterialsTab", () => ({
+vi.mock("./MaterialsTab", () => ({
   default: () => <div>Materials Section Content</div>,
 }));
 
-vi.mock("./ProductionOutputTab", () => ({
-  default: ({ isActive }: { isActive?: boolean }) => (
-    <div data-testid="output-section-state">{isActive ? "Output Section Active" : "Output Section Inactive"}</div>
-  ),
+vi.mock("./OutputTab", () => ({
+  default: () => <div data-testid="output-section-state">Output Section Active</div>,
 }));
 
-vi.mock("./ProductionPlaceholderTab", () => ({
-  default: ({ title }: { title: string }) => <div>{title} Placeholder Content</div>,
+vi.mock("./StagesTab", () => ({
+  default: () => <div>Stages Placeholder Content</div>,
+}));
+
+vi.mock("./ScrapTab", () => ({
+  default: () => <div>Scrap Placeholder Content</div>,
+}));
+
+vi.mock("./CostTab", () => ({
+  default: () => <div>Cost Placeholder Content</div>,
+}));
+
+vi.mock("./ResourcesTab", () => ({
+  default: () => <div>Resources Placeholder Content</div>,
 }));
 
 const renderForm = (props: Partial<ComponentProps<typeof ProductionOrderForm>> = {}) => {
@@ -93,6 +103,7 @@ describe("ProductionOrderForm UI shell", () => {
     renderForm();
 
     await waitFor(() => expect(screen.getByText("General Section Content")).toBeVisible());
+    expect(screen.queryByText("Materials Section Content")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /materials/i }));
 
@@ -114,11 +125,11 @@ describe("ProductionOrderForm UI shell", () => {
     expect(screen.getByTestId("output-section-state")).toHaveTextContent("Output Section Active");
   });
 
-  it("keeps the output section inactive until the output tab is selected", async () => {
+  it("does not mount the output section until the output tab is selected", async () => {
     renderForm();
 
     await waitFor(() => expect(screen.getByText("General Section Content")).toBeVisible());
-    expect(screen.getByTestId("output-section-state")).toHaveTextContent("Output Section Inactive");
+    expect(screen.queryByTestId("output-section-state")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /output/i }));
 

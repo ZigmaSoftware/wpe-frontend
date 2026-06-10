@@ -316,57 +316,6 @@ export type QcrRecord = {
   updated_at: string;
 };
 
-// ── Presales ────────────────────────────────────────────────────────────────
-
-export type PresalesRequestItem = {
-  id: number;
-  item: number;
-  item_code: string;
-  item_name: string;
-  category: string;
-  quantity: string;
-  unit: string;
-  unit_display: string;
-  remarks: string;
-  created_at: string;
-};
-
-export type PresalesRequest = {
-  id: number;
-  request_no: string;
-  request_date: string;
-  category: "STORE" | "PURCHASE";
-  request_person: string;
-  department: string;
-  required_reason: string;
-  customer_type: string;
-  customer_name: string;
-  remarks: string;
-  status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "SENT_TO_PRODUCTION";
-  items: PresalesRequestItem[];
-  submitted_by: number | null;
-  submitted_by_username: string | null;
-  submitted_at: string | null;
-  approved_by: number | null;
-  approved_by_username: string | null;
-  approved_at: string | null;
-  approval_remarks: string;
-  sent_to_prod_at: string | null;
-  created_by: number | null;
-  created_by_username: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type PresalesAuditLog = {
-  id: number;
-  action: string;
-  performed_by: number | null;
-  performed_by_username: string | null;
-  notes: string;
-  created_at: string;
-};
-
 // ── Production ───────────────────────────────────────────────────────────────
 
 export type ProductionMachine = {

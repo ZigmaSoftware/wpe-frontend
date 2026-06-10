@@ -23,6 +23,7 @@ export const ADMIN_SCREEN_CODES = {
   screenSections: ["screen-section-master"] as const,
   userScreens: ["user-screen-master"] as const,
   departments: ["department-master"] as const,
+  designations: ["designation-master"] as const,
   staffCreation: ["staff-creation-master"] as const,
   roles: ["role-master"] as const,
   userTypeMapping: ["user-type-master"] as const,
@@ -77,6 +78,12 @@ export const INVENTORY_STORE_MASTER_SCREEN_CODES = {
   saleTypes: ["sale-type-master"] as const,
   purchaseTypes: ["purchase-type-master"] as const,
 };
+
+export const INVENTORY_STORE_ITEM_HIERARCHY_SCREEN_CODES = [
+  ...INVENTORY_STORE_MASTER_SCREEN_CODES.productTypes,
+  ...INVENTORY_STORE_MASTER_SCREEN_CODES.productSubtypes,
+  ...INVENTORY_STORE_MASTER_SCREEN_CODES.itemCreations,
+] as const;
 
 export const PRODUCTION_MASTER_SCREEN_CODES = {
   profileCreations: ["profile-creation-master"] as const,
@@ -134,6 +141,7 @@ export const MASTER_GROUP_SCREEN_CODES = {
     ADMIN_SCREEN_CODES.screenSections,
     ADMIN_SCREEN_CODES.userScreens,
     ADMIN_SCREEN_CODES.departments,
+    ADMIN_SCREEN_CODES.designations,
     ADMIN_SCREEN_CODES.staffCreation,
     ADMIN_SCREEN_CODES.roles,
     ADMIN_SCREEN_CODES.userTypeMapping,
@@ -215,6 +223,7 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   "/admin/screen-sections": ADMIN_SCREEN_CODES.screenSections,
   "/admin/user-screens": ADMIN_SCREEN_CODES.userScreens,
   "/wpe-masters/departments": ADMIN_SCREEN_CODES.departments,
+  "/wpe-masters/designations": ADMIN_SCREEN_CODES.designations,
   "/admin/staff-creation": ADMIN_SCREEN_CODES.staffCreation,
   "/wpe-masters/roles": ADMIN_SCREEN_CODES.roles,
   "/admin/user-types": ADMIN_SCREEN_CODES.userTypeMapping,
@@ -231,7 +240,7 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   "/masters/suppliers": COMMON_MASTER_SCREEN_CODES.suppliers,
   "/masters/companies": COMMON_MASTER_SCREEN_CODES.companies,
   [INVENTORY_STORE_MASTERS_ROUTE]: MASTER_GROUP_SCREEN_CODES.inventoryStore,
-  [WPE_PRODUCT_TYPES_ROUTE]: INVENTORY_STORE_MASTER_SCREEN_CODES.productTypes,
+  [WPE_PRODUCT_TYPES_ROUTE]: INVENTORY_STORE_ITEM_HIERARCHY_SCREEN_CODES,
   [WPE_PRODUCT_SUBTYPES_ROUTE]: INVENTORY_STORE_MASTER_SCREEN_CODES.productSubtypes,
   [WPE_ITEM_VARIANTS_ROUTE]: INVENTORY_STORE_MASTER_SCREEN_CODES.itemCreations,
   "/wpe-masters/units": INVENTORY_STORE_MASTER_SCREEN_CODES.units,
@@ -275,7 +284,7 @@ const screenCodeRoutePathMap = {
     return acc;
   }, {}),
   "dashboard-home": "/app/dashboard",
-  "item-creation-master": WPE_ITEM_VARIANTS_ROUTE,
+  "item-creation-master": WPE_PRODUCT_TYPES_ROUTE,
   "requests-store-request-workspace": REQUESTS_STORE_REQUEST_ROUTE,
   "store-request": REQUESTS_STORE_REQUEST_ROUTE,
   "blending-store-request-workspace": REQUESTS_STORE_REQUEST_ROUTE,

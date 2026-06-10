@@ -26,6 +26,7 @@ import { productionHelperTextClassName } from "./productionOrderFormStyles";
 
 type ProductionMaterialsTabProps = {
   form: UseFormReturn<ProductionOrderFormValues>;
+  isActive?: boolean;
 };
 
 const selectedBomVariantFromList = (variants: BOMVariant[], selectedBomVariantId: number | null) =>
@@ -51,7 +52,7 @@ const haveSameMaterialRowShape = (
   left.length === right.length &&
   left.every((row, index) => materialRowSignature(row) === materialRowSignature(right[index]));
 
-const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
+const ProductionMaterialsTab = ({ form, isActive = true }: ProductionMaterialsTabProps) => {
   const finishedGoods = useWatch({ control: form.control, name: "finished_goods" }) as ProductionItemOption | null;
   const planRows = useWatch({ control: form.control, name: "plan_rows" });
   const materialsState = useWatch({ control: form.control, name: "materials" });
@@ -62,8 +63,8 @@ const ProductionMaterialsTab = ({ form }: ProductionMaterialsTabProps) => {
 
   const previousFinishedGoodsId = useRef<number | null>(finishedGoods?.id ?? null);
   const bomVariantId = materialsState.selected_bom_variant_id ? Number(materialsState.selected_bom_variant_id) : null;
-  const bomVariantsQuery = useBomVariants(finishedGoods?.id ?? null);
-  const bomComponentsQuery = useBomComponents(bomVariantId);
+  const bomVariantsQuery = useBomVariants(finishedGoods?.id ?? null, { enabled: isActive });
+  const bomComponentsQuery = useBomComponents(bomVariantId, { enabled: isActive });
   const calculations = useMaterialCalculations({
     planRows,
     bomMultiplier: materialsState.bom_multiplier,

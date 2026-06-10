@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { ClipboardList } from "lucide-react";
-import { useFieldArray, type UseFormReturn } from "react-hook-form";
+import { useFieldArray, useWatch, type UseFormReturn } from "react-hook-form";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,7 +26,7 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
 
   const visibleFields = fields.slice(0, 1);
 
-  const rows = form.watch("plan_rows");
+  const rows = useWatch({ control: form.control, name: "plan_rows" }) ?? [];
   const totals = rows.reduce(
     (accumulator, row) => ({
       length: accumulator.length + parseNumericInput(row.length_mts),

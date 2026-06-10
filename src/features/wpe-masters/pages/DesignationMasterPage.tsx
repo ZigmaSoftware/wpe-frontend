@@ -30,8 +30,8 @@ const DesignationMasterPage = () => {
 
   return (
     <CodeMasterPage
-      title="Designation"
-      description="Manage designation records mapped to departments."
+      title="Desigination"
+      description="Manage desigination records mapped to departments for staff setup."
       queryKey="designations"
       api={wpeMastersApi.designations}
       schema={designationMasterSchema}
@@ -49,12 +49,12 @@ const DesignationMasterPage = () => {
         department: values.department,
         is_active: values.is_active,
       })}
-      codeLabel="Designation Code*"
-      nameLabel="Designation Name*"
-      namePlaceholder="Enter designation name"
+      codeLabel="Desigination Code*"
+      nameLabel="Desigination Name*"
+      namePlaceholder="Enter desigination name"
       descriptionLabel="Details"
-      createLabel="Add Designation"
-      createButtonLabel="Create Designation"
+      createLabel="Add Desigination"
+      createButtonLabel="Create Desigination"
       renderNameSecondary={(record) => record.department_name}
       extraColumns={[
         {

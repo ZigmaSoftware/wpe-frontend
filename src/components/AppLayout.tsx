@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   ChevronDown,
@@ -176,11 +176,14 @@ const AppLayout = () => {
 
   const sessionTitle = user?.username ?? "Authenticated user";
   const sessionSubtitle = user?.email || `${adminMenu.length} permission group${adminMenu.length === 1 ? "" : "s"}`;
+  const routeLoadingFallback = <div className="p-6 text-sm text-muted-foreground">Loading page...</div>;
 
   if (isFullscreenFormLayout) {
     return (
       <div className="min-h-screen bg-background p-4 lg:p-6">
-        <Outlet />
+        <Suspense fallback={routeLoadingFallback}>
+          <Outlet />
+        </Suspense>
       </div>
     );
   }
@@ -501,7 +504,9 @@ const AppLayout = () => {
             </div>
           ) : null}
 
-          <Outlet key={location.key} />
+          <Suspense fallback={routeLoadingFallback}>
+            <Outlet key={location.key} />
+          </Suspense>
         </div>
       </main>
     </div>

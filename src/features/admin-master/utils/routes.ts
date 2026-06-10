@@ -1,6 +1,7 @@
 import {
   BriefcaseBusiness,
   Building2,
+  IdCard,
   Layers,
   Layout,
   Monitor,
@@ -51,6 +52,13 @@ export const adminModuleDefinitions: AdminModuleDefinition[] = [
     icon: Building2,
     label: "Department",
     description: "Manage department structure, heads, and administrative ownership.",
+  },
+  {
+    codes: ["designation-master"],
+    to: "/wpe-masters/designations",
+    icon: IdCard,
+    label: "Desigination",
+    description: "Manage desigination records and the department mapping used in staff setup.",
   },
   {
     codes: ["staff-creation-master"],

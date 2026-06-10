@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import { CheckCircle2, ChevronDown, ChevronRight, PackageCheck, QrCode, Scale } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
@@ -101,12 +101,12 @@ const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCapture
 const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutputTabProps) => {
   const queryClient = useQueryClient();
   const { id: orderIdParam } = useParams<{ id?: string }>();
-  const formMaterials = form.watch("materials.rows");
-  const selectedBomVariantId = form.watch("materials.selected_bom_variant_id");
-  const productionId = form.watch("production_id");
-  const productionFor = form.watch("production_for");
-  const finishedGoods = form.watch("finished_goods");
-  const batchAuto = form.watch("details.batch_auto");
+  const formMaterials = useWatch({ control: form.control, name: "materials.rows" }) ?? [];
+  const selectedBomVariantId = useWatch({ control: form.control, name: "materials.selected_bom_variant_id" }) ?? "";
+  const productionId = useWatch({ control: form.control, name: "production_id" }) ?? "";
+  const productionFor = useWatch({ control: form.control, name: "production_for" }) ?? "";
+  const finishedGoods = useWatch({ control: form.control, name: "finished_goods" });
+  const batchAuto = useWatch({ control: form.control, name: "details.batch_auto" }) ?? "";
   const outputStage = context?.stage ?? "AD";
   const isAdMode = outputStage === "AD";
   const isBlMode = outputStage === "BL";
@@ -125,7 +125,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     return typeof firstAssignedVariant === "number" ? firstAssignedVariant : null;
   }, [formMaterials, selectedBomVariantId]);
 
-  const bomVariantQuery = useBomComponents(bomVariantId);
+  const queriesEnabled = isActive;
+  const bomVariantQuery = useBomComponents(bomVariantId, { enabled: queriesEnabled });
   const binlotValue =
     batchAuto.trim() && batchAuto.trim().toLowerCase() !== "generated on save"
       ? batchAuto.trim()
@@ -147,7 +148,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
 
   const stageBatchesQuery = useQuery({
     queryKey: ["production-output-batches", persistedOrderId, outputStage],
-    enabled: persistedOrderId !== null,
+    enabled: queriesEnabled && persistedOrderId !== null,
     queryFn: async () => {
       const response = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
         params: { stage: outputStage },
@@ -182,6 +183,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       isSingleCaptureMode ? outputCaptureSourceBatchId ?? "all" : "stage-batches",
     ],
     enabled:
+      queriesEnabled &&
       persistedOrderId !== null &&
       (isSingleCaptureMode ? outputCaptureSourceBatchId !== null : true),
     queryFn: async () => {
