@@ -41,7 +41,7 @@ const fullscreenMatchers = [
   /^\/app\/production\/manage-batch\/[^/]+\/?$/,
   /^\/app\/grn\/new\/?$/,
   /^\/app\/grn\/[^/]+\/edit\/?$/,
-  /^\/app\/grn\/[^/]+\/?$/,
+  /^\/app\/grn\/\d+\/?$/,
 ];
 
 const AppLayout = () => {
@@ -220,7 +220,6 @@ const AppLayout = () => {
                       </span>
                       <span className="wpe-mega-link-copy">
                         <span className="wpe-mega-link-title">{item.label}</span>
-                        <span className="wpe-mega-link-description">{item.description}</span>
                       </span>
                     </Link>
                   );
@@ -295,7 +294,6 @@ const AppLayout = () => {
           >
             <span className="wpe-mobile-link-copy">
               <span className="wpe-mobile-link-title">{item.label}</span>
-              <span className="wpe-mobile-link-description">{item.description}</span>
             </span>
             <ArrowRight className="h-4 w-4" />
           </Link>
