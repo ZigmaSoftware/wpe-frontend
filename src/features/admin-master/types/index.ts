@@ -212,6 +212,7 @@ export type UserCreationRecord = {
   company_name?: string | null;
   account_status: "active" | "inactive" | "locked";
   is_active: boolean;
+  password?: string | null;
   last_login?: string | null;
   password_changed_at?: string | null;
   failed_login_attempts?: number;
