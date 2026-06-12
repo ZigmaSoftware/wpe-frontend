@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
+import { Eye } from "lucide-react";
 import { useDeferredValue, useEffect, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
 import { storeApi } from "@/features/store/api/storeApi";
@@ -44,6 +47,21 @@ type TransactionFilterState = {
   department: string;
 };
 
+type RequestReviewLine = {
+  itemId: number;
+  itemName: string;
+  itemCode: string;
+  requestedQty: string;
+  providedQty: string;
+  unit: string;
+  reason: string;
+};
+
+type RequestReviewError = {
+  providedQty?: string;
+  reason?: string;
+};
+
 const createDefaultDateRange = () => {
   return {
     fromDate: "",
@@ -77,6 +95,27 @@ const readText = (value: unknown) => {
   }
 
   return String(value);
+};
+
+const isNonNegativeDecimalDraft = (value: string) => /^\d*(?:\.\d*)?$/.test(value);
+
+const shouldBlockQuantityKey = (key: string) => key === "-" || key === "+";
+
+const getProvideQtyError = (value: string, requestedQty: string) => {
+  if (!value.trim()) return "Provide Qty is required.";
+  if (value.includes("-")) return "Provide Qty cannot be negative.";
+  if (!isNonNegativeDecimalDraft(value)) return "Provide Qty must be numeric.";
+
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) return "Provide Qty must be numeric.";
+  if (parsedValue < 0) return "Provide Qty cannot be negative.";
+
+  const parsedRequestedQty = requestedQty ? Number(requestedQty) : Number.NaN;
+  if (Number.isFinite(parsedRequestedQty) && parsedValue > parsedRequestedQty) {
+    return "Provide Qty cannot exceed Requested Qty.";
+  }
+
+  return undefined;
 };
 
 const getRequestItemNames = (row: StoreStockRequest) =>
@@ -208,6 +247,9 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   const [transactionDraftFilters, setTransactionDraftFilters] = useState<TransactionFilterState>(createDefaultTransactionFilters);
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilterState>(createDefaultTransactionFilters);
   const [isTransactionFilterPending, startTransactionFilterTransition] = useTransition();
+  const [requestReviewTarget, setRequestReviewTarget] = useState<StoreStockRequest | null>(null);
+  const [requestReviewItems, setRequestReviewItems] = useState<RequestReviewLine[]>([]);
+  const [requestReviewErrors, setRequestReviewErrors] = useState<Record<number, RequestReviewError>>({});
 
   const deferredStockSearch = useDeferredValue(stockSearch.trim());
   const deferredRequestSearch = useDeferredValue(requestSearch.trim());
@@ -268,30 +310,57 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
     setRespondedRequestPage(1);
   };
 
-  const approveRequestMutation = useMutation({
-    mutationFn: async (requestId: number) => {
-      const response = await coreApi.post(`/api/store/approve-request/${requestId}/`, {});
-      return response.data;
-    },
-    onSuccess: () => {
-      showAllRequestStatuses();
-      toast.success("Store request approved.");
-      void queryClient.invalidateQueries({ queryKey: ["store"] });
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to approve store request.")),
-  });
+  const openRequestReviewDialog = (row: StoreStockRequest) => {
+    const reviewRows = row.items?.length
+      ? row.items
+      : row.item
+        ? [
+            {
+              id: row.id,
+              item: row.item,
+              item_code: readText(row.item_code),
+              item_name: readText(row.item_name),
+              unit: readText(row.unit),
+              requested_qty: row.quantity,
+            },
+          ]
+        : [];
 
-  const rejectRequestMutation = useMutation({
-    mutationFn: async (requestId: number) => {
-      const response = await coreApi.post(`/api/store/reject-request/${requestId}/`, {});
+    setRequestReviewTarget(row);
+    setRequestReviewItems(
+      reviewRows.map((item) => ({
+        itemId: item.item,
+        itemName: item.item_name,
+        itemCode: item.item_code,
+        requestedQty: item.requested_qty,
+        providedQty: item.requested_qty,
+        unit: item.unit,
+        reason: "",
+      })),
+    );
+    setRequestReviewErrors({});
+  };
+
+  const closeRequestReviewDialog = () => {
+    setRequestReviewTarget(null);
+    setRequestReviewItems([]);
+    setRequestReviewErrors({});
+  };
+
+  const requestReviewMutation = useMutation({
+    mutationFn: async (payload: { requestId: number; items: Array<{ item: number; provided_qty: string; remarks: string }> }) => {
+      const response = await coreApi.post(`/api/store/approve-request/${payload.requestId}/`, {
+        items: payload.items,
+      });
       return response.data;
     },
     onSuccess: () => {
+      closeRequestReviewDialog();
       showAllRequestStatuses();
-      toast.success("Store request rejected.");
+      toast.success("Store request reviewed.");
       void queryClient.invalidateQueries({ queryKey: ["store"] });
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to reject store request.")),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to save store request review.")),
   });
 
   const requestDepartmentMap = (requestLookupQuery.data ?? []).reduce<Record<string, string>>((map, row) => {
@@ -301,6 +370,63 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
 
     return map;
   }, {});
+
+  const isRequestReviewReady =
+    requestReviewItems.length > 0 &&
+    requestReviewItems.every((item) => {
+      const qtyError = getProvideQtyError(item.providedQty, item.requestedQty);
+      if (qtyError) {
+        return false;
+      }
+
+      const providedQty = Number(item.providedQty);
+      const requestedQty = Number(item.requestedQty);
+      const quantityChanged = Number.isFinite(providedQty) && Number.isFinite(requestedQty) && providedQty !== requestedQty;
+      if (quantityChanged && !item.reason.trim()) {
+        return false;
+      }
+
+      return true;
+    });
+
+  const submitRequestReview = () => {
+    if (!requestReviewTarget) {
+      return;
+    }
+
+    const nextErrors: Record<number, RequestReviewError> = {};
+    let hasErrors = false;
+
+    requestReviewItems.forEach((item, index) => {
+      const providedQtyError = getProvideQtyError(item.providedQty, item.requestedQty);
+      const providedQty = Number(item.providedQty);
+      const requestedQty = Number(item.requestedQty);
+      const quantityChanged = Number.isFinite(providedQty) && Number.isFinite(requestedQty) && providedQty !== requestedQty;
+      const reasonError = quantityChanged && !item.reason.trim() ? "Reason is required when Provide Qty is different from Requested Qty." : undefined;
+
+      if (providedQtyError || reasonError) {
+        nextErrors[index] = {
+          providedQty: providedQtyError,
+          reason: reasonError,
+        };
+        hasErrors = true;
+      }
+    });
+
+    if (hasErrors) {
+      setRequestReviewErrors(nextErrors);
+      return;
+    }
+
+    requestReviewMutation.mutate({
+      requestId: requestReviewTarget.id,
+      items: requestReviewItems.map((item) => ({
+        item: item.itemId,
+        provided_qty: item.providedQty,
+        remarks: item.reason.trim(),
+      })),
+    });
+  };
 
   const filteredTransactions = (transactionsQuery.data ?? []).filter((row) => {
     if (!matchesTransactionType(row, transactionFilters.type)) {
@@ -549,26 +675,16 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end">
                             <Button
                               size="sm"
                               variant="outline"
                               className="h-8"
-                              onClick={() => approveRequestMutation.mutate(row.id)}
-                              disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
+                              onClick={() => openRequestReviewDialog(row)}
+                              disabled={requestReviewMutation.isPending}
                             >
-                              <Check className="mr-1.5 h-4 w-4" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8"
-                              onClick={() => rejectRequestMutation.mutate(row.id)}
-                              disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
-                            >
-                              <X className="mr-1.5 h-4 w-4" />
-                              Reject
+                              <Eye className="mr-1.5 h-4 w-4" />
+                              Open
                             </Button>
                           </div>
                         </TableCell>
@@ -892,7 +1008,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
             }}
             onExport={handleRequestExport}
             summaryText={`${pendingRequestRows.length} pending and ${respondedRequestRows.length} responded requests in the current result set`}
-            isFetching={requestsQuery.isFetching || approveRequestMutation.isPending || rejectRequestMutation.isPending}
+            isFetching={requestsQuery.isFetching || requestReviewMutation.isPending}
           />
           {renderRequestTable()}
         </div>
@@ -996,6 +1112,165 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
           {renderTransactionTable()}
         </div>
       ) : null}
+
+      <Dialog
+        open={Boolean(requestReviewTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeRequestReviewDialog();
+          }
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Request Review</DialogTitle>
+            <DialogDescription>
+              Review each requested item for <span className="font-semibold">{requestReviewTarget?.request_no ?? "-"}</span>.
+              Full approval keeps the requested quantity. Reduce any line to reject or partially approve it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:grid-cols-3">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Request No</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.request_no ?? "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Department</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.department ?? "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Requested By</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.requested_by_username ?? "-"}</div>
+              </div>
+            </div>
+
+            {requestReviewItems.map((item, index) => {
+              const requestedQtyNumber = Number(item.requestedQty);
+              const providedQtyNumber = Number(item.providedQty);
+              const reasonRequired =
+                item.providedQty.trim() &&
+                Number.isFinite(providedQtyNumber) &&
+                Number.isFinite(requestedQtyNumber) &&
+                providedQtyNumber !== requestedQtyNumber;
+
+              return (
+                <div key={`${item.itemId}-${index}`} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+                  <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)]">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Item Name</div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">{item.itemName}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {item.itemCode}
+                        {item.unit ? ` | ${item.unit}` : ""}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Requested Qty</div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">
+                        {formatDecimal(item.requestedQty)}{item.unit ? ` ${item.unit}` : ""}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor={`request-provided-${index}`}>
+                        Provide Qty <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id={`request-provided-${index}`}
+                        inputMode="decimal"
+                        value={item.providedQty}
+                        onKeyDown={(event) => {
+                          if (shouldBlockQuantityKey(event.key)) {
+                            event.preventDefault();
+                          }
+                        }}
+                        onPaste={(event) => {
+                          const pastedValue = event.clipboardData.getData("text");
+                          const pastedError = getProvideQtyError(pastedValue, item.requestedQty);
+                          if (pastedError) {
+                            event.preventDefault();
+                            setRequestReviewErrors((current) => ({
+                              ...current,
+                              [index]: {
+                                ...current[index],
+                                providedQty: pastedError,
+                              },
+                            }));
+                          }
+                        }}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          const nextError = getProvideQtyError(nextValue, item.requestedQty);
+
+                          setRequestReviewItems((current) =>
+                            current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, providedQty: nextValue } : entry)),
+                          );
+                          setRequestReviewErrors((current) => {
+                            const nextErrors = { ...current, [index]: { ...current[index], providedQty: nextError } };
+                            if (
+                              nextValue.trim() &&
+                              Number.isFinite(Number(nextValue)) &&
+                              Number.isFinite(Number(item.requestedQty)) &&
+                              Number(nextValue) === Number(item.requestedQty)
+                            ) {
+                              nextErrors[index] = { providedQty: nextError };
+                            } else if (nextValue.trim() && !nextError && !current[index]?.reason?.trim()) {
+                              nextErrors[index] = {
+                                providedQty: nextError,
+                                reason: "Reason is required when Provide Qty is different from Requested Qty.",
+                              };
+                            } else if (!nextValue.trim()) {
+                              nextErrors[index] = { providedQty: nextError };
+                            }
+                            return nextErrors;
+                          });
+                        }}
+                        placeholder="Enter provide quantity"
+                        className={requestReviewErrors[index]?.providedQty ? "border-destructive" : ""}
+                      />
+                      {requestReviewErrors[index]?.providedQty ? (
+                        <p className="text-xs text-destructive">{requestReviewErrors[index]?.providedQty}</p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor={`request-reason-${index}`}>
+                        Reason{reasonRequired ? <span className="text-destructive"> *</span> : null}
+                      </Label>
+                      <Textarea
+                        id={`request-reason-${index}`}
+                        rows={3}
+                        value={item.reason}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setRequestReviewItems((current) =>
+                            current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reason: nextValue } : entry)),
+                          );
+                          setRequestReviewErrors((current) => ({ ...current, [index]: { ...current[index], reason: undefined } }));
+                        }}
+                        placeholder="Enter reason when provide qty is different from requested qty"
+                        className={requestReviewErrors[index]?.reason ? "border-destructive" : ""}
+                      />
+                      {requestReviewErrors[index]?.reason ? <p className="text-xs text-destructive">{requestReviewErrors[index]?.reason}</p> : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeRequestReviewDialog} disabled={requestReviewMutation.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={submitRequestReview} disabled={requestReviewMutation.isPending || !isRequestReviewReady}>
+              {requestReviewMutation.isPending ? "Saving..." : "Submit Review"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

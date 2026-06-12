@@ -3358,7 +3358,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
 
             {qcrEntryItems.map((item, index) => (
               <div key={`${item.lineIndex}-${index}`} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-                <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1.8fr)_minmax(0,0.7fr)_minmax(0,0.7fr)]">
+                <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)]">
                   <div>
                     <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Item Name</div>
                     <div className="mt-1 text-sm font-semibold text-foreground">{item.itemName}</div>
@@ -3366,16 +3366,18 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                       {item.itemId || "-"}{item.unit ? ` | ${item.unit}` : ""}{item.storeInName ? ` | Store In: ${item.storeInName}` : ""}
                     </div>
                   </div>
-                  <div>
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Sent Qty</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">
-                      {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Sent Qty</div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">
+                        {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Received Qty</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">
-                      {item.receivedQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Received Qty</div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">
+                        {item.receivedQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                      </div>
                     </div>
                   </div>
                 </div>
