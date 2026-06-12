@@ -1,6 +1,13 @@
 import { z } from "zod";
 import type { GrnRecord } from "@/lib/types";
 
+export const GRN_GATE_ENTRY_STATUS = "Gate Entry";
+export const GRN_PENDING_STATUS = "GRN Pending";
+export const GRN_QCR_STATUS = "Moved to QCR";
+export const GRN_MOVED_TO_GRN_STATUS = "Moved to GRN";
+export const GRN_APPROVED_STATUS = "GRN Approved";
+export const GRN_REJECTED_STATUS = "Rejected";
+
 export const grnItemSchema = z.object({
   item_id: z.string().default(""),
   item_serial_number: z.string().default(""),

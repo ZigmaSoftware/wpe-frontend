@@ -3,7 +3,7 @@ import { BLENDING_ROUTE, BLENDING_STOCK_ROUTE, BLENDING_STORE_REQUEST_ROUTE, BLE
 import { COMMON_MASTERS_ROUTE } from "@/features/common-master/utils/routes";
 import { DEVICE_LABEL_MASTERS_ROUTE } from "@/features/device-label-masters/utils/routes";
 import { GRN_PROCESS_ROUTE, GRN_ROUTE, GRN_STATUS_ROUTE } from "@/features/grn/utils/routes";
-import { INVENTORY_ROUTE, PRODUCTION_INVENTORY_ROUTE, STORE_INVENTORY_ROUTE } from "@/features/items/utils/routes";
+import { INVENTORY_ROUTE, PRODUCTION_INVENTORY_ROUTE, STORE_INVENTORY_ROUTE, WAREHOUSE_INVENTORY_ROUTE } from "@/features/items/utils/routes";
 import { PRODUCTION_MASTERS_ROUTE } from "@/features/production-masters/utils/routes";
 import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_BL_BLENDING_ROUTE, PRODUCTION_GL_GRANULATION_ROUTE, PRODUCTION_PR_PRODUCTION_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
 import { REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
@@ -203,6 +203,7 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   "/dashboard": DASHBOARD_SCREEN_CODES,
   [STORE_INVENTORY_ROUTE]: WORKSPACE_SCREEN_CODES.storeInventory,
   [PRODUCTION_INVENTORY_ROUTE]: WORKSPACE_SCREEN_CODES.productionInventory,
+  [WAREHOUSE_INVENTORY_ROUTE]: WORKSPACE_GROUP_SCREEN_CODES.inventory,
   [BLENDING_STOCK_ROUTE]: WORKSPACE_SCREEN_CODES.blendingStock,
   [BLENDING_STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.requestsStoreRequest,
   [BLENDING_TRANSACTIONS_ROUTE]: WORKSPACE_SCREEN_CODES.blendingTransactions,

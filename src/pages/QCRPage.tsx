@@ -23,9 +23,44 @@ const readText = (value: unknown) => {
   return String(value);
 };
 
+const hasQcrValue = (value: unknown) => value !== null && value !== undefined && value !== "";
+
+const getQcrQuantityValue = (payload: Record<string, unknown> | undefined) => {
+  if (!payload) return undefined;
+
+  for (const fieldName of ["received_qty", "accepted_qty", "quantity", "total_quantity"]) {
+    const value = payload[fieldName];
+    if (hasQcrValue(value)) {
+      return value;
+    }
+  }
+
+  const itemLines = payload.items;
+  if (Array.isArray(itemLines)) {
+    const firstItem = itemLines.find((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object");
+    if (firstItem) {
+      for (const fieldName of ["received_qty", "accepted_qty", "quantity", "total_quantity"]) {
+        const value = firstItem[fieldName];
+        if (hasQcrValue(value)) {
+          return value;
+        }
+      }
+    }
+  }
+
+  return undefined;
+};
+
 const getQcrField = (record: QcrRecord, key: string) => {
+  if (key === "quantity") {
+    const quantityValue = getQcrQuantityValue(record.source_grn_data) ?? getQcrQuantityValue(record.snapshot);
+    if (hasQcrValue(quantityValue)) {
+      return quantityValue;
+    }
+  }
+
   const sourceValue = record.source_grn_data?.[key];
-  if (sourceValue !== null && sourceValue !== undefined && sourceValue !== "") {
+  if (hasQcrValue(sourceValue)) {
     return sourceValue;
   }
   return record.snapshot?.[key];

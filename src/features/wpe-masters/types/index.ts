@@ -12,6 +12,16 @@ export interface MasterWritePayload {
   is_active?: boolean;
 }
 
+export type LocationCenterType = "GRN_CENTER" | "BLENDING_CENTER" | "WAREHOUSE_CENTER";
+
+export interface LocationMasterRecord extends MasterRecord {
+  center_type: LocationCenterType;
+}
+
+export interface LocationMasterWritePayload extends MasterWritePayload {
+  center_type: LocationCenterType;
+}
+
 export interface CodeMasterRecord extends MasterRecord {
   code: string | null;
   description: string;

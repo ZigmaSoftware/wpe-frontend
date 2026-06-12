@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, Eye, EyeOff } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -142,7 +142,7 @@ const UserCreationPage = () => {
   const userTypeOptions = useUserTypeOptions();
   const companyOptions = useCompanyOptions();
   const selectedStaffId = form.watch("staff");
-  const selectedUserTypeId = form.watch("user_type");
+  const syncedStaffIdRef = useRef<number | null>(null);
 
   const query = useQuery({
     queryKey: adminMasterKeys.entity("user-creation", table.page, table.pageSize, debouncedSearch, table.ordering, ""),
@@ -191,29 +191,32 @@ const UserCreationPage = () => {
 
   useEffect(() => {
     if (!selectedStaffOption) {
+      syncedStaffIdRef.current = null;
       return;
-    }
-
-    if (availableUserTypes.length > 0) {
-      const matchedUserType = availableUserTypes.find(
-        (option) =>
-          option.department_id === (selectedStaffOption.department_id ?? null) &&
-          option.role_id === (selectedStaffOption.role_id ?? null),
-      );
-      const currentUserType = availableUserTypes.find((option) => option.id === selectedUserTypeId) ?? null;
-
-      if (
-        !currentUserType ||
-        currentUserType.department_id !== (selectedStaffOption.department_id ?? null) ||
-        currentUserType.role_id !== (selectedStaffOption.role_id ?? null)
-      ) {
-        form.setValue("user_type", matchedUserType?.id ?? 0, { shouldValidate: true });
-      }
     }
 
     form.setValue("mobile_no", selectedStaffOption.mobile ?? "", { shouldValidate: true });
     form.setValue("email", selectedStaffOption.email ?? "", { shouldValidate: true });
-  }, [availableUserTypes, form, selectedStaffOption, selectedUserTypeId]);
+
+    if (!userTypeOptions.isFetched) {
+      return;
+    }
+
+    const staffChanged = syncedStaffIdRef.current !== selectedStaffOption.id;
+    if (!staffChanged || editing) {
+      syncedStaffIdRef.current = selectedStaffOption.id;
+      return;
+    }
+
+    const matchedUserType = availableUserTypes.find(
+      (option) =>
+        option.department_id === (selectedStaffOption.department_id ?? null) &&
+        option.role_id === (selectedStaffOption.role_id ?? null),
+    );
+
+    form.setValue("user_type", matchedUserType?.id ?? 0, { shouldValidate: true });
+    syncedStaffIdRef.current = selectedStaffOption.id;
+  }, [availableUserTypes, editing, form, selectedStaffOption, userTypeOptions.isFetched]);
 
   const openCreateDialog = () => {
     setEditing(null);

@@ -143,7 +143,7 @@ const DashboardPage = () => {
         <StatCard label="Contacts" value={contacts.length} hint={`${contacts.filter((contact) => contact.is_active).length} active`} />
         <StatCard label="Store Stock Rows" value={storeStockCount} hint="Persisted warehouse balances" />
         <StatCard label="Blending Stock Rows" value={blendingStockCount} hint="Blending inventory rows" />
-        <StatCard label="GRN Process" value={grn.length} hint="Active goods receipt records" />
+        <StatCard label="Gate Entry" value={grn.length} hint="Active goods receipt records" />
         <StatCard label="QCR Queue" value={qcr.length} hint="Current quality review records" />
       </div>
 

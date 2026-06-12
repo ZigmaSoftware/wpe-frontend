@@ -270,6 +270,36 @@ export type GrnValueDetails = {
   total_after_tax?: string | number;
 };
 
+export type GrnPendingItemLine = {
+  line_index: number;
+  item_id?: string | null;
+  item_name?: string | null;
+  unit?: string | null;
+  sent_qty?: string | number | null;
+  received_qty?: string | number | null;
+  accepted_qty?: string | number | null;
+  rejected_qty?: string | number | null;
+  rejection_reason?: string | null;
+  pending_rejected_qty?: string | number | null;
+  store_in_id?: string | number | null;
+  store_in_name?: string | null;
+};
+
+export type QcrItemLine = {
+  line_index: number;
+  item_id?: string | null;
+  item_name?: string | null;
+  unit?: string | null;
+  sent_qty?: string | number | null;
+  received_qty?: string | number | null;
+  accepted_qty?: string | number | null;
+  rejected_qty?: string | number | null;
+  rejection_reason?: string | null;
+  pending_rejected_qty?: string | number | null;
+  store_in_id?: string | number | null;
+  store_in_name?: string | null;
+};
+
 export type GrnRecord = {
   id: number;
   unique_id: string;
@@ -287,6 +317,7 @@ export type GrnRecord = {
   moved_to_qcr_at: string | null;
   moved_to_qcr_by: string | null;
   raw_payload?: Record<string, unknown>;
+  grn_pending_items?: GrnPendingItemLine[];
   document_details: GrnDocumentDetails;
   document_requirement_details: GrnRequirementDetails;
   supplier_details: GrnSupplierDetails;
@@ -310,8 +341,11 @@ export type QcrRecord = {
   snapshot: Record<string, unknown>;
   status: string;
   remarks: string | null;
+  qcr_items?: QcrItemLine[];
   moved_to_qcr_at: string;
   moved_to_qcr_by: string | null;
+  qcr_completed_at?: string | null;
+  qcr_completed_by?: string | null;
   created_at: string;
   updated_at: string;
 };

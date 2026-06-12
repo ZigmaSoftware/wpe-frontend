@@ -58,7 +58,7 @@ export const inventoryStoreModuleDefinitions: InventoryStoreModuleDefinition[] =
     to: "/wpe-masters/locations",
     icon: MapPin,
     label: "Location",
-    description: "Manage existing location master records.",
+    description: "Manage locations grouped by GRN, blending, and warehouse stock centers.",
   },
   {
     to: "/wpe-masters/production-types",
