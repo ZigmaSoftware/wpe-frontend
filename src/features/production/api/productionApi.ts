@@ -10,8 +10,11 @@ import {
   ProductionOrderListResponse,
   ProductionOrderFilters,
   MaterialMovement,
+  MaterialMovementFilters,
   ProductionTransaction,
+  ProductionTransactionFilters,
   ProductionSummary,
+  ProductionSummaryFilters,
   CostBreakdown,
 } from '../types';
 
@@ -124,7 +127,7 @@ export const materialMovementApi = {
   /**
    * Get list of material movements
    */
-  getList: async (filters?: any): Promise<ResultsListResponse<MaterialMovement>> => {
+  getList: async (filters?: MaterialMovementFilters): Promise<ResultsListResponse<MaterialMovement>> => {
     const params = new URLSearchParams();
 
     if (filters) {
@@ -179,7 +182,7 @@ export const productionTransactionApi = {
   /**
    * Get list of transactions
    */
-  getList: async (filters?: any): Promise<ResultsListResponse<ProductionTransaction>> => {
+  getList: async (filters?: ProductionTransactionFilters): Promise<ResultsListResponse<ProductionTransaction>> => {
     const params = new URLSearchParams();
 
     if (filters) {
@@ -234,7 +237,7 @@ export const productionSummaryApi = {
   /**
    * Get list of summaries
    */
-  getList: async (filters?: any): Promise<ResultsListResponse<ProductionSummary>> => {
+  getList: async (filters?: ProductionSummaryFilters): Promise<ResultsListResponse<ProductionSummary>> => {
     const params = new URLSearchParams();
 
     if (filters) {
