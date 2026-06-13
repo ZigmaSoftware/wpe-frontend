@@ -135,11 +135,22 @@ export type StoreStockRequest = {
   require_time?: string | null;
   requested_for_name: string;
   request_reason: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "PARTIALLY_APPROVED" | "CANCELLED";
+  status:
+    | "PENDING_HEAD_APPROVAL"
+    | "PENDING_STORE_ISSUE"
+    | "HEAD_REJECTED"
+    | "APPROVED"
+    | "REJECTED"
+    | "PARTIALLY_APPROVED"
+    | "CANCELLED";
   requested_by: number;
   requested_by_username: string;
   approved_by: number | null;
   approved_by_username: string | null;
+  head_action_by: number | null;
+  head_action_by_username: string | null;
+  head_action_at: string | null;
+  head_approval_remarks: string | null;
   requested_at: string;
   approved_at: string | null;
   total_requested_qty?: string;

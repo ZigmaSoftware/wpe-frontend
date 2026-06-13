@@ -1,5 +1,11 @@
 import { ADMIN_MASTERS_ROUTE } from "@/features/admin-master/utils/routes";
-import { BLENDING_ROUTE, BLENDING_STOCK_ROUTE, BLENDING_STORE_REQUEST_ROUTE, BLENDING_TRANSACTIONS_ROUTE } from "@/features/blending/utils/routes";
+import {
+  BLENDING_HEAD_APPROVAL_ROUTE,
+  BLENDING_ROUTE,
+  BLENDING_STOCK_ROUTE,
+  BLENDING_STORE_REQUEST_ROUTE,
+  BLENDING_TRANSACTIONS_ROUTE,
+} from "@/features/blending/utils/routes";
 import { COMMON_MASTERS_ROUTE } from "@/features/common-master/utils/routes";
 import { DEVICE_LABEL_MASTERS_ROUTE } from "@/features/device-label-masters/utils/routes";
 import { GRN_PROCESS_ROUTE, GRN_ROUTE, GRN_STATUS_ROUTE } from "@/features/grn/utils/routes";
@@ -41,6 +47,7 @@ export const WORKSPACE_SCREEN_CODES = {
     "blending-store-request-workspace",
   ] as const,
   blendingTransactions: ["blending-transactions-workspace"] as const,
+  blendingHeadApproval: ["blending-head-approval-workspace"] as const,
   productionAdWeightage: ["production-ad-weightage-workspace"] as const,
   productionBlBlending: ["production-bl-blending-workspace"] as const,
   productionGlGranulation: ["production-gl-granulation-workspace"] as const,
@@ -117,7 +124,11 @@ const uniqueCodes = (...groups: ReadonlyArray<readonly string[]>) =>
 
 export const WORKSPACE_GROUP_SCREEN_CODES = {
   inventory: uniqueCodes(WORKSPACE_SCREEN_CODES.storeInventory, WORKSPACE_SCREEN_CODES.productionInventory),
-  blending: uniqueCodes(WORKSPACE_SCREEN_CODES.blendingStock, WORKSPACE_SCREEN_CODES.blendingTransactions),
+  blending: uniqueCodes(
+    WORKSPACE_SCREEN_CODES.blendingStock,
+    WORKSPACE_SCREEN_CODES.blendingTransactions,
+    WORKSPACE_SCREEN_CODES.blendingHeadApproval,
+  ),
   requests: uniqueCodes(WORKSPACE_SCREEN_CODES.requestsStoreRequest),
   production: uniqueCodes(
     WORKSPACE_SCREEN_CODES.productionAdWeightage,
@@ -207,6 +218,7 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   [BLENDING_STOCK_ROUTE]: WORKSPACE_SCREEN_CODES.blendingStock,
   [BLENDING_STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.requestsStoreRequest,
   [BLENDING_TRANSACTIONS_ROUTE]: WORKSPACE_SCREEN_CODES.blendingTransactions,
+  [BLENDING_HEAD_APPROVAL_ROUTE]: WORKSPACE_SCREEN_CODES.blendingHeadApproval,
   [PRODUCTION_AD_WEIGHTAGE_ROUTE]: WORKSPACE_SCREEN_CODES.productionAdWeightage,
   [PRODUCTION_BL_BLENDING_ROUTE]: WORKSPACE_SCREEN_CODES.productionBlBlending,
   [PRODUCTION_GL_GRANULATION_ROUTE]: WORKSPACE_SCREEN_CODES.productionGlGranulation,
