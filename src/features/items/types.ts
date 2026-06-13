@@ -11,6 +11,21 @@ export type InventorySummaryRow = {
   total_outward: string;
 };
 
+export type WarehouseInventoryRow = {
+  grn_id: number;
+  qcr_id: number;
+  grn_no: string;
+  supplier: string;
+  po_no: string;
+  items: string;
+  inward_qty: string;
+  outward_qty: string;
+  status: string;
+  reason?: string;
+  warehouse_name: string;
+  moved_to_qcr_at: string | null;
+};
+
 export type InventoryHistoryRow = {
   datetime: string;
   transaction_type: "INWARD" | "OUTWARD";

@@ -8,6 +8,8 @@ import type {
   DesignationMasterWritePayload,
   ItemMasterRecord,
   ItemMasterWritePayload,
+  LocationMasterRecord,
+  LocationMasterWritePayload,
   LookupItem,
   MasterRecord,
   MasterWritePayload,
@@ -40,8 +42,8 @@ const toParams = ({ page, pageSize, search, ordering, ...rest }: TableParams) =>
   ...rest,
 });
 
-async function listMaster(path: string, params: TableParams) {
-  const res = await coreApi.get<PaginatedResponse<MasterRecord>>(path, { params: toParams(params) });
+async function listMaster<TRecord extends MasterRecord>(path: string, params: TableParams) {
+  const res = await coreApi.get<PaginatedResponse<TRecord>>(path, { params: toParams(params) });
   const data = res.data;
   return {
     items: Array.isArray(data) ? data : data.results ?? [],
@@ -78,13 +80,13 @@ async function fetchNextCode(path: string) {
   return res.data.code;
 }
 
-async function createMaster(path: string, payload: MasterWritePayload) {
-  const res = await coreApi.post<MasterRecord>(path, payload);
+async function createMaster<TRecord extends MasterRecord, TPayload extends MasterWritePayload>(path: string, payload: TPayload) {
+  const res = await coreApi.post<TRecord>(path, payload);
   return res.data;
 }
 
-async function updateMaster(path: string, payload: Partial<MasterWritePayload>) {
-  const res = await coreApi.put<MasterRecord>(path, payload);
+async function updateMaster<TRecord extends MasterRecord, TPayload extends MasterWritePayload>(path: string, payload: Partial<TPayload>) {
+  const res = await coreApi.put<TRecord>(path, payload);
   return res.data;
 }
 
@@ -92,18 +94,18 @@ async function deleteMaster(path: string) {
   await coreApi.delete(path);
 }
 
-async function toggleMaster(path: string) {
-  const res = await coreApi.patch<MasterRecord>(path, {});
+async function toggleMaster<TRecord extends MasterRecord>(path: string) {
+  const res = await coreApi.patch<TRecord>(path, {});
   return res.data;
 }
 
-const master = (resource: string) => ({
-  list: (params: TableParams) => listMaster(`${BASE}/${resource}/`, params),
-  lookup: () => lookupMaster(`${BASE}/${resource}/lookup/`),
-  create: (payload: MasterWritePayload) => createMaster(`${BASE}/${resource}/`, payload),
-  update: (id: number, payload: Partial<MasterWritePayload>) => updateMaster(`${BASE}/${resource}/${id}/`, payload),
+const master = <TRecord extends MasterRecord = MasterRecord, TPayload extends MasterWritePayload = MasterWritePayload>(resource: string) => ({
+  list: (params: TableParams) => listMaster<TRecord>(`${BASE}/${resource}/`, params),
+  lookup: (params?: Record<string, string | number | boolean | null | undefined>) => lookupMaster(`${BASE}/${resource}/lookup/`, params),
+  create: (payload: TPayload) => createMaster<TRecord, TPayload>(`${BASE}/${resource}/`, payload),
+  update: (id: number, payload: Partial<TPayload>) => updateMaster<TRecord, TPayload>(`${BASE}/${resource}/${id}/`, payload),
   delete: (id: number) => deleteMaster(`${BASE}/${resource}/${id}/`),
-  toggle: (id: number) => toggleMaster(`${BASE}/${resource}/${id}/toggle/`),
+  toggle: (id: number) => toggleMaster<TRecord>(`${BASE}/${resource}/${id}/toggle/`),
 });
 
 const codeMaster = <TRecord extends CodeMasterRecord, TPayload extends CodeMasterWritePayload>(resource: string) => ({
@@ -126,7 +128,7 @@ const resourceEntity = <TRecord, TPayload>(resource: string) => ({
 });
 
 export const wpeMastersApi = {
-  locations: master("locations"),
+  locations: master<LocationMasterRecord, LocationMasterWritePayload>("locations"),
   branches: master("branches"),
   priceBooks: master("price-books"),
   warehouses: codeMaster<WarehouseMasterRecord, WarehouseMasterWritePayload>("warehouses"),

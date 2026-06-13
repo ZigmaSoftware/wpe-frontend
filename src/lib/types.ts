@@ -26,16 +26,38 @@ export type Contact = {
   id: number;
   ref_code: string;
   name: string;
-  phone: string;
-  email: string | null;
+  display_name: string | null;
+  contact_code: string | null;
   category: string;
+  contact_category: string | null;
+  customer_loyalty: string | null;
   company_name: string | null;
   gstin: string | null;
-  state: string;
-  address: string;
+  pan: string | null;
+  sale_person: string | null;
+  division: string | null;
+  zone: string | null;
+  subzone: string | null;
+  tds_category: string | null;
+  tds_percent: string | number | null;
+  accounting_percent: string | number | null;
   lead_source: string;
   market_segment: string;
   is_active: boolean;
+  contact_person: string | null;
+  designation: string | null;
+  phone: string;
+  work_phone_2: string | null;
+  work_phone_3: string | null;
+  fax: string | null;
+  email: string | null;
+  address: string;
+  billing_landmark: string | null;
+  billing_city: string | null;
+  state: string;
+  billing_postal_code: string | null;
+  billing_country: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -270,6 +292,36 @@ export type GrnValueDetails = {
   total_after_tax?: string | number;
 };
 
+export type GrnPendingItemLine = {
+  line_index: number;
+  item_id?: string | null;
+  item_name?: string | null;
+  unit?: string | null;
+  sent_qty?: string | number | null;
+  received_qty?: string | number | null;
+  accepted_qty?: string | number | null;
+  rejected_qty?: string | number | null;
+  rejection_reason?: string | null;
+  pending_rejected_qty?: string | number | null;
+  store_in_id?: string | number | null;
+  store_in_name?: string | null;
+};
+
+export type QcrItemLine = {
+  line_index: number;
+  item_id?: string | null;
+  item_name?: string | null;
+  unit?: string | null;
+  sent_qty?: string | number | null;
+  received_qty?: string | number | null;
+  accepted_qty?: string | number | null;
+  rejected_qty?: string | number | null;
+  rejection_reason?: string | null;
+  pending_rejected_qty?: string | number | null;
+  store_in_id?: string | number | null;
+  store_in_name?: string | null;
+};
+
 export type GrnRecord = {
   id: number;
   unique_id: string;
@@ -287,6 +339,7 @@ export type GrnRecord = {
   moved_to_qcr_at: string | null;
   moved_to_qcr_by: string | null;
   raw_payload?: Record<string, unknown>;
+  grn_pending_items?: GrnPendingItemLine[];
   document_details: GrnDocumentDetails;
   document_requirement_details: GrnRequirementDetails;
   supplier_details: GrnSupplierDetails;
@@ -310,8 +363,11 @@ export type QcrRecord = {
   snapshot: Record<string, unknown>;
   status: string;
   remarks: string | null;
+  qcr_items?: QcrItemLine[];
   moved_to_qcr_at: string;
   moved_to_qcr_by: string | null;
+  qcr_completed_at?: string | null;
+  qcr_completed_by?: string | null;
   created_at: string;
   updated_at: string;
 };

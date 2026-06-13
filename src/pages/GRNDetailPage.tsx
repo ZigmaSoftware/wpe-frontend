@@ -12,6 +12,7 @@ import { toast } from "@/components/ui/sonner";
 import GrnPageLayout from "@/features/grn/components/GrnPageLayout";
 import GrnSectionCard from "@/features/grn/components/GrnSectionCard";
 import {
+  GRN_GATE_ENTRY_STATUS,
   buildSupplierAddress,
   defaultItem,
   documentFieldConfigs,
@@ -68,7 +69,7 @@ const GRNDetailPage = () => {
   });
 
   const detailRecord: GrnRecord | null = detailQuery.data?.data ?? null;
-  const isActiveRecord = detailRecord?.process_status === "GRN Process";
+  const isActiveRecord = detailRecord?.process_status === GRN_GATE_ENTRY_STATUS;
 
   const moveMutation = useMutation({
     mutationFn: async () => {
@@ -76,13 +77,14 @@ const GRNDetailPage = () => {
       return response.data;
     },
     onSuccess: () => {
-      toast.success("GRN moved to QCR.");
+      toast.success("GRN moved to GRN Pending.");
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
       queryClient.invalidateQueries({ queryKey: ["qcr"] });
       navigate(GRN_PROCESS_ROUTE);
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move GRN to QCR.")),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move GRN to GRN Pending.")),
   });
 
   if (detailQuery.isLoading) {
@@ -111,7 +113,7 @@ const GRNDetailPage = () => {
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span className="inline-flex items-center rounded-full border border-[#d8e6ff] bg-[#f6f9ff] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#2d6cdf]">
-                      GRN Review
+                      Gate Entry Review
                     </span>
                     <span className="inline-flex items-center gap-2">
                       <span>Inventory Receipt</span>
@@ -135,7 +137,7 @@ const GRNDetailPage = () => {
                       </Badge>
                     </div>
                     <p className="max-w-2xl text-sm leading-6 text-slate-500">
-                      Review document, supplier, line, and commercial details in a full-page GRN workspace before inventory progression.
+                      Review document, supplier, line, and commercial details in a full-page gate entry workspace before inventory progression.
                     </p>
                   </div>
 
@@ -145,14 +147,14 @@ const GRNDetailPage = () => {
                         className="rounded-full bg-[linear-gradient(135deg,#2d6cdf_0%,#1953bc_100%)] text-white hover:opacity-95"
                         onClick={() => navigate(getGrnProcessEditRoute(detailRecord.id))}
                       >
-                        Edit GRN
+                        Edit Gate Entry
                       </Button>
                     )}
 
                     {!isViewOnly && isActiveRecord ? (
                       <Button variant="outline" className="rounded-full" onClick={() => setMoveConfirmOpen(true)}>
                         <MoveRight className="mr-2 h-4 w-4" />
-                        Move to QCR
+                        Move to GRN Pending
                       </Button>
                     ) : null}
                   </div>
@@ -362,9 +364,9 @@ const GRNDetailPage = () => {
       <ConfirmDialog
         open={moveConfirmOpen}
         onOpenChange={setMoveConfirmOpen}
-        title="Move GRN to QCR"
-        description={`Move ${detailRecord.grn_no} to QCR? This will inactivate the GRN and create an active QCR record.`}
-        confirmLabel={moveMutation.isPending ? "Moving..." : "Move to QCR"}
+        title="Move Gate Entry to GRN Pending"
+        description={`Move ${detailRecord.grn_no} to GRN Pending? This will complete Gate Entry and send the record to the pending handoff queue.`}
+        confirmLabel={moveMutation.isPending ? "Moving..." : "Move to GRN Pending"}
         onConfirm={() => moveMutation.mutate()}
       />
     </GrnPageLayout>

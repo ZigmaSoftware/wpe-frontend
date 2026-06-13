@@ -49,7 +49,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
     setEditData(null);
   };
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: keyof ProductionOrderDetail, value: ProductionOrderDetail[keyof ProductionOrderDetail]) => {
     setEditData((prev) => ({
       ...prev,
       [field]: value,

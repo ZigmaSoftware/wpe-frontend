@@ -3,7 +3,12 @@
  * Follows the recommended key factory pattern
  */
 
-import { ProductionOrderFilters } from '../types';
+import {
+  ProductionOrderFilters,
+  MaterialMovementFilters,
+  ProductionTransactionFilters,
+  ProductionSummaryFilters,
+} from '../types';
 
 export const productionKeys = {
   all: ['production'] as const,
@@ -25,14 +30,14 @@ export const productionKeys = {
 
   // Material Movements
   movements: () => [...productionKeys.all, 'material-movements'] as const,
-  movementsList: (filters?: any) =>
+  movementsList: (filters?: MaterialMovementFilters) =>
     [...productionKeys.movements(), 'list', filters] as const,
   movementDetail: (id: number | string) =>
     [...productionKeys.movements(), 'detail', id] as const,
 
   // Production Transactions
   transactions: () => [...productionKeys.all, 'transactions'] as const,
-  transactionsList: (filters?: any) =>
+  transactionsList: (filters?: ProductionTransactionFilters) =>
     [...productionKeys.transactions(), 'list', filters] as const,
   transactionDetail: (id: number | string) =>
     [...productionKeys.transactions(), 'detail', id] as const,

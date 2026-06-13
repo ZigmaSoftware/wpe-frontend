@@ -155,12 +155,12 @@ const ContactsPage = () => {
                     <TableCell className="text-sm">{c.company_name || "—"}</TableCell>
                     <TableCell className="text-sm">{c.phone}</TableCell>
                     <TableCell className="text-sm">
-                      <div>{(c as any).billing_city || "—"}</div>
+                      <div>{c.billing_city || "—"}</div>
                       <div className="text-xs text-muted-foreground">{c.state}</div>
                     </TableCell>
                     <TableCell className="text-xs">
                       <div>{c.gstin || "—"}</div>
-                      <div className="text-muted-foreground">{(c as any).pan || "—"}</div>
+                      <div className="text-muted-foreground">{c.pan || "—"}</div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{formatDateTime(c.updated_at)}</TableCell>
                     <TableCell className="text-right">

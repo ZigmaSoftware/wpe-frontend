@@ -22,8 +22,8 @@ export const grnWorkspaceModuleDefinitions: GrnWorkspaceModuleDefinition[] = [
   {
     to: GRN_PROCESS_ROUTE,
     icon: FileSpreadsheet,
-    label: "GRN Process",
-    description: "Manage active GRN records and QCR movement in one process workspace.",
+    label: "Gate Entry",
+    description: "Manage gate entry records, GRN pending movement, and QCR handoff in one workspace.",
     activeMatchPaths: [GRN_PROCESS_ROUTE],
   },
   {

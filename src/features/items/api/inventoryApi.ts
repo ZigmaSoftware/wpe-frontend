@@ -1,7 +1,14 @@
-import { coreApi } from "@/lib/api";
+import { coreApi, grnApi } from "@/lib/api";
 import { unwrapSuccessEnvelope } from "@/lib/api-helpers";
 import type { ApiPaginatedResult, ApiSuccessEnvelope } from "@/lib/types";
-import { INVENTORY_MODULES, type InventoryHistoryRow, type InventoryModule, type InventoryPage, type InventorySummaryRow } from "@/features/items/types";
+import {
+  INVENTORY_MODULES,
+  type InventoryHistoryRow,
+  type InventoryModule,
+  type InventoryPage,
+  type InventorySummaryRow,
+  type WarehouseInventoryRow,
+} from "@/features/items/types";
 
 const normalizePaginatedEnvelope = <T>(
   payload: ApiSuccessEnvelope<ApiPaginatedResult<T>> | ApiPaginatedResult<T>,
@@ -114,6 +121,43 @@ export const itemsInventoryApi = {
         search: params.search?.trim() || undefined,
         dateFrom: params.dateFrom || undefined,
         dateTo: params.dateTo || undefined,
+      }),
+    ),
+
+  listWarehouseInventory: async (
+    params: {
+      warehouseName: string;
+      page: number;
+      pageSize: number;
+      search?: string;
+    },
+  ) => {
+    const response = await grnApi.get<ApiSuccessEnvelope<ApiPaginatedResult<WarehouseInventoryRow>> | ApiPaginatedResult<WarehouseInventoryRow>>(
+      "/api/warehouse-inventory/",
+      {
+        params: {
+          warehouse_name: params.warehouseName,
+          page: params.page,
+          page_size: params.pageSize,
+          search: params.search?.trim() || undefined,
+        },
+      },
+    );
+    return normalizePaginatedEnvelope<WarehouseInventoryRow>(response.data);
+  },
+
+  listAllWarehouseInventory: async (
+    params: {
+      warehouseName: string;
+      search?: string;
+    },
+  ) =>
+    collectAllPages<WarehouseInventoryRow>((page, pageSize) =>
+      itemsInventoryApi.listWarehouseInventory({
+        warehouseName: params.warehouseName,
+        page,
+        pageSize,
+        search: params.search?.trim() || undefined,
       }),
     ),
 };

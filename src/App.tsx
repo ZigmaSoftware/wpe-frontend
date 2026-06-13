@@ -29,6 +29,7 @@ import {
   INVENTORY_ROUTE,
   PRODUCTION_INVENTORY_ROUTE,
   STORE_INVENTORY_ROUTE,
+  WAREHOUSE_INVENTORY_ROUTE,
 } from "@/features/items/utils/routes";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
@@ -148,6 +149,7 @@ const TaxesPage = lazy(() => import("@/features/common-master/pages/TaxesPage"))
 const GRNPage = lazy(() => import("@/pages/GRNPage"));
 const ItemsPage = lazy(() => import("@/pages/ItemsPage"));
 const ProductionInventoryPage = lazy(() => import("@/pages/ProductionInventoryPage"));
+const WarehouseInventoryPage = lazy(() => import("@/pages/WarehouseInventoryPage"));
 const RequestsPage = lazy(() => import("@/pages/RequestsPage"));
 const StorePage = lazy(() => import("@/pages/StorePage"));
 const StoreStockItemPage = lazy(() => import("@/pages/StoreStockItemPage"));
@@ -242,6 +244,7 @@ const App = () => (
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.inventoryWorkspace} />}>
                     <Route path={INVENTORY_ROUTE} element={<WorkspaceGroupRedirect groupKey="inventory" fallback={STORE_INVENTORY_ROUTE} />} />
                     <Route path={BLENDING_INVENTORY_ROUTE} element={<ItemsPage module="blending" />} />
+                    <Route path={WAREHOUSE_INVENTORY_ROUTE} element={<WarehouseInventoryPage />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.storeInventory} />}>
                     <Route path={STORE_INVENTORY_ROUTE} element={<ItemsPage module="store" />} />

@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Boxes, Building2, Calculator, ClipboardList, FileText, Loader2, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useEffect, useState, type ReactNode } from "react";
+import { useFieldArray, useForm, type FieldPath } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,16 @@ type GrnRecordFormProps = {
   onCancel: () => void;
   isSubmitting?: boolean;
   initialValues?: GrnFormValues;
+  headerActions?: ReactNode | ((state: {
+    isDirty: boolean;
+    validateFields: (names?: FieldPath<GrnFormValues> | FieldPath<GrnFormValues>[]) => Promise<boolean>;
+    getValue: (name: FieldPath<GrnFormValues>) => unknown;
+    setFieldError: (name: FieldPath<GrnFormValues>, message: string) => void;
+    clearFieldError: (name: FieldPath<GrnFormValues>) => void;
+    setActiveTab: (tab: GrnFormTab) => void;
+  }) => ReactNode);
+  headerActionsPlacement?: "end" | "center" | "side-center";
+  requiredDocumentFields?: Array<keyof GrnFormValues["document_details"]>;
 };
 
 const cardIcons = {
@@ -50,12 +60,25 @@ const renderInput = (
     ref: (instance: HTMLInputElement | HTMLTextAreaElement | null) => void;
   },
   kind: "text" | "date" | "textarea" = "text",
+  required = false,
+  className?: string,
+  options?: {
+    max?: string;
+  },
 ) => {
   if (kind === "textarea") {
-    return <Textarea {...field} rows={3} className={`resize-none ${grnInputClassName}`} />;
+    return <Textarea {...field} rows={3} required={required} className={`resize-none ${grnInputClassName} ${className ?? ""}`} />;
   }
 
-  return <Input {...field} type={kind === "date" ? "date" : "text"} className={grnInputClassName} />;
+  return (
+    <Input
+      {...field}
+      type={kind === "date" ? "date" : "text"}
+      required={required}
+      max={kind === "date" ? options?.max : undefined}
+      className={`${grnInputClassName} ${className ?? ""}`}
+    />
+  );
 };
 
 const GrnRecordForm = ({
@@ -66,6 +89,9 @@ const GrnRecordForm = ({
   onCancel,
   isSubmitting = false,
   initialValues,
+  headerActions,
+  headerActionsPlacement = "end",
+  requiredDocumentFields = [],
 }: GrnRecordFormProps) => {
   const [activeTab, setActiveTab] = useState<GrnFormTab>("document");
   const form = useForm<GrnFormValues>({
@@ -81,6 +107,24 @@ const GrnRecordForm = ({
     form.reset(initialValues ?? defaultGrnValues);
   }, [form, initialValues]);
 
+  const resolvedHeaderActions =
+    typeof headerActions === "function"
+      ? headerActions({
+          isDirty: form.formState.isDirty,
+          validateFields: (names) => form.trigger(names),
+          getValue: (name) => form.getValues(name),
+          setFieldError: (name, message) => form.setError(name, { type: "manual", message }),
+          clearFieldError: (name) => form.clearErrors(name),
+          setActiveTab,
+        })
+      : headerActions;
+  const requiredDocumentFieldNames = new Set(requiredDocumentFields);
+  const renderCenteredHeaderActions = headerActionsPlacement === "center" && resolvedHeaderActions;
+  const renderSideCenteredHeaderActions = headerActionsPlacement === "side-center" && resolvedHeaderActions;
+  const today = new Date();
+  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+  const todayDateInputValue = today.toISOString().slice(0, 10);
+
   return (
     <div className="flex min-h-full flex-col">
       <Form {...form}>
@@ -92,11 +136,29 @@ const GrnRecordForm = ({
           >
             <div className="border-b border-slate-200/80 bg-white">
               <div className="px-4 py-3 text-left sm:px-5 lg:px-6 lg:py-3.5">
-                <div className="space-y-1">
-                  <h1 className="text-[1.35rem] font-semibold leading-tight tracking-[-0.02em] text-slate-950 sm:text-[1.5rem]">
-                    {title}
-                  </h1>
-                  <p className="text-sm text-slate-500">{subtitle}</p>
+                <div className="space-y-3">
+                  <div
+                    className={`flex flex-wrap gap-3 ${
+                      renderCenteredHeaderActions
+                        ? "items-start"
+                        : renderSideCenteredHeaderActions
+                          ? "items-center justify-between"
+                          : "items-start justify-between"
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <h1 className="text-[1.35rem] font-semibold leading-tight tracking-[-0.02em] text-slate-950 sm:text-[1.5rem]">
+                        {title}
+                      </h1>
+                      <p className="text-sm text-slate-500">{subtitle}</p>
+                    </div>
+                    {!renderCenteredHeaderActions && resolvedHeaderActions ? (
+                      <div className="flex flex-wrap items-center gap-2">{resolvedHeaderActions}</div>
+                    ) : null}
+                  </div>
+                  {renderCenteredHeaderActions ? (
+                    <div className="flex flex-wrap items-center justify-center gap-2">{resolvedHeaderActions}</div>
+                  ) : null}
                 </div>
               </div>
 
@@ -115,18 +177,58 @@ const GrnRecordForm = ({
                 >
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {documentFieldConfigs.map((config) => (
+                      (() => {
+                        const isRequired = requiredDocumentFieldNames.has(config.name);
+                        return (
                       <FormField
                         key={config.name}
                         control={form.control}
                         name={`document_details.${config.name}` as const}
-                        render={({ field }) => (
+                        render={({ field, fieldState }) => {
+                          const fieldName = `document_details.${config.name}` as const;
+                          return (
                           <FormItem className={config.fullWidth ? "xl:col-span-3" : undefined}>
-                            <FormLabel>{config.label}</FormLabel>
-                            <FormControl>{renderInput(field, config.kind)}</FormControl>
+                            <FormLabel>
+                              {config.label}
+                              {isRequired ? <span className="text-destructive"> *</span> : null}
+                            </FormLabel>
+                            <FormControl>
+                              {renderInput(
+                                {
+                                  ...field,
+                                  onChange: (...event) => {
+                                    field.onChange(...event);
+                                    if (!isRequired) {
+                                      return;
+                                    }
+                                    const nextValue =
+                                      typeof event[0] === "string"
+                                        ? event[0]
+                                        : (event[0] as { target?: { value?: string } } | undefined)?.target?.value ?? "";
+                                    if (String(nextValue).trim()) {
+                                      form.clearErrors(fieldName);
+                                    }
+                                  },
+                                },
+                                config.kind,
+                                isRequired,
+                                fieldState.error
+                                  ? "border-destructive bg-destructive/5 focus-visible:border-destructive focus-visible:ring-destructive/20"
+                                  : undefined,
+                                config.name === "gateentry_bookdate"
+                                  ? {
+                                      max: todayDateInputValue,
+                                    }
+                                  : undefined,
+                              )}
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
-                        )}
+                          );
+                        }}
                       />
+                        );
+                      })()
                     ))}
                   </div>
                 </GrnSectionCard>
