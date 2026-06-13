@@ -92,4 +92,27 @@ export const blendingApi = {
     const response = await coreApi.post<ApiSuccessEnvelope<StoreStockRequest>>("/api/blending/store-requests/", payload);
     return unwrapSuccessEnvelope(response.data);
   },
+
+  getBlendingHeadApprovals: async () => {
+    const response = await coreApi.get<PaginatedEnvelope<StoreStockRequest>>("/api/blending/head-approvals/", {
+      params: { page_size: 200 },
+    });
+    return normalizePaginatedEnvelope(response.data).items;
+  },
+
+  approveBlendingHeadRequest: async (requestId: number, remarks: string) => {
+    const response = await coreApi.post<ApiSuccessEnvelope<StoreStockRequest>>(
+      `/api/blending/head-approvals/${requestId}/approve/`,
+      { remarks },
+    );
+    return unwrapSuccessEnvelope(response.data);
+  },
+
+  rejectBlendingHeadRequest: async (requestId: number, remarks: string) => {
+    const response = await coreApi.post<ApiSuccessEnvelope<StoreStockRequest>>(
+      `/api/blending/head-approvals/${requestId}/reject/`,
+      { remarks },
+    );
+    return unwrapSuccessEnvelope(response.data);
+  },
 };

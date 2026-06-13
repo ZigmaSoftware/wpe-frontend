@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { blendingApi } from "@/features/blending/api/blendingApi";
+import { getStoreRequestStatusLabel } from "@/features/blending/utils/requestStatus";
 import { BLENDING_TRANSACTIONS_ROUTE } from "@/features/blending/utils/routes";
 import StoreTablePagination from "@/features/store/components/StoreTablePagination";
 import StoreTableToolbar, { type StoreExportFormat, type StorePageSizeValue } from "@/features/store/components/StoreTableToolbar";
@@ -135,7 +136,7 @@ const BlendingTransactionPage = () => {
             </div>
             <div>
               <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
-              <div className="mt-1 font-semibold text-foreground">{requestQuery.data.status}</div>
+              <div className="mt-1 font-semibold text-foreground">{getStoreRequestStatusLabel(requestQuery.data.status)}</div>
             </div>
           </div>
 

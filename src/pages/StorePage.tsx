@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
 import { storeApi } from "@/features/store/api/storeApi";
+import { getStoreRequestStatusLabel } from "@/features/blending/utils/requestStatus";
 import StoreTablePagination from "@/features/store/components/StoreTablePagination";
 import StoreTableToolbar, {
   type StoreExportFormat,
@@ -30,7 +31,7 @@ import { cn } from "@/lib/utils";
 import type { StoreStockRequest, StoreTransactionRecord } from "@/lib/types";
 
 type StorePageModule = "stock" | "requests" | "transactions";
-type RequestStatusFilter = "pending" | "all" | "approved" | "rejected";
+type RequestStatusFilter = "pending_store_issue" | "all";
 type TransactionTypeFilter = "all" | "inwards" | "outwards";
 
 type RequestFilterState = {
@@ -71,7 +72,7 @@ const createDefaultDateRange = () => {
 
 const createDefaultRequestFilters = (): RequestFilterState => ({
   ...createDefaultDateRange(),
-  status: "pending",
+  status: "pending_store_issue",
   department: "all",
 });
 
@@ -199,7 +200,7 @@ const statusBadgeClassName = (status: StoreStockRequest["status"]) => {
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "REJECTED":
       return "border-rose-200 bg-rose-50 text-rose-700";
-    case "PENDING":
+    case "PENDING_STORE_ISSUE":
       return "border-amber-200 bg-amber-50 text-amber-700";
     default:
       return "border-slate-200 bg-slate-100 text-slate-700";
@@ -443,8 +444,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   const stockRows = stockQuery.data ?? [];
   const requestRows = requestsQuery.data ?? [];
   const transactionRows = filteredTransactions;
-  const pendingRequestRows = requestRows.filter((row) => row.status === "PENDING");
-  const respondedRequestRows = requestRows.filter((row) => row.status !== "PENDING");
+  const pendingRequestRows = requestRows.filter((row) => row.status === "PENDING_STORE_ISSUE");
+  const respondedRequestRows = requestRows.filter((row) => row.status !== "PENDING_STORE_ISSUE");
 
   const paginatedRequestRows = paginateRows(pendingRequestRows, requestPage, requestPageSize);
   const paginatedRespondedRequestRows = paginateRows(respondedRequestRows, respondedRequestPage, requestPageSize);
@@ -510,7 +511,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         { label: "Department", value: (row) => row.department },
         { label: "Requested By", value: (row) => row.requested_by_username },
         { label: "Requested For", value: (row) => row.requested_for_name || "-" },
-        { label: "Status", value: (row) => row.status },
+        { label: "Status", value: (row) => getStoreRequestStatusLabel(row.status) },
         { label: "Item Codes", value: (row) => getRequestItemCodes(row) },
         { label: "Items", value: (row) => getRequestItemNames(row) },
         { label: "Requested Qty", value: (row) => getRequestQuantity(row) },
@@ -671,7 +672,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={cn("font-medium", statusBadgeClassName(row.status))}>
-                            {row.status}
+                            {getStoreRequestStatusLabel(row.status)}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
@@ -772,7 +773,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={cn("font-medium", statusBadgeClassName(row.status))}>
-                              {row.status}
+                              {getStoreRequestStatusLabel(row.status)}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -956,10 +957,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="pending_store_issue">Pending Store Issue</SelectItem>
                       <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

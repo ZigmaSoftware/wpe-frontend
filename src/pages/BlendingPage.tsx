@@ -43,6 +43,7 @@ import StoreTableToolbar, {
 } from "@/features/store/components/StoreTableToolbar";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import { printStoreRequest } from "@/features/blending/utils/printSR";
+import { getStoreRequestStatusLabel } from "@/features/blending/utils/requestStatus";
 import { getPageCount, getPageSerialNumber, paginateRows } from "@/features/store/utils/table";
 import { toast } from "@/components/ui/sonner";
 import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
@@ -50,8 +51,8 @@ import type { StoreStockRecord, StoreStockRequest } from "@/lib/types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type BlendingPageModule = "stock" | "requests" | "transactions";
-type RequestStatusFilter = "all" | "pending" | "approved" | "partially_approved" | "cancelled";
-type TransactionStatusFilter = "all" | "pending" | "approved" | "rejected";
+type RequestStatusFilter = "all" | "pending_head_approval" | "pending_store_issue" | "approved" | "partially_approved" | "cancelled";
+type TransactionStatusFilter = "all" | "pending_store_issue" | "approved" | "rejected";
 
 type RequestFilterState = {
   fromDate: string;
@@ -179,7 +180,8 @@ const statusClassName = (status: StoreStockRequest["status"]) => {
       return "text-emerald-700";
     case "REJECTED":
       return "text-rose-700";
-    case "PENDING":
+    case "PENDING_HEAD_APPROVAL":
+    case "PENDING_STORE_ISSUE":
       return "text-amber-700";
     default:
       return "text-slate-700";
@@ -277,8 +279,6 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
         status: toStatusParam(requestFilters.status),
         dateFrom: requestFilters.fromDate,
         dateTo: requestFilters.toDate,
-        requestType: "ADDITIVE",
-        department: requestDepartment,
       }),
     enabled: module === "requests",
     placeholderData: (previousData) => previousData,
@@ -470,7 +470,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
         { label: "Requested By", value: (row) => row.requested_by_username },
         { label: "Requested Date", value: (row) => formatDateTime(row.requested_at) },
         { label: "Approved By", value: (row) => row.approved_by_username || "-" },
-        { label: "Status", value: (row) => row.status },
+        { label: "Status", value: (row) => getStoreRequestStatusLabel(row.status) },
         { label: "Request Department", value: (row) => row.department },
         { label: "Request Person", value: (row) => row.requested_for_name || "-" },
         { label: "Require Date", value: (row) => row.require_date || "-" },
@@ -497,7 +497,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
         { label: "Item Codes", value: (row) => getRequestItemCodes(row) },
         { label: "Requested Date", value: (row) => formatDateTime(row.requested_at) },
         { label: "Approved Date", value: (row) => (row.approved_at ? formatDateTime(row.approved_at) : "-") },
-        { label: "Status", value: (row) => row.status },
+        { label: "Status", value: (row) => getStoreRequestStatusLabel(row.status) },
       ];
 
       exportTableData({
@@ -593,7 +593,8 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="pending_head_approval">Pending Blending Head Approval</SelectItem>
+                  <SelectItem value="pending_store_issue">Pending Store Issue</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="partially_approved">Partially Approved</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -669,7 +670,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                         <TableCell>{request.requested_by_username}</TableCell>
                         <TableCell>{formatDateTime(request.requested_at)}</TableCell>
                         <TableCell>{request.approved_by_username || "-"}</TableCell>
-                        <TableCell className={statusClassName(request.status)}>{request.status}</TableCell>
+                        <TableCell className={statusClassName(request.status)}>{getStoreRequestStatusLabel(request.status)}</TableCell>
                         <TableCell className="text-center">
                           <Button
                             variant="outline"
@@ -745,7 +746,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="pending_store_issue">Pending Store Issue</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
@@ -825,7 +826,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                         </TableCell>
                         <TableCell>{formatDateTime(request.requested_at)}</TableCell>
                         <TableCell>{request.approved_at ? formatDateTime(request.approved_at) : "-"}</TableCell>
-                        <TableCell className={statusClassName(request.status)}>{request.status}</TableCell>
+                        <TableCell className={statusClassName(request.status)}>{getStoreRequestStatusLabel(request.status)}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -1059,7 +1060,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                   <FlaskConical className="h-4 w-4" />
                   Request Type: Store Request
                 </div>
-                <p className="mt-1">Store will approve or reject this request and the approved quantity will move into blending stock.</p>
+                <p className="mt-1">Blending Head will review this request. After approval, Store can issue the material into Blending Inventory.</p>
               </div>
 
               <div className="flex justify-end gap-2">

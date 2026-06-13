@@ -20,6 +20,7 @@ import { RECIPE_BOM_MASTERS_ROUTE } from "@/features/recipe-bom-masters/utils/ro
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import {
   BLENDING_ROUTE,
+  BLENDING_HEAD_APPROVAL_ROUTE,
   BLENDING_STOCK_ROUTE,
   BLENDING_STORE_REQUEST_ROUTE,
   BLENDING_TRANSACTIONS_ROUTE,
@@ -124,6 +125,7 @@ const UserScreenPermissionPage = lazy(() => import("@/features/admin-master/page
 const UserScreensPage = lazy(() => import("@/features/admin-master/pages/UserScreensPage"));
 const UserTypesPage = lazy(() => import("@/features/admin-master/pages/UserTypesPage"));
 const BlendingPage = lazy(() => import("@/pages/BlendingPage"));
+const BlendingHeadApprovalPage = lazy(() => import("@/pages/BlendingHeadApprovalPage"));
 const BlendingStockItemPage = lazy(() => import("@/pages/BlendingStockItemPage"));
 const BlendingTransactionPage = lazy(() => import("@/pages/BlendingTransactionPage"));
 const ContactsPage = lazy(() => import("@/pages/ContactsPage"));
@@ -263,6 +265,9 @@ const App = () => (
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.blendingTransactions} />}>
                     <Route path={BLENDING_TRANSACTIONS_ROUTE} element={<BlendingPage module="transactions" />} />
                     <Route path={`${BLENDING_TRANSACTIONS_ROUTE}/:requestId`} element={<BlendingTransactionPage />} />
+                  </Route>
+                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.blendingHeadApproval} />}>
+                    <Route path={BLENDING_HEAD_APPROVAL_ROUTE} element={<BlendingHeadApprovalPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.requestsWorkspace} />}>
