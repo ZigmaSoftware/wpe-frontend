@@ -8,13 +8,17 @@ const isLocalFrontendHost = () => {
   return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 };
 
-// VITE_ENV: "local" | "server" | "prod"
+// VITE_PROD=true always selects production. Otherwise VITE_ENV selects
+// between the local developer machine and the LAN server.
 // Keep deployment config intact, but when the app is opened from localhost
 // use the local backend so login does not hang on an unreachable LAN server.
+const IS_PROD = import.meta.env.VITE_PROD === "true";
 const ENV =
-  import.meta.env.VITE_ENV === "server" && isLocalFrontendHost()
-    ? "local"
-    : (import.meta.env.VITE_ENV ?? "local");
+  IS_PROD
+    ? "prod"
+    : import.meta.env.VITE_ENV === "server" && isLocalFrontendHost()
+      ? "local"
+      : (import.meta.env.VITE_ENV ?? "local");
 
 export const CORE_API_URL = trimTrailingSlash(
   ENV === "prod"
