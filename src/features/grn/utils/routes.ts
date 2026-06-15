@@ -1,4 +1,4 @@
-import { ClipboardCheck, FileSpreadsheet, Truck, type LucideIcon } from "lucide-react";
+import { FileSpreadsheet, Truck, type LucideIcon } from "lucide-react";
 
 export const GRN_ROUTE = "/app/grn";
 export const GRN_PROCESS_ROUTE = `${GRN_ROUTE}/process`;
@@ -22,16 +22,9 @@ export const grnWorkspaceModuleDefinitions: GrnWorkspaceModuleDefinition[] = [
   {
     to: GRN_PROCESS_ROUTE,
     icon: FileSpreadsheet,
-    label: "Gate Entry",
-    description: "Manage gate entry records, GRN pending movement, and QCR handoff in one workspace.",
+    label: "GRN Process",
+    description: "Manage gate entry records, GRN pending movement, QCR handoff, and completed GRN review in one workspace.",
     activeMatchPaths: [GRN_PROCESS_ROUTE],
-  },
-  {
-    to: GRN_STATUS_ROUTE,
-    icon: ClipboardCheck,
-    label: "GRN Status",
-    description: "Review completed and rejected GRN records with compact status tracking.",
-    activeMatchPaths: [GRN_STATUS_ROUTE],
   },
 ];
 
