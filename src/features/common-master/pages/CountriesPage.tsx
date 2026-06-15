@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -17,18 +17,18 @@ import MasterTable from "@/features/common-master/components/MasterTable";
 import MasterToolbar from "@/features/common-master/components/MasterToolbar";
 import RowActions from "@/features/common-master/components/RowActions";
 import { countrySchema, type CountryFormValues } from "@/features/common-master/schemas";
-import type { ContinentRecord, CountryListRow } from "@/features/common-master/types";
+import type { CountryListRow } from "@/features/common-master/types";
 import { useCommonMasterMutations } from "@/features/common-master/hooks/useCommonMasterMutations";
-import { useContinentOptions } from "@/features/common-master/hooks/useLookupOptions";
+import { useContinentOptions, useCurrencyOptions } from "@/features/common-master/hooks/useLookupOptions";
 import { useDebouncedValue } from "@/features/common-master/hooks/useDebouncedValue";
 import { useTableSearchParams } from "@/features/common-master/hooks/useTableSearchParams";
 import { applyBackendErrors } from "@/features/common-master/hooks/useFormErrorMapper";
 
 const defaultValues: CountryFormValues = {
+  code: "",
   continent: 0,
   name: "",
-  code: "",
-  currency: "",
+  currency: 0,
   status: true,
 };
 
@@ -41,9 +41,15 @@ const CountriesPage = () => {
   const form = useForm<CountryFormValues>({ resolver: zodResolver(countrySchema), defaultValues });
 
   const continentsQuery = useContinentOptions();
+  const currenciesQuery = useCurrencyOptions();
   const countriesQuery = useQuery({
     queryKey: commonMasterKeys.countries(table.page, table.pageSize, debouncedSearch),
     queryFn: () => commonMasterApi.listCountries({ page: table.page, pageSize: table.pageSize, search: debouncedSearch }),
+  });
+  const nextCodeQuery = useQuery({
+    queryKey: commonMasterKeys.nextCode("countries"),
+    queryFn: commonMasterApi.getNextCountryCode,
+    enabled: false,
   });
 
   const createMutation = useCommonMasterMutations({
@@ -66,25 +72,22 @@ const CountriesPage = () => {
     errorMessage: "Unable to update country status.",
   });
 
-  const continentByName = useMemo(() => {
-    const index = new Map<string, ContinentRecord>();
-    (continentsQuery.data ?? []).forEach((continent) => index.set(continent.name, continent));
-    return index;
-  }, [continentsQuery.data]);
-
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditing(null);
     form.reset(defaultValues);
     setDialogOpen(true);
+    const result = await nextCodeQuery.refetch();
+    form.setValue("code", result.data ?? "");
   };
 
-  const openEdit = (record: CountryListRow) => {
+  const openEdit = async (record: CountryListRow) => {
     setEditing(record);
+    const detail = await commonMasterApi.getCountry(record.id);
     form.reset({
-      continent: continentByName.get(record.continent)?.id ?? 0,
-      name: record.country_name,
-      code: record.country_code,
-      currency: record.currency === "-" ? "" : record.currency,
+      continent: detail.continent,
+      name: detail.name,
+      code: detail.code,
+      currency: detail.currency ?? 0,
       status: record.status === "Active",
     });
     setDialogOpen(true);
@@ -109,8 +112,8 @@ const CountriesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Countries"
-        description="Country master with continent mapping, code, and reporting currency."
+        title="Country"
+        description="Manage countries and currency mapping."
       />
 
       <MasterToolbar search={table.search} onSearchChange={table.setSearch} createLabel="Add Country" onCreate={openCreate} />
@@ -118,7 +121,7 @@ const CountriesPage = () => {
       <MasterTable
         columns={[
           { key: "country_name", title: "Country", render: (record) => <div className="font-medium">{record.country_name}</div> },
-          { key: "code", title: "Code", render: (record) => <span className="font-mono text-xs">{record.country_code}</span> },
+          { key: "code", title: "Country Code", render: (record) => <span className="font-mono text-xs">{record.country_code}</span> },
           { key: "continent", title: "Continent", render: (record) => record.continent },
           { key: "currency", title: "Currency", render: (record) => record.currency },
           { key: "status", title: "Status", render: (record) => <MasterStatusBadge active={record.status === "Active"} /> },
@@ -126,13 +129,13 @@ const CountriesPage = () => {
             key: "actions",
             title: "Actions",
             className: "w-[120px] text-right",
-            render: (record) => <RowActions onEdit={() => openEdit(record)} onToggle={() => setToggleTarget(record)} />,
+            render: (record) => <RowActions onEdit={() => openEdit(record)} onToggle={() => setToggleTarget(record)} isActive={record.is_active} />,
           },
         ]}
         records={result?.items ?? []}
         isLoading={countriesQuery.isLoading}
         isError={countriesQuery.isError}
-        errorDescription="Countries could not be loaded."
+        errorDescription="Country records could not be loaded."
         emptyTitle="No countries found"
         emptyDescription="Create the first country to unlock state and city configuration."
         page={table.page}
@@ -149,12 +152,25 @@ const CountriesPage = () => {
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
+                name="code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country Code*</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} readOnly placeholder="Generating..." className="bg-slate-50 text-slate-700" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="continent"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Continent</FormLabel>
+                    <FormLabel>Continent*</FormLabel>
                     <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select continent" /></SelectTrigger></FormControl>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select Continent" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {(continentsQuery.data ?? []).map((continent) => (
                           <SelectItem key={continent.id} value={String(continent.id)}>{continent.name}</SelectItem>
@@ -166,13 +182,23 @@ const CountriesPage = () => {
                 )}
               />
               <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem><FormLabel>Country name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="code" render={({ field }) => (
-                <FormItem><FormLabel>Country code</FormLabel><FormControl><Input {...field} className="uppercase" /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Country Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="currency" render={({ field }) => (
-                <FormItem><FormLabel>Currency</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Currency*</FormLabel>
+                  <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select Currency" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {(currenciesQuery.data ?? []).map((currency) => (
+                        <SelectItem key={currency.id} value={String(currency.id)}>
+                          {currency.code ? `${currency.name} (${currency.code})` : currency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
               )} />
             </div>
             <FormField
@@ -180,7 +206,7 @@ const CountriesPage = () => {
               name="status"
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
-                  <FormLabel>Active status</FormLabel>
+                  <FormLabel>Active Status*</FormLabel>
                   <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                 </FormItem>
               )}

@@ -3,6 +3,8 @@ import { Loader2, Search, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { productionMastersApi } from "@/features/production-masters/api/productionMastersApi";
+import type { ProfileCreationRecord } from "@/features/production-masters/types";
 import { coreApi } from "@/lib/api";
 import { normalizeListResponse } from "@/lib/api-helpers";
 import { cn } from "@/lib/utils";
@@ -11,6 +13,16 @@ import {
   productionHelperTextClassName,
   productionInputClassName,
 } from "./productionOrderFormStyles";
+
+const mapProfileToOption = (profile: ProfileCreationRecord): ProductionItemOption => ({
+  id: profile.id,
+  item_code: profile.code ?? profile.name,
+  item_name: profile.name,
+  unit: profile.uom,
+  _source: "profile",
+  _profile_length: profile.length ?? null,
+  _profile_weight: profile.weight_per_piece ?? null,
+});
 
 type FinishedGoodsAutocompleteProps = {
   value: ProductionItemOption | null;
@@ -80,14 +92,32 @@ const FinishedGoodsAutocomplete = ({
     queryKey: ["production-finished-goods-search", debouncedSearch],
     enabled: open && debouncedSearch.length >= 2,
     queryFn: async () => {
-      const response = await coreApi.get<unknown>("/api/items/items/", {
+      const response = await coreApi.get<unknown>("/api/wpe-masters/item-creations/", {
         params: {
           search: debouncedSearch,
           page_size: 20,
         },
       });
 
-      return normalizeListResponse<ProductionItemOption>(response.data);
+      return normalizeListResponse<Record<string, unknown>>(response.data).map((item) => ({
+        id: item.id as number,
+        item_code: item.item_code as string,
+        item_name: item.item_name as string,
+        unit: (item.uom_code ?? item.unit ?? "") as string,
+      })) as ProductionItemOption[];
+    },
+  });
+
+  const profileSearchQuery = useQuery({
+    queryKey: ["production-profile-search", debouncedSearch],
+    enabled: open && debouncedSearch.length >= 2,
+    queryFn: async () => {
+      const result = await productionMastersApi.profileCreations.list({
+        page: 1,
+        pageSize: 20,
+        search: debouncedSearch,
+      });
+      return result.items;
     },
   });
 
@@ -97,12 +127,24 @@ const FinishedGoodsAutocomplete = ({
       return [];
     }
 
-    return (searchQuery.data ?? []).filter((item) =>
+    const q = query.trim().toLowerCase();
+
+    const itemResults = (searchQuery.data ?? []).filter((item) =>
       [item.item_name, item.item_code, item.unit]
         .filter((candidate): candidate is string => Boolean(candidate))
-        .some((candidate) => candidate.toLowerCase().includes(query.trim().toLowerCase())),
+        .some((candidate) => candidate.toLowerCase().includes(q)),
     );
-  }, [debouncedSearch, searchQuery.data, searchTerm]);
+
+    const profileResults = (profileSearchQuery.data ?? [])
+      .filter((p) =>
+        [p.name, p.code, p.profile_type_name, p.profile_size_name, p.color_name]
+          .filter((candidate): candidate is string => Boolean(candidate))
+          .some((candidate) => candidate.toLowerCase().includes(q)),
+      )
+      .map(mapProfileToOption);
+
+    return [...profileResults, ...itemResults];
+  }, [debouncedSearch, searchQuery.data, profileSearchQuery.data, searchTerm]);
 
   useEffect(() => {
     if (!open) {
@@ -120,9 +162,11 @@ const FinishedGoodsAutocomplete = ({
     optionRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
   }, [highlightedIndex]);
 
+  const isSearching = searchQuery.isLoading || profileSearchQuery.isLoading;
+
   const helperMessage =
     error ??
-    (open && debouncedSearch.length >= 2 && !searchQuery.isLoading && suggestions.length === 0
+    (open && debouncedSearch.length >= 2 && !isSearching && suggestions.length === 0
       ? "No matching finished goods found."
       : searchTerm.trim().length > 0 && !value && !open
         ? "Select a finished goods item from the suggestion list."
@@ -181,7 +225,7 @@ const FinishedGoodsAutocomplete = ({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className={cn("relative rounded-xl", open && "ring-2 ring-[#2d6cdf]/15 ring-offset-2 ring-offset-white")}>
+      <div className={cn("relative rounded-[10px]", open && "ring-1 ring-[#2d6cdf]/20 ring-offset-1 ring-offset-white")}>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
         <Input
           id={inputId}
@@ -205,10 +249,10 @@ const FinishedGoodsAutocomplete = ({
           aria-controls={listId}
           aria-expanded={open}
           aria-invalid={error ? "true" : "false"}
-          className={cn(productionInputClassName, "pl-10 pr-20", error && "border-destructive")}
+          className={cn(productionInputClassName, "pl-9 pr-16", error && "border-destructive")}
         />
         <div className="absolute inset-y-0 right-2 flex items-center gap-1">
-          {searchQuery.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-300" /> : null}
+          {isSearching ? <Loader2 className="h-4 w-4 animate-spin text-slate-300" /> : null}
           {searchTerm ? (
             <Button
               type="button"
@@ -233,31 +277,32 @@ const FinishedGoodsAutocomplete = ({
         <div
           id={listId}
           role="listbox"
-          className="absolute top-[calc(100%+0.35rem)] z-50 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_42px_-28px_rgba(15,23,42,0.4)]"
+          className="absolute top-[calc(100%+0.3rem)] z-50 w-full overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_18px_42px_-28px_rgba(15,23,42,0.4)]"
         >
           <div className="max-h-72 overflow-y-auto py-1">
             {debouncedSearch.length < 2 ? (
               <div className="px-3 py-3 text-sm text-slate-500">Type at least 2 characters to search finished goods.</div>
             ) : null}
 
-            {debouncedSearch.length >= 2 && searchQuery.isLoading ? (
+            {debouncedSearch.length >= 2 && isSearching ? (
               <div className="flex items-center gap-2 px-3 py-3 text-sm text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Searching products...
               </div>
             ) : null}
 
-            {debouncedSearch.length >= 2 && !searchQuery.isLoading && suggestions.length === 0 ? (
+            {debouncedSearch.length >= 2 && !isSearching && suggestions.length === 0 ? (
               <div className="px-3 py-3 text-sm text-slate-500">No finished goods matched your search.</div>
             ) : null}
 
             {suggestions.map((item, index) => {
               const query = debouncedSearch || searchTerm;
               const active = index === highlightedIndex;
+              const isProfile = item._source === "profile";
 
               return (
                 <button
-                  key={item.id}
+                  key={`${isProfile ? "profile" : "item"}-${item.id}`}
                   ref={(node) => {
                     optionRefs.current[index] = node;
                   }}
@@ -265,16 +310,25 @@ const FinishedGoodsAutocomplete = ({
                   role="option"
                   aria-selected={active}
                   className={cn(
-                    "flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors",
+                    "flex w-full flex-col gap-1 px-3 py-2 text-left transition-colors",
                     active ? "bg-[#f5f8ff]" : "hover:bg-slate-50",
                   )}
                   onMouseDown={() => handleSelect(item)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                 >
-                  <span className="font-medium text-slate-900">{highlightText(item.item_name, query)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-900">{highlightText(item.item_name, query)}</span>
+                    {isProfile ? (
+                      <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-600">
+                        Profile
+                      </span>
+                    ) : null}
+                  </div>
                   <span className="text-xs text-slate-500">
                     {highlightText(item.item_code, query)}
                     {item.unit ? ` · ${item.unit}` : ""}
+                    {isProfile && item._profile_length ? ` · ${item._profile_length} m` : ""}
+                    {isProfile && item._profile_weight ? ` · ${item._profile_weight} kg/pc` : ""}
                   </span>
                 </button>
               );
@@ -283,7 +337,7 @@ const FinishedGoodsAutocomplete = ({
         </div>
       ) : null}
 
-      <div className={cn("mt-2", error ? "text-destructive" : productionHelperTextClassName)}>{helperMessage}</div>
+      <div className={cn("mt-1.5", error ? "text-destructive text-xs leading-5" : productionHelperTextClassName)}>{helperMessage}</div>
     </div>
   );
 };

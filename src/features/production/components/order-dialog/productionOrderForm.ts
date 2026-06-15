@@ -15,27 +15,37 @@ export const PRODUCTION_ORDER_TABS = [
 export type ProductionDialogTab = (typeof PRODUCTION_ORDER_TABS)[number]["value"];
 
 export const ORDER_STATUS_VALUES = ["PLANNED", "IN_PROGRESS", "PLAN_COMPLETED", "CLOSED"] as const;
-export const PRODUCTION_TYPE_VALUES = ["RECYCLING_PRODUCTION", "BLENDING_PRODUCTION", "COMPOUNDING"] as const;
-export const WORKFLOW_STAGE_VALUES = ["AD", "BL", "GL"] as const;
+export const WORKFLOW_STAGE_VALUES = ["-", "AD", "BL", "GL"] as const;
 export const SHIFT_VALUES = ["SHIFT_1", "SHIFT_2", "SHIFT_3"] as const;
 export const MATERIAL_SOURCE_TYPE_VALUES = ["ITEM", "PRODUCT_SUBTYPE"] as const;
 
 export type ProductionOrderStatusValue = (typeof ORDER_STATUS_VALUES)[number];
-export type ProductionTypeValue = (typeof PRODUCTION_TYPE_VALUES)[number];
 export type WorkflowStageValue = (typeof WORKFLOW_STAGE_VALUES)[number];
 export type ProductionShiftValue = (typeof SHIFT_VALUES)[number];
 export type MaterialSourceTypeValue = (typeof MATERIAL_SOURCE_TYPE_VALUES)[number];
+
+export const DEFAULT_WORKFLOW_STAGE_VALUE: WorkflowStageValue = "-";
 
 export type ProductionItemOption = {
   id: number;
   item_code: string;
   item_name: string;
   unit?: string;
+  _source?: "profile";
+  _profile_length?: string | null;
+  _profile_weight?: string | null;
 };
 
 export type NamedOption = {
   id: string;
   name: string;
+  description?: string;
+};
+
+export type ProductionTypeOption = {
+  id: string;
+  value: string;
+  label: string;
   description?: string;
 };
 
@@ -46,13 +56,8 @@ export const ORDER_STATUS_OPTIONS: Array<{ value: ProductionOrderStatusValue; la
   { value: "CLOSED", label: "Closed", description: "Closed production order." },
 ];
 
-export const PRODUCTION_TYPE_OPTIONS: Array<{ value: ProductionTypeValue; label: string; description: string }> = [
-  { value: "RECYCLING_PRODUCTION", label: "Recycling Production", description: "WPE recycling workflow." },
-  { value: "BLENDING_PRODUCTION", label: "Blending Production", description: "Blend and compound preparation." },
-  { value: "COMPOUNDING", label: "Compounding", description: "Compounding production route." },
-];
-
 export const WORKFLOW_STAGE_OPTIONS: Array<{ value: WorkflowStageValue; label: string; description: string }> = [
+  { value: "-", label: "-", description: "No workflow stage selected." },
   { value: "AD", label: "AD · Material Prep", description: "Additive and raw mix preparation." },
   { value: "BL", label: "BL · Blending", description: "Blend setup and processing." },
   { value: "GL", label: "GL · Granulation", description: "Granulation and downstream conversion." },
@@ -70,6 +75,8 @@ export const SHIFT_OPTIONS: Array<{
     label: "Shift 1",
     timeRange: "6:00am - 2:00pm",
     apiLabel: "Shift 1 (6:00 am - 2:00 pm)",
+
+    
     startTime: "06:00",
   },
   {
@@ -103,6 +110,9 @@ const finishedGoodsSchema = z.object({
   item_code: z.string(),
   item_name: z.string(),
   unit: z.string().optional(),
+  _source: z.literal("profile").optional(),
+  _profile_length: z.string().nullable().optional(),
+  _profile_weight: z.string().nullable().optional(),
 });
 
 const planRowSchema = z.object({
@@ -135,12 +145,12 @@ export const productionOrderFormSchema = z
   .object({
     production_id: z.string().trim().min(1, "Production ID is required"),
     status: z.enum(ORDER_STATUS_VALUES),
-    production_type: z.enum(PRODUCTION_TYPE_VALUES),
+    production_type: z.string().trim().min(1, "Production type is required"),
     stage: z.enum(WORKFLOW_STAGE_VALUES),
     next_workflow_stage: z.enum(WORKFLOW_STAGE_VALUES),
     finished_goods: finishedGoodsSchema.nullable().default(null),
     plan_rows: z.array(planRowSchema).min(1, "Add at least one plan row"),
-    production_for: z.string().trim().default(""),
+    production_for: z.string().trim().min(1, "Production For is required"),
     notes: z.string().trim().max(2000, "Notes must be 2000 characters or fewer").default(""),
     base_order: z.object({
       base_plan_id: z.string().default(""),
@@ -260,7 +270,8 @@ export type ProductionMaterialComputedRow = ProductionOrderMaterialRowForm & {
 
 export type CreateProductionOrderPayload = {
   production_id: string;
-  production_type: ProductionTypeValue;
+  production_for?: string;
+  production_type: string;
   status: ProductionOrderStatusValue;
   production_date: string;
   shift: string;
@@ -273,6 +284,7 @@ export type CreateProductionOrderPayload = {
   plan_id?: string;
   material_cost?: string;
   total_cost?: string;
+  extra_form_data?: Record<string, unknown>;
   materials?: Array<{
     sequence: number;
     source_type: MaterialSourceTypeValue;
@@ -314,7 +326,11 @@ export const createEmptyMaterialsState = (): ProductionOrderFormValues["material
   rows: [],
 });
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+};
 
 export const getShiftOption = (value: ProductionShiftValue) =>
   SHIFT_OPTIONS.find((option) => option.value === value) ?? SHIFT_OPTIONS[0];
@@ -349,9 +365,9 @@ export const createProductionOrderDefaultValues = (): ProductionOrderFormValues 
   return {
     production_id: "",
     status: "PLANNED",
-    production_type: "RECYCLING_PRODUCTION",
-    stage: "AD",
-    next_workflow_stage: "BL",
+    production_type: "",
+    stage: DEFAULT_WORKFLOW_STAGE_VALUE,
+    next_workflow_stage: DEFAULT_WORKFLOW_STAGE_VALUE,
     finished_goods: null,
     plan_rows: [createEmptyPlanRow()],
     production_for: "",
@@ -454,6 +470,42 @@ export const createMaterialRowFromItem = (
 
 export const createMaterialRowFromSubtype = createMaterialRowFromItem;
 
+export const mergeBomDerivedMaterialRow = (
+  baseRow: ProductionOrderMaterialRowForm,
+  existingRow?: ProductionOrderMaterialRowForm | null,
+): ProductionOrderMaterialRowForm => {
+  if (!existingRow || existingRow.bom_component !== baseRow.bom_component) {
+    return baseRow;
+  }
+
+  const shouldPreserveSelectedVariant =
+    baseRow.source_type === "PRODUCT_SUBTYPE" &&
+    existingRow.item !== null;
+
+  return {
+    ...baseRow,
+    item: shouldPreserveSelectedVariant ? existingRow.item : baseRow.item,
+    unit: shouldPreserveSelectedVariant ? existingRow.unit || baseRow.unit : baseRow.unit,
+    received_quantity: existingRow.received_quantity,
+    request_quantity: existingRow.request_quantity,
+    rate: existingRow.rate,
+    notes: existingRow.notes,
+  };
+};
+
+type MaterialRowConfigurationCandidate = {
+  item_code?: string | null;
+  item_name?: string | null;
+};
+
+export const isMaterialRowConfigured = (
+  row?: MaterialRowConfigurationCandidate | null,
+): row is MaterialRowConfigurationCandidate & { item_code: string; item_name: string } =>
+  typeof row?.item_code === "string" &&
+  row.item_code.trim().length > 0 &&
+  typeof row.item_name === "string" &&
+  row.item_name.trim().length > 0;
+
 export const getMaterialRowIdentity = (row: Pick<ProductionOrderMaterialRowForm, "source_type" | "item" | "product_subtype" | "item_code">) => {
   if (row.source_type === "PRODUCT_SUBTYPE" && row.product_subtype) {
     return `PRODUCT_SUBTYPE:${row.product_subtype}`;
@@ -510,17 +562,35 @@ export type MaterialPlanItem = {
   notes?: string;
 };
 
+type ExtraFormData = {
+  stage?: string;
+  next_workflow_stage?: string;
+  notes?: string;
+  finished_goods?: ProductionItemOption | null;
+  production_facility?: string;
+  work_center?: string;
+  shift_incharge?: string;
+  selected_bom_variant_id?: string;
+  bom_multiplier?: string;
+  plan_rows?: ProductionOrderFormValues["plan_rows"];
+  base_order?: ProductionOrderFormValues["base_order"];
+  custom_specs?: ProductionOrderFormValues["custom_specs"];
+};
+
 export type ProductionOrderDetail = {
   id: number;
   production_id: string;
+  production_for?: string | null;
   production_type?: string;
   status?: string;
+  batch_number?: string | null;
   production_date?: string;
   shift?: string;
   planned_quantity?: string;
   line_number?: string | null;
   line_name?: string | null;
   material_plans?: MaterialPlanItem[];
+  extra_form_data?: ExtraFormData | null;
 };
 
 export const mapOrderDetailToFormValues = (
@@ -528,6 +598,7 @@ export const mapOrderDetailToFormValues = (
   machines: Array<{ id: number; machine_code?: string | null; name: string }>,
 ): ProductionOrderFormValues => {
   const defaults = createProductionOrderDefaultValues();
+  const extra = order.extra_form_data ?? {};
   const shiftValue = SHIFT_OPTIONS.find((o) => o.apiLabel === order.shift)?.value ?? "SHIFT_1";
   const qty = parseFloat(String(order.planned_quantity ?? "0")) || 0;
   const machine = machines.find(
@@ -558,19 +629,47 @@ export const mapOrderDetailToFormValues = (
     }),
   );
 
+  const savedPlanRows = extra.plan_rows;
+  const inferredBomVariantId =
+    materialRows.find((row) => row.bom_variant !== null)?.bom_variant ?? null;
+  const planRows: ProductionOrderFormValues["plan_rows"] =
+    Array.isArray(savedPlanRows) && savedPlanRows.length > 0
+      ? savedPlanRows
+      : [{ length_mts: "", qty_mts: qty > 0 ? qty.toFixed(3) : "", packets: "" }];
+
   return {
     ...defaults,
     production_id: order.production_id,
     status: (order.status as ProductionOrderStatusValue) ?? "PLANNED",
-    production_type: (order.production_type as ProductionTypeValue) ?? "RECYCLING_PRODUCTION",
-    plan_rows: [{ length_mts: "", qty_mts: qty > 0 ? qty.toFixed(3) : "", packets: "" }],
+    production_for: order.production_for?.trim() ?? "",
+    production_type: order.production_type?.trim() || defaults.production_type,
+    stage: (extra.stage as WorkflowStageValue) ?? defaults.stage,
+    next_workflow_stage: (extra.next_workflow_stage as WorkflowStageValue) ?? defaults.next_workflow_stage,
+    notes: extra.notes ?? defaults.notes,
+    finished_goods: extra.finished_goods ?? null,
+    plan_rows: planRows,
+    base_order: extra.base_order ?? defaults.base_order,
+    custom_specs: extra.custom_specs ?? defaults.custom_specs,
     resources: {
       ...defaults.resources,
       production_date: order.production_date ?? defaults.resources.production_date,
       shift: shiftValue,
+      production_facility: extra.production_facility ?? "",
+      work_center: extra.work_center ?? "",
       line_machine_id: machine ? String(machine.id) : "",
+      shift_incharge: extra.shift_incharge ?? "",
     },
-    materials: { selected_bom_variant_id: "", bom_multiplier: "1", rows: materialRows },
+    details: {
+      ...defaults.details,
+      batch_auto: order.batch_number?.trim() || defaults.details.batch_auto,
+    },
+    materials: {
+      selected_bom_variant_id:
+        extra.selected_bom_variant_id?.trim() ||
+        (typeof inferredBomVariantId === "number" ? String(inferredBomVariantId) : ""),
+      bom_multiplier: extra.bom_multiplier?.trim() || defaults.materials.bom_multiplier,
+      rows: materialRows,
+    },
   };
 };
 
@@ -582,23 +681,42 @@ export const toProductionOrderPayload = (
   const plannedQuantity = getProductionQuantity(values.plan_rows);
   const planId = values.base_order.base_plan_id.trim();
   const bomMultiplier = parseNumericInput(values.materials.bom_multiplier) || 1;
+  const batchNumber = values.details.batch_auto.trim();
   const computedMaterialRows = values.materials.rows.map((row) => computeMaterialRow(row, plannedQuantity, bomMultiplier));
   const materialCost = computedMaterialRows.reduce((sum, row) => sum + row.amount, 0);
 
   return {
     production_id: values.production_id.trim(),
-    production_type: values.production_type,
+    production_for: values.production_for.trim(),
+    production_type: values.production_type.trim(),
     status: values.status,
     production_date: values.resources.production_date,
     shift: getShiftOption(values.resources.shift).apiLabel,
     planned_quantity: plannedQuantity.toFixed(3),
     planned_weight: "0.000",
     start_date_time: buildActualStartDateTimeValue(values.resources.production_date, values.resources.shift),
-    batch_number: "",
+    batch_number:
+      batchNumber && batchNumber.toLowerCase() !== "generated on save"
+        ? batchNumber
+        : "",
     line_name: selectedMachine?.name ?? "",
     line_number: selectedMachine?.machine_code ?? "",
     material_cost: materialCost.toFixed(2),
     total_cost: materialCost.toFixed(2),
+    extra_form_data: {
+      stage: values.stage,
+      next_workflow_stage: values.next_workflow_stage,
+      notes: values.notes,
+      finished_goods: values.finished_goods ?? null,
+      production_facility: values.resources.production_facility,
+      work_center: values.resources.work_center,
+      shift_incharge: values.resources.shift_incharge,
+      selected_bom_variant_id: values.materials.selected_bom_variant_id,
+      bom_multiplier: values.materials.bom_multiplier,
+      plan_rows: values.plan_rows,
+      base_order: values.base_order,
+      custom_specs: values.custom_specs,
+    },
     materials: computedMaterialRows.map((row) => ({
       sequence: row.sequence,
       source_type: row.source_type,

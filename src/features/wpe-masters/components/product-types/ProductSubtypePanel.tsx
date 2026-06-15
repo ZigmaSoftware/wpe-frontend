@@ -85,7 +85,7 @@ const ProductSubtypePanel = ({
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
-                Active detail panel
+                Active item sub category workspace
               </Badge>
               <MasterStatusBadge active={selectedCategory.is_active} />
             </div>
@@ -102,7 +102,7 @@ const ProductSubtypePanel = ({
                 Code: {selectedCategory.code}
               </Badge>
               <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">
-                {selectedCategory.subtype_count} total subtypes
+                {selectedCategory.subtype_count} total item sub categories
               </Badge>
               <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">
                 {activeSubtypeCount} active
@@ -121,7 +121,7 @@ const ProductSubtypePanel = ({
               onClick={onBackToCategories}
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Categories
+              Back to Item Categories
             </Button>
             {onEditCategory ? (
               <Button
@@ -131,7 +131,7 @@ const ProductSubtypePanel = ({
                 onClick={() => onEditCategory(selectedCategory)}
               >
                 <Pencil className="h-4 w-4" />
-                Edit Category
+                Edit Item Category
               </Button>
             ) : null}
             {onToggleCategory ? (
@@ -167,7 +167,7 @@ const ProductSubtypePanel = ({
             <Input
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder={`Search subtypes in ${selectedCategory.name}`}
+              placeholder={`Search item sub categories in ${selectedCategory.name}`}
               className="h-11 rounded-xl border-slate-200 bg-white pl-10 shadow-sm shadow-slate-100"
             />
           </div>
@@ -188,7 +188,7 @@ const ProductSubtypePanel = ({
             {canAdd ? (
               <Button onClick={onCreateSubtype} className="h-11 rounded-xl px-4">
                 <Plus className="h-4 w-4" />
-                Add Subtype
+                Add Item Sub Category
               </Button>
             ) : null}
           </div>
@@ -211,17 +211,17 @@ const ProductSubtypePanel = ({
       ) : !records.length ? (
         <div className="p-5">
           <EmptyState
-            title={hasFilters ? "No subtypes match your filters" : "No subtypes created yet"}
+            title={hasFilters ? "No item sub categories match your filters" : "No item sub categories created yet"}
             description={
               hasFilters
-                ? "Refine the subtype search or status filter to find matching records."
-                : `Create the first subtype under ${selectedCategory.name} to complete this hierarchy.`
+                ? "Refine the search or status filter to find matching item sub categories."
+                : `Create the first item sub category under ${selectedCategory.name} to complete this hierarchy.`
             }
             action={
               canAdd && !hasFilters ? (
                 <Button onClick={onCreateSubtype}>
                   <Plus className="h-4 w-4" />
-                  Add First Subtype
+                  Add First Item Sub Category
                 </Button>
               ) : undefined
             }
@@ -231,13 +231,13 @@ const ProductSubtypePanel = ({
         <div className="overflow-x-auto px-5 pb-5 pt-4">
           <div className="overflow-hidden rounded-2xl border border-slate-200">
             <Table className="min-w-[760px]">
-              <TableHeader className="bg-slate-50/80">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-16 text-center">S.No</TableHead>
-                  <TableHead>Subtype</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Updated</TableHead>
+                <TableHeader className="bg-slate-50/80">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-16 text-center">S.No</TableHead>
+                    <TableHead>Item Sub Category</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Updated</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -274,6 +274,7 @@ const ProductSubtypePanel = ({
                         onEdit={onEditSubtype ? () => onEditSubtype(record) : undefined}
                         onToggle={onToggleSubtype ? () => onToggleSubtype(record) : undefined}
                         onDelete={onDeleteSubtype ? () => onDeleteSubtype(record) : undefined}
+                        isActive={record.is_active}
                       />
                     </TableCell>
                   </TableRow>

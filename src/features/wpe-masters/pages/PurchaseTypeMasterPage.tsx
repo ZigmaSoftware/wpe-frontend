@@ -3,7 +3,7 @@ import SimpleMasterPage from "./SimpleMasterPage";
 
 const PurchaseTypeMasterPage = () => (
   <SimpleMasterPage
-    title="Purchase Type Master"
+    title="Purchase Type"
     description="Manage authorized purchase transaction types for users."
     queryKey="purchase-types"
     api={wpeMastersApi.purchaseTypes}

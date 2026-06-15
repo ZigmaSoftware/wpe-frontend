@@ -7,6 +7,7 @@ import type { ProductionOrderFormValues } from "./productionOrderForm";
 import {
   productionFieldLabelClassName,
   productionReadOnlyInputClassName,
+  productionTripleFieldGridClassName,
 } from "./productionOrderFormStyles";
 
 type ProductionDetailsSectionProps = {
@@ -15,12 +16,12 @@ type ProductionDetailsSectionProps = {
 
 const ProductionDetailsSection = ({ form }: ProductionDetailsSectionProps) => (
   <ProductionSectionCard
-    title="Details"
-    description="Auto-generated tracking fields for the production order lifecycle."
+    title="Tracking"
+    description="System generated tracking information for this order."
     tone="emerald"
     icon={Zap}
   >
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className={productionTripleFieldGridClassName}>
       <FormField
         control={form.control}
         name="details.batch_auto"

@@ -26,16 +26,38 @@ export type Contact = {
   id: number;
   ref_code: string;
   name: string;
-  phone: string;
-  email: string | null;
+  display_name: string | null;
+  contact_code: string | null;
   category: string;
+  contact_category: string | null;
+  customer_loyalty: string | null;
   company_name: string | null;
   gstin: string | null;
-  state: string;
-  address: string;
+  pan: string | null;
+  sale_person: string | null;
+  division: string | null;
+  zone: string | null;
+  subzone: string | null;
+  tds_category: string | null;
+  tds_percent: string | number | null;
+  accounting_percent: string | number | null;
   lead_source: string;
   market_segment: string;
   is_active: boolean;
+  contact_person: string | null;
+  designation: string | null;
+  phone: string;
+  work_phone_2: string | null;
+  work_phone_3: string | null;
+  fax: string | null;
+  email: string | null;
+  address: string;
+  billing_landmark: string | null;
+  billing_city: string | null;
+  state: string;
+  billing_postal_code: string | null;
+  billing_country: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -108,13 +130,27 @@ export type StoreStockRequest = {
   quantity: string;
   request_type: "GENERAL" | "ADDITIVE";
   department: string;
+  request_date?: string | null;
+  require_date?: string | null;
+  require_time?: string | null;
   requested_for_name: string;
   request_reason: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "PARTIALLY_APPROVED" | "CANCELLED";
+  status:
+    | "PENDING_HEAD_APPROVAL"
+    | "PENDING_STORE_ISSUE"
+    | "HEAD_REJECTED"
+    | "APPROVED"
+    | "REJECTED"
+    | "PARTIALLY_APPROVED"
+    | "CANCELLED";
   requested_by: number;
   requested_by_username: string;
   approved_by: number | null;
   approved_by_username: string | null;
+  head_action_by: number | null;
+  head_action_by_username: string | null;
+  head_action_at: string | null;
+  head_approval_remarks: string | null;
   requested_at: string;
   approved_at: string | null;
   total_requested_qty?: string;
@@ -124,14 +160,26 @@ export type StoreStockRequest = {
 
 export type StoreTransactionRecord = {
   id: number;
+  transaction_no?: string | null;
+  transaction_date?: string | null;
   item: number;
   item_code: string;
   item_name: string;
   unit: string;
   transaction_type: string;
+  reference_type?: string | null;
   quantity: string;
   reference_id: string;
   metadata: Record<string, unknown>;
+  warehouse?: number;
+  warehouse_code?: string | null;
+  warehouse_name?: string | null;
+  inward_qty?: string;
+  outward_qty?: string;
+  balance_qty?: string;
+  remarks?: string | null;
+  created_by?: number | null;
+  created_by_username?: string | null;
   created_at: string;
 };
 
@@ -255,6 +303,36 @@ export type GrnValueDetails = {
   total_after_tax?: string | number;
 };
 
+export type GrnPendingItemLine = {
+  line_index: number;
+  item_id?: string | null;
+  item_name?: string | null;
+  unit?: string | null;
+  sent_qty?: string | number | null;
+  received_qty?: string | number | null;
+  accepted_qty?: string | number | null;
+  rejected_qty?: string | number | null;
+  rejection_reason?: string | null;
+  pending_rejected_qty?: string | number | null;
+  store_in_id?: string | number | null;
+  store_in_name?: string | null;
+};
+
+export type QcrItemLine = {
+  line_index: number;
+  item_id?: string | null;
+  item_name?: string | null;
+  unit?: string | null;
+  sent_qty?: string | number | null;
+  received_qty?: string | number | null;
+  accepted_qty?: string | number | null;
+  rejected_qty?: string | number | null;
+  rejection_reason?: string | null;
+  pending_rejected_qty?: string | number | null;
+  store_in_id?: string | number | null;
+  store_in_name?: string | null;
+};
+
 export type GrnRecord = {
   id: number;
   unique_id: string;
@@ -272,6 +350,7 @@ export type GrnRecord = {
   moved_to_qcr_at: string | null;
   moved_to_qcr_by: string | null;
   raw_payload?: Record<string, unknown>;
+  grn_pending_items?: GrnPendingItemLine[];
   document_details: GrnDocumentDetails;
   document_requirement_details: GrnRequirementDetails;
   supplier_details: GrnSupplierDetails;
@@ -295,61 +374,13 @@ export type QcrRecord = {
   snapshot: Record<string, unknown>;
   status: string;
   remarks: string | null;
+  qcr_items?: QcrItemLine[];
   moved_to_qcr_at: string;
   moved_to_qcr_by: string | null;
+  qcr_completed_at?: string | null;
+  qcr_completed_by?: string | null;
   created_at: string;
   updated_at: string;
-};
-
-// ── Presales ────────────────────────────────────────────────────────────────
-
-export type PresalesRequestItem = {
-  id: number;
-  item: number;
-  item_code: string;
-  item_name: string;
-  category: string;
-  quantity: string;
-  unit: string;
-  unit_display: string;
-  remarks: string;
-  created_at: string;
-};
-
-export type PresalesRequest = {
-  id: number;
-  request_no: string;
-  request_date: string;
-  category: "STORE" | "PURCHASE";
-  request_person: string;
-  department: string;
-  required_reason: string;
-  customer_type: string;
-  customer_name: string;
-  remarks: string;
-  status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "SENT_TO_PRODUCTION";
-  items: PresalesRequestItem[];
-  submitted_by: number | null;
-  submitted_by_username: string | null;
-  submitted_at: string | null;
-  approved_by: number | null;
-  approved_by_username: string | null;
-  approved_at: string | null;
-  approval_remarks: string;
-  sent_to_prod_at: string | null;
-  created_by: number | null;
-  created_by_username: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type PresalesAuditLog = {
-  id: number;
-  action: string;
-  performed_by: number | null;
-  performed_by_username: string | null;
-  notes: string;
-  created_at: string;
 };
 
 // ── Production ───────────────────────────────────────────────────────────────
@@ -376,6 +407,7 @@ export type BOMVariantComponent = {
   item_name: string;
   category: string;
   is_active: boolean | null;
+  source_active?: boolean | null;
   target_weight_grams: string;
   min_weight_grams: string;
   max_weight_grams: string;
@@ -391,6 +423,12 @@ export type BOMVariant = {
   product_item: number | null;
   product_item_name: string | null;
   revision: string;
+  batch_size?: string | null;
+  batch_uom?: string;
+  status?: "DRAFT" | "APPROVED" | "INACTIVE";
+  approved_by?: number | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
   is_active: boolean;
   notes: string;
   component_count?: number;
@@ -442,6 +480,8 @@ export type RegrindEntry = {
 export type ProductionBatch = {
   id: number;
   batch_no: string;
+  display_batch_no?: string | null;
+  display_status?: string | null;
   production_order: number;
   bom_variant: number | null;
   bom_variant_name: string | null;
@@ -460,9 +500,45 @@ export type ProductionBatch = {
   updated_at: string;
 };
 
+export type ProductionOutputCaptureDetail = {
+  component_id: number;
+  item_code: string;
+  item_name: string;
+  weight_kg: string;
+  captured_at: string;
+};
+
+export type ProductionOutputCaptureColumn = {
+  id: number;
+  label: string;
+};
+
+export type ProductionOutputCapture = {
+  id: number;
+  production_order: number;
+  source_batch: number;
+  source_batch_no: string;
+  source_batch_display_batch_no?: string | null;
+  source_batch_display_status?: string | null;
+  sequence: number;
+  scancode_id: string;
+  recipe_no: string;
+  quantity_kg: string;
+  weight_kg: string;
+  binlot: string;
+  is_outwarded: boolean;
+  session_key: string;
+  captured_at: string;
+  component_columns: ProductionOutputCaptureColumn[];
+  details: ProductionOutputCaptureDetail[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type ProductionOrder = {
   id: number;
   production_id: string;
+  production_for?: string | null;
   production_type: string;
   status: "PLANNED" | "IN_PROGRESS" | "PLAN_COMPLETED" | "CLOSED";
   batch_number: string | null;
@@ -482,6 +558,25 @@ export type ProductionOrder = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ProductionStageRecord = {
+  id: number;
+  order_id: number;
+  production_id: string;
+  stage: "AD" | "BL" | "GL" | "PR";
+  production_type: string;
+  batch_no: string | null;
+  display_batch_no: string | null;
+  batch_count: number;
+  production_date: string;
+  shift: string;
+  line_no: string;
+  start_date_time: string | null;
+  end_date_time: string | null;
+  plan_id: string | null;
+  status: string;
+  workflow_status: string;
 };
 
 export type ImportResponse = {

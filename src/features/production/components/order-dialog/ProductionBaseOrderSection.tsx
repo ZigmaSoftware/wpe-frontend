@@ -18,7 +18,7 @@ type ProductionBaseOrderSectionProps = {
 };
 
 const BaseOrderFields = ({ form }: Pick<ProductionBaseOrderSectionProps, "form">) => (
-  <div className="grid gap-4">
+  <div className="grid gap-4 md:grid-cols-2">
     <FormField
       control={form.control}
       name="base_order.base_plan_id"
@@ -27,8 +27,8 @@ const BaseOrderFields = ({ form }: Pick<ProductionBaseOrderSectionProps, "form">
           <FormLabel className={productionFieldLabelClassName}>Plan ID</FormLabel>
           <Input {...field} readOnly placeholder="Will populate from linked plan" className={productionReadOnlyInputClassName} />
         </FormItem>
-      )}
-    />
+        )}
+      />
     <FormField
       control={form.control}
       name="base_order.base_order_id"
@@ -37,8 +37,8 @@ const BaseOrderFields = ({ form }: Pick<ProductionBaseOrderSectionProps, "form">
           <FormLabel className={productionFieldLabelClassName}>Base Order ID</FormLabel>
           <Input {...field} readOnly placeholder="Will populate from linked order" className={productionReadOnlyInputClassName} />
         </FormItem>
-      )}
-    />
+        )}
+      />
     <FormField
       control={form.control}
       name="base_order.base_customer_id"
@@ -47,18 +47,8 @@ const BaseOrderFields = ({ form }: Pick<ProductionBaseOrderSectionProps, "form">
           <FormLabel className={productionFieldLabelClassName}>Base Customer ID</FormLabel>
           <Input {...field} readOnly placeholder="Will populate from linked customer" className={productionReadOnlyInputClassName} />
         </FormItem>
-      )}
-    />
-    <FormField
-      control={form.control}
-      name="base_order.base_customer_name"
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel className={productionFieldLabelClassName}>Base Customer Name</FormLabel>
-          <Input {...field} readOnly placeholder="Will populate from linked customer" className={productionReadOnlyInputClassName} />
-        </FormItem>
-      )}
-    />
+        )}
+      />
     <FormField
       control={form.control}
       name="base_order.base_order_date"
@@ -66,6 +56,16 @@ const BaseOrderFields = ({ form }: Pick<ProductionBaseOrderSectionProps, "form">
         <FormItem>
           <FormLabel className={productionFieldLabelClassName}>Base Order Date</FormLabel>
           <Input {...field} readOnly placeholder="Will populate from base order date" className={productionReadOnlyInputClassName} />
+        </FormItem>
+        )}
+      />
+    <FormField
+      control={form.control}
+      name="base_order.base_customer_name"
+      render={({ field }) => (
+        <FormItem className="md:col-span-2">
+          <FormLabel className={productionFieldLabelClassName}>Base Customer Name</FormLabel>
+          <Input {...field} readOnly placeholder="Will populate from linked customer" className={productionReadOnlyInputClassName} />
         </FormItem>
       )}
     />
@@ -80,9 +80,9 @@ const ProductionBaseOrderSection = ({
 }: ProductionBaseOrderSectionProps) => {
   if (embedded) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div>
-          <div className="text-sm font-bold uppercase tracking-[0.08em] text-slate-800">{title}</div>
+          <div className="text-[1.05rem] font-semibold tracking-[-0.02em] text-slate-950">{title}</div>
           <p className={`mt-1 ${productionHelperTextClassName}`}>{description}</p>
         </div>
         <BaseOrderFields form={form} />

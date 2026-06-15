@@ -1,9 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Plus, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Columns2, PanelLeftOpen, PanelRightOpen, Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import { Button } from "@/components/ui/button";
@@ -32,15 +32,18 @@ import {
   productionCompactInputClassName,
   productionFieldLabelClassName,
   productionHelperTextClassName,
-  productionMetricCardClassName,
 } from "@/features/production/components/order-dialog/productionOrderFormStyles";
+import {
+  PRODUCTION_AD_WEIGHTAGE_ROUTE,
+  getProductionEditRoute,
+  getProductionManageBatchRoute,
+  getProductionStageRoute,
+} from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type {
   BatchWeightEntry,
-  BOMVariant,
   ProductionBatch,
-  ProductionMachine,
   ProductionOrder,
   RegrindEntry,
 } from "@/lib/types";
@@ -59,8 +62,8 @@ const STAGE_META: Record<
   }
 > = {
   AD: {
-    label: "Raw Mix",
-    description: "Prepare additive and raw-material mix for the batch.",
+    label: "Raw Weightage",
+    description: "Prepare additive and raw-material weightage for the batch.",
     accentClassName: "border-[#ffd7bf] bg-[#fff4eb] text-[#f97316]",
     mutedClassName: "border-[#ffe8d8] bg-[#fffaf5] text-[#c76d2b]",
   },
@@ -78,21 +81,18 @@ const STAGE_META: Record<
   },
 };
 
+const STAGE_PRODUCTION_TYPE_LABELS: Record<ProductionBatch["stage"], string> = {
+  AD: "WPE Additive Production",
+  BL: "WPE Blend Production",
+  GL: "WPE Granulated Blend Production",
+};
+
 const dialogContentClassName =
   "overflow-hidden rounded-[28px] border border-slate-200/90 bg-white p-0 shadow-[0_32px_80px_-48px_rgba(15,23,42,0.42)]";
 const dialogHeaderClassName = "border-b border-slate-200/75 px-6 py-5 text-left";
 const dialogBodyClassName = "px-6 py-6";
 const productionDialogTextareaClassName =
-  "min-h-[88px] rounded-xl border-slate-200/90 bg-white text-[15px] text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-slate-300 focus-visible:border-[#2d6cdf] focus-visible:ring-[#2d6cdf]/20";
-
-const batchSchema = z.object({
-  stage: z.enum(STAGES),
-  bom_variant: z.number().nullable().default(null),
-  machine: z.number().nullable().default(null),
-  notes: z.string().default(""),
-});
-
-type BatchFormValues = z.infer<typeof batchSchema>;
+  "min-h-[88px] rounded-xl border-slate-200/90 bg-white text-[15px] text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-slate-500 focus-visible:border-[#2d6cdf] focus-visible:ring-[#2d6cdf]/20";
 
 const regrindSchema = z.object({
   item_id: z.number({ required_error: "Item required" }),
@@ -104,7 +104,44 @@ const regrindSchema = z.object({
 });
 
 type RegrindFormValues = z.infer<typeof regrindSchema>;
+type BatchSplitView = "left" | "split" | "right";
 type ItemOption = { id: number; item_code: string; item_name: string };
+
+const compactHeaderMetricClassName =
+  "rounded-lg border border-slate-200/85 bg-white px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]";
+
+const STAGE_WORKFLOW_PRIORITY: Record<ProductionBatch["stage"], number> = {
+  AD: 0,
+  BL: 1,
+  GL: 2,
+};
+
+const dedupeWorkflowBatches = (batches: ProductionBatchExt[]) => {
+  const batchesByWorkflow = new Map<string, ProductionBatchExt[]>();
+
+  batches.forEach((batch) => {
+    const workflowKey = (batch.display_batch_no?.trim() || batch.batch_no || String(batch.id)).toUpperCase();
+    const existing = batchesByWorkflow.get(workflowKey);
+    if (existing) {
+      existing.push(batch);
+      return;
+    }
+    batchesByWorkflow.set(workflowKey, [batch]);
+  });
+
+  return Array.from(batchesByWorkflow.values())
+    .map((workflowBatches) =>
+      [...workflowBatches].sort((left, right) => {
+        const stagePriorityDelta =
+          STAGE_WORKFLOW_PRIORITY[right.stage] - STAGE_WORKFLOW_PRIORITY[left.stage];
+        if (stagePriorityDelta !== 0) {
+          return stagePriorityDelta;
+        }
+        return right.id - left.id;
+      })[0],
+    )
+    .sort((left, right) => right.id - left.id);
+};
 
 const ItemSearch = ({ onSelect }: { onSelect: (item: ItemOption) => void }) => {
   const [query, setQuery] = useState("");
@@ -166,21 +203,22 @@ const ProductionManageBatchPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { orderId: orderIdParam } = useParams();
+  const [searchParams] = useSearchParams();
 
   const orderId = Number(orderIdParam);
   const hasValidOrderId = Number.isInteger(orderId) && orderId > 0;
+  const routeStage = searchParams.get("stage")?.toUpperCase() ?? "";
+  const activeStageFilter = STAGES.includes(routeStage as ProductionBatch["stage"])
+    ? (routeStage as ProductionBatch["stage"])
+    : null;
+  const backRoute = activeStageFilter ? getProductionStageRoute(activeStageFilter) : PRODUCTION_AD_WEIGHTAGE_ROUTE;
 
-  const [activeStage, setActiveStage] = useState<ProductionBatch["stage"]>("AD");
-  const [createBatchOpen, setCreateBatchOpen] = useState(false);
+  const [detailTab, setDetailTab] = useState<"general" | "movement" | "transactions" | "summary">("general");
+  const [viewMode, setViewMode] = useState<BatchSplitView>("split");
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [weightEntryOpen, setWeightEntryOpen] = useState(false);
   const [regrindOpen, setRegrindOpen] = useState(false);
   const [weightValues, setWeightValues] = useState<Record<number, string>>({});
-
-  const batchForm = useForm<BatchFormValues>({
-    resolver: zodResolver(batchSchema),
-    defaultValues: { stage: "AD", bom_variant: null, machine: null, notes: "" },
-  });
   const regrindForm = useForm<RegrindFormValues>({
     resolver: zodResolver(regrindSchema),
     defaultValues: {
@@ -202,32 +240,16 @@ const ProductionManageBatchPage = () => {
     enabled: hasValidOrderId,
   });
 
-  const machinesQ = useQuery({
-    queryKey: ["production-machines"],
-    queryFn: async () => {
-      const response = await coreApi.get<unknown>("/api/production/machines/");
-      return normalizeListResponse<ProductionMachine>(response.data);
-    },
-  });
-
-  const bomVariantsQ = useQuery({
-    queryKey: ["bom-variants"],
-    queryFn: async () => {
-      const response = await coreApi.get<unknown>("/api/production/bom-variants/");
-      return normalizeListResponse<BOMVariant>(response.data);
-    },
-  });
-
   const batchesQ = useQuery({
-    queryKey: ["production-batches", orderId],
+    queryKey: ["production-batches", orderId, activeStageFilter ?? "all"],
     queryFn: async () => {
-      const response = await coreApi.get<unknown>(`/api/production/orders/${orderId}/batches/`);
+      const response = await coreApi.get<unknown>(`/api/production/orders/${orderId}/batches/`, {
+        params: { stage: activeStageFilter ?? undefined },
+      });
       return normalizeListResponse<ProductionBatchExt>(response.data);
     },
     enabled: hasValidOrderId,
   });
-
-  const selectedBatch = (batchesQ.data ?? []).find((batch) => batch.id === selectedBatchId) ?? null;
 
   const regrindEntriesQ = useQuery({
     queryKey: ["regrind-entries", orderId, selectedBatchId],
@@ -240,48 +262,37 @@ const ProductionManageBatchPage = () => {
     enabled: hasValidOrderId && selectedBatchId !== null && regrindOpen,
   });
 
-  useEffect(() => {
-    if (!batchesQ.data?.length) return;
-    if ((batchesQ.data ?? []).some((batch) => batch.stage === activeStage)) return;
+  const allBatches = useMemo(() => {
+    const rawBatches = batchesQ.data ?? [];
+    return activeStageFilter ? rawBatches : dedupeWorkflowBatches(rawBatches);
+  }, [activeStageFilter, batchesQ.data]);
 
-    const nextStage = STAGES.find((stage) => (batchesQ.data ?? []).some((batch) => batch.stage === stage));
-    if (nextStage) {
-      setActiveStage(nextStage);
+  useEffect(() => {
+    if (!allBatches.length) {
+      if (selectedBatchId !== null) {
+        setSelectedBatchId(null);
+      }
+      setWeightEntryOpen(false);
+      setRegrindOpen(false);
+      return;
     }
-  }, [activeStage, batchesQ.data]);
 
-  useEffect(() => {
-    if (!selectedBatchId || !batchesQ.data) return;
-    if ((batchesQ.data ?? []).some((batch) => batch.id === selectedBatchId)) return;
+    if (selectedBatchId && allBatches.some((batch) => batch.id === selectedBatchId)) {
+      return;
+    }
 
-    setSelectedBatchId(null);
+    setSelectedBatchId(allBatches[0].id);
     setWeightEntryOpen(false);
     setRegrindOpen(false);
-  }, [batchesQ.data, selectedBatchId]);
+  }, [allBatches, selectedBatchId]);
 
   const invalidateProductionContext = () => {
     queryClient.invalidateQueries({ queryKey: ["production-batches", orderId] });
     queryClient.invalidateQueries({ queryKey: ["production-order", orderId] });
     queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
     queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
   };
-
-  const createBatchMutation = useMutation({
-    mutationFn: (values: BatchFormValues) =>
-      coreApi.post(`/api/production/orders/${orderId}/batches/`, {
-        stage: values.stage,
-        bom_variant: values.bom_variant ?? undefined,
-        machine: values.machine ?? undefined,
-        notes: values.notes,
-      }),
-    onSuccess: (_, values) => {
-      toast.success("Batch created.");
-      setCreateBatchOpen(false);
-      batchForm.reset({ stage: values.stage, bom_variant: null, machine: null, notes: "" });
-      invalidateProductionContext();
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Failed to create batch.")),
-  });
 
   const startBatchMutation = useMutation({
     mutationFn: (batch: ProductionBatchExt) =>
@@ -296,10 +307,15 @@ const ProductionManageBatchPage = () => {
   const confirmBatchMutation = useMutation({
     mutationFn: (batch: ProductionBatchExt) =>
       coreApi.post(`/api/production/orders/${orderId}/batches/${batch.id}/confirm/`),
-    onSuccess: () => {
+    onSuccess: (_, batch) => {
       toast.success("Batch confirmed and completed.");
       setWeightEntryOpen(false);
       invalidateProductionContext();
+      if (batch.stage === "AD") {
+        navigate(getProductionManageBatchRoute(orderId, "BL"));
+      } else if (batch.stage === "BL") {
+        navigate(getProductionManageBatchRoute(orderId, "GL"));
+      }
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to confirm batch.")),
   });
@@ -361,109 +377,184 @@ const ProductionManageBatchPage = () => {
     setRegrindOpen(true);
   };
 
-  const batchesByStage = (stage: ProductionBatch["stage"]) =>
-    (batchesQ.data ?? []).filter((batch) => batch.stage === stage);
-
   const order = orderQ.data;
+  const resolveDisplayBatchNo = (batch?: ProductionBatchExt | null) =>
+    batch?.display_batch_no?.trim() || batch?.batch_no || order?.batch_number?.trim() || "Not assigned";
+  const resolveBatchStatusLabel = (batch?: ProductionBatchExt | null) =>
+    batch?.display_status?.trim() || batch?.status || "-";
+  const resolveStageProductionType = (stage?: ProductionBatch["stage"] | null) =>
+    (stage ? STAGE_PRODUCTION_TYPE_LABELS[stage] : null) || order?.production_type || "-";
+  const selectedBatch = allBatches.find((batch) => batch.id === selectedBatchId) ?? null;
+  const displayedBatch = selectedBatch ?? allBatches[0] ?? null;
+  const displayedStage = displayedBatch?.stage ?? activeStageFilter ?? null;
+  const productionFor = (() => {
+    if (!order) return "-";
+    const mapped = (order as unknown as Record<string, unknown>).production_for;
+    if (typeof mapped === "string" && mapped.trim().length > 0) return mapped;
+    return resolveStageProductionType(displayedStage);
+  })();
+  const displayedStageMeta = displayedBatch ? STAGE_META[displayedBatch.stage] : null;
+  const displayedProductionType = resolveStageProductionType(displayedStage);
+  const aggregateWeight = allBatches.reduce((total, batch) => total + (batch.total_weight_grams ?? 0), 0);
+  const aggregateOkCount = allBatches.reduce(
+    (total, batch) => total + (batch.weight_entries ?? []).filter((entry) => entry.is_valid === true).length,
+    0,
+  );
+  const aggregateRejectedCount = allBatches.reduce(
+    (total, batch) => total + (batch.weight_entries ?? []).filter((entry) => entry.is_valid === false).length,
+    0,
+  );
+  const selectedTotalWeight = displayedBatch?.total_weight_grams ?? aggregateWeight;
+  const okCount = displayedBatch
+    ? (displayedBatch.weight_entries ?? []).filter((entry) => entry.is_valid === true).length
+    : aggregateOkCount;
+  const rejectedCount = displayedBatch
+    ? (displayedBatch.weight_entries ?? []).filter((entry) => entry.is_valid === false).length
+    : aggregateRejectedCount;
+  const currentManageStage: ProductionBatch["stage"] = activeStageFilter ?? displayedStage ?? "AD";
+  const detailSubtitle = displayedBatch
+    ? `${resolveDisplayBatchNo(displayedBatch)} • ${displayedBatch.stage} — ${displayedStageMeta?.label}`
+    : "No batches created for this production order yet";
+  const detailMachine = displayedBatch?.machine_name || order?.line_name || "-";
+  const detailPlanId = displayedBatch?.production_order ?? orderId;
+  const detailBatchValue = displayedBatch
+    ? resolveDisplayBatchNo(displayedBatch)
+    : order?.batch_number || (allBatches.length > 0 ? `${allBatches.length} linked batch${allBatches.length === 1 ? "" : "es"}` : "-");
+  const splitLayoutClassName =
+    viewMode === "left"
+      ? "xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]"
+      : viewMode === "right"
+        ? "xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+        : "xl:grid-cols-2";
+  const headerActionLabel =
+    currentManageStage === "AD" ? "Batch" : currentManageStage === "BL" ? "Bin Assign" : "Bag Assign";
+  const backButtonLabel =
+    currentManageStage === "AD"
+    ? "Back to AD list"
+    : currentManageStage === "BL"
+      ? "Back to BL list"
+      : "Back to Production";
+  const pageTitle =
+    currentManageStage === "AD"
+    ? "AD - Manage Batch"
+    : currentManageStage === "BL"
+      ? "BL - Manage Batch"
+      : "Manage Batches";
+  const batchListTitle =
+    currentManageStage === "AD"
+    ? "AD - Batch List"
+    : currentManageStage === "BL"
+      ? "BL - Batch List"
+      : currentManageStage === "GL"
+        ? "GL Batch List"
+        : "Production / Batch List";
+  const canRunHeaderAction = currentManageStage === "AD" || displayedBatch !== null;
+  const handleHeaderAction = () =>
+    navigate({
+      pathname: getProductionEditRoute(orderId),
+      search:
+        currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL"
+          ? `?mode=output&stage=${currentManageStage}${currentManageStage === "AD" ? "" : `&batchId=${displayedBatch?.id ?? selectedBatchId ?? ""}`}`
+          : "",
+    }, {
+      state: {
+        backTo: getProductionManageBatchRoute(orderId, currentManageStage),
+        ...(currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL"
+          ? {
+              initialTab: "output",
+              visibleTabs: ["output"],
+              outputStage: currentManageStage,
+              outputBatchId: currentManageStage === "AD" ? null : displayedBatch?.id ?? selectedBatchId ?? null,
+            }
+          : {}),
+      },
+    });
 
   return (
-    <div className="-m-4 min-h-full bg-[#eef3f8] p-4 lg:-m-6 lg:p-6">
-      <div className="mx-auto flex max-w-[1240px] flex-col gap-4">
+    <div className="-m-4 min-h-full bg-[#eef3f8] py-2 lg:-m-6 lg:py-3">
+      <div className="flex w-full flex-col gap-2">
         <div className="flex items-center">
           <Button
             type="button"
             variant="ghost"
-            className="rounded-full px-3 text-slate-600 hover:bg-white hover:text-slate-900"
-            onClick={() => navigate("/app/production")}
+            className="h-8 rounded-full px-2.5 text-sm font-medium text-slate-600 hover:bg-white/80 hover:text-slate-900"
+            onClick={() => navigate(backRoute)}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Production
+            {backButtonLabel}
           </Button>
         </div>
 
-        <div className="min-h-[calc(100vh-9rem)]">
-          <div className="flex h-full flex-col overflow-hidden rounded-[32px] border border-slate-200/90 bg-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.42)]">
-            <div className="border-b border-slate-200/80 bg-white">
-              <div className="px-6 py-6 lg:px-8">
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
-                  <div className="space-y-5">
-                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
-                      <span className="inline-flex items-center rounded-full border border-[#cfe0ff] bg-[#eef4ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2d6cdf]">
-                        Production Workspace
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <span>Production</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </span>
-                      <span>Manage Batch</span>
-                    </div>
+        <div className="flex flex-col">
+          <div className="border-b border-slate-200/80 bg-white">
+            <div className="px-3 py-2.5 sm:px-4 lg:px-5 lg:py-3">
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-[1.15rem] font-semibold leading-tight tracking-[-0.02em] text-slate-950 sm:text-[1.25rem]">
+                      {pageTitle}
+                    </h1>
+                    {order ? <StatusBadge status={order.status} classes={ORDER_STATUS_CLASSES} /> : null}
+                  </div>
+                  <p className="max-w-3xl text-[12px] leading-5 text-slate-500">
+                    Create, weigh, confirm, and track AD → BL → GL batches for the selected production order.
+                  </p>
 
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h1 className="text-[2rem] font-semibold tracking-[-0.03em] text-slate-950">Manage Batches</h1>
-                        {order ? <StatusBadge status={order.status} classes={ORDER_STATUS_CLASSES} /> : null}
-                      </div>
-                      <p className="max-w-3xl text-[15px] leading-7 text-slate-500">
-                        Create, weigh, confirm, and track AD → BL → GL batches for the selected production order without leaving the
-                        Production workspace.
-                      </p>
+                  {order ? (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="inline-flex items-center rounded-full bg-[#fff7ed] px-2 py-0.5 font-medium text-[#f97316]">
+                        {displayedProductionType}
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-[#eef4ff] px-2 py-0.5 font-medium text-[#2d6cdf]">
+                        Shift: {order.shift}
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-[#ecfdf5] px-2 py-0.5 font-medium text-[#059669]">
+                        Batch No: {resolveDisplayBatchNo(displayedBatch)}
+                      </span>
                     </div>
+                  ) : null}
+                </div>
 
-                    {order ? (
-                      <div className="flex flex-wrap items-center gap-3 text-xs">
-                        <span className="inline-flex items-center rounded-full bg-[#fff7ed] px-3 py-1.5 font-medium text-[#f97316]">
-                          {order.production_type}
-                        </span>
-                        <span className="inline-flex items-center rounded-full bg-[#eef4ff] px-3 py-1.5 font-medium text-[#2d6cdf]">
-                          Shift: {order.shift}
-                        </span>
-                        <span className="inline-flex items-center rounded-full bg-[#ecfdf5] px-3 py-1.5 font-medium text-[#059669]">
-                          Batch No: {order.batch_number || "Not assigned"}
-                        </span>
-                      </div>
-                    ) : null}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className={compactHeaderMetricClassName}>
+                    <div className={productionFieldLabelClassName}>Production ID</div>
+                    <div className="mt-2 font-mono text-base font-semibold text-slate-950">
+                      {order ? order.production_id : "--"}
+                    </div>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className={productionMetricCardClassName}>
-                      <div className={productionFieldLabelClassName}>Production ID</div>
-                      <div className="mt-3 font-mono text-lg font-semibold text-slate-950">
-                        {order ? order.production_id : "--"}
-                      </div>
+                  <div className={compactHeaderMetricClassName}>
+                    <div className={productionFieldLabelClassName}>Production Date</div>
+                    <div className="mt-2 text-base font-semibold text-slate-950">
+                      {order ? formatDate(order.production_date) : "--"}
                     </div>
+                  </div>
 
-                    <div className={productionMetricCardClassName}>
-                      <div className={productionFieldLabelClassName}>Production Date</div>
-                      <div className="mt-3 text-lg font-semibold text-slate-950">
-                        {order ? formatDate(order.production_date) : "--"}
-                      </div>
+                  <div className={compactHeaderMetricClassName}>
+                    <div className={productionFieldLabelClassName}>Planned Qty</div>
+                    <div className="mt-2 text-base font-semibold text-slate-950">
+                      {order ? formatDecimal(order.planned_quantity) : "--"}
                     </div>
+                  </div>
 
-                    <div className={productionMetricCardClassName}>
-                      <div className={productionFieldLabelClassName}>Planned Qty</div>
-                      <div className="mt-3 text-lg font-semibold text-slate-950">
-                        {order ? formatDecimal(order.planned_quantity) : "--"}
-                      </div>
-                    </div>
-
-                    <div className={productionMetricCardClassName}>
-                      <div className={productionFieldLabelClassName}>Last Updated</div>
-                      <div className="mt-3 text-lg font-semibold text-slate-950">
-                        {order ? formatDate(order.updated_at) : "--"}
-                      </div>
+                  <div className={compactHeaderMetricClassName}>
+                    <div className={productionFieldLabelClassName}>Last Updated</div>
+                    <div className="mt-2 text-base font-semibold text-slate-950">
+                      {order ? formatDate(order.updated_at) : "--"}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="flex-1 overflow-y-auto bg-[#eef3f9] px-4 py-5 sm:px-6 lg:px-8">
+          <div className="bg-[#eef3f9] py-4">
               {!hasValidOrderId ? (
                 <ErrorState
                   title="Invalid production order"
                   description="The Manage Batch route is missing a valid order identifier."
                   action={
-                    <Button variant="outline" onClick={() => navigate("/app/production")}>
+                    <Button variant="outline" onClick={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
                       Return to Production
                     </Button>
                   }
@@ -474,357 +565,276 @@ const ProductionManageBatchPage = () => {
                 <ErrorState
                   description={getApiErrorMessage(orderQ.error, "Could not load the selected production order.")}
                   action={
-                    <Button variant="outline" onClick={() => navigate("/app/production")}>
+                    <Button variant="outline" onClick={() => navigate(PRODUCTION_AD_WEIGHTAGE_ROUTE)}>
                       Return to Production
                     </Button>
                   }
                 />
               ) : (
-                <div className="space-y-5">
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-                    <div className="grid gap-3 md:grid-cols-3">
-                      {STAGES.map((stage) => {
-                        const stageBatches = batchesByStage(stage);
-                        const stageMeta = STAGE_META[stage];
+                <div className="space-y-4 px-4 sm:px-5 lg:px-6">
+                  <div className="flex flex-col gap-3 md:relative md:min-h-[44px] md:justify-center">
+                    <div className="flex justify-center">
+                      <div className="inline-flex items-center gap-1 rounded-2xl border border-white/70 bg-white/90 p-1.5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.45)] backdrop-blur">
+                        {([
+                          { value: "left", label: "Left focused", Icon: PanelLeftOpen },
+                          { value: "split", label: "Split view", Icon: Columns2 },
+                          { value: "right", label: "Right focused", Icon: PanelRightOpen },
+                        ] as const).map((option) => {
+                          const isActive = viewMode === option.value;
 
-                        return (
-                          <div key={stage} className={productionMetricCardClassName}>
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className={productionFieldLabelClassName}>{stage}</div>
-                                <div className="mt-2 text-lg font-semibold text-slate-950">
-                                  {stageMeta.label}
-                                </div>
-                              </div>
-                              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${stageMeta.accentClassName}`}>
-                                {stageBatches.length}
-                              </span>
-                            </div>
-                            <p className="mt-3 text-sm leading-6 text-slate-500">{stageMeta.description}</p>
-                          </div>
-                        );
-                      })}
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              aria-label={option.label}
+                              title={option.label}
+                              className={`group relative flex h-9 w-10 items-center justify-center rounded-xl border transition-all duration-200 ${
+                                isActive
+                                  ? "border-slate-900 bg-[linear-gradient(135deg,#0f172a,#1e293b)] text-white shadow-[0_14px_30px_-18px_rgba(15,23,42,0.9)]"
+                                  : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                              }`}
+                              onClick={() => setViewMode(option.value)}
+                            >
+                              <option.Icon className={`h-[1.05rem] w-[1.05rem] ${isActive ? "" : "transition-transform duration-200 group-hover:scale-105"}`} strokeWidth={2.1} />
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        className="h-11 rounded-xl bg-[#2d6cdf] px-5 text-white shadow-[0_18px_35px_-20px_rgba(45,108,223,0.85)] hover:bg-[#255fc8]"
-                        onClick={() => {
-                          batchForm.reset({ stage: activeStage, bom_variant: null, machine: null, notes: "" });
-                          setCreateBatchOpen(true);
-                        }}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Batch
-                      </Button>
-                    </div>
+                    {currentManageStage === "AD" && canRunHeaderAction ? (
+                      <div className="flex justify-end md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2">
+                        <Button
+                          size="sm"
+                          className="h-10 rounded-xl border-0 bg-[linear-gradient(135deg,#0f766e,#14b8a6)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_-20px_rgba(15,118,110,0.75)] hover:opacity-95"
+                          onClick={handleHeaderAction}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          {headerActionLabel}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
 
-                  {batchesQ.isLoading ? (
-                    <LoadingState label="Loading batches..." />
-                  ) : batchesQ.isError ? (
-                    <ErrorState description="Could not load batches." />
-                  ) : (
-                    <div className={`${productionCardBaseClassName} bg-[#f7faff]`}>
-                      <Tabs
-                        value={activeStage}
-                        onValueChange={(value) => setActiveStage(value as ProductionBatch["stage"])}
-                        className="flex flex-col"
-                      >
-                        <div className="border-b border-slate-200/75 px-5 py-4">
-                          <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl bg-[#e8eef7] p-1">
-                            {STAGES.map((stage) => {
-                              const stageMeta = STAGE_META[stage];
+                  <div className={`grid gap-4 ${splitLayoutClassName}`}>
+                    <div className={`${productionCardBaseClassName} overflow-hidden bg-white`}>
+                      <div className="border-b border-slate-200/70 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h2 className="text-[15px] font-semibold leading-tight text-slate-950">{batchListTitle}</h2>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              {activeStageFilter
+                                ? `Select a ${activeStageFilter} batch from the list to review its details.`
+                                : "Select a batch from the list to review its details."}
+                            </p>
+                          </div>
+                          <span className="inline-flex min-w-8 items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                            {allBatches.length}
+                          </span>
+                        </div>
+                      </div>
 
-                              return (
-                                <TabsTrigger
-                                  key={stage}
-                                  value={stage}
-                                  className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
-                                >
-                                  {stage} — {stageMeta.label} ({batchesByStage(stage).length})
-                                </TabsTrigger>
-                              );
-                            })}
+                      {allBatches.length === 0 ? (
+                        <div className="p-4">
+                          <EmptyState title="No batches created" description="Create a new batch to start the production workflow." />
+                        </div>
+                      ) : (
+                        <div className="max-h-[720px] overflow-auto">
+                            <Table>
+                            <TableHeader className="bg-slate-50/90">
+                              <TableRow>
+                                <TableHead>Prd ID</TableHead>
+                                <TableHead>Batch ID</TableHead>
+                                <TableHead>Production Status</TableHead>
+                                <TableHead>Start Date Time</TableHead>
+                                <TableHead>Ended Date Time</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {allBatches.map((batch) => {
+                                const isSelected = displayedBatch?.id === batch.id;
+                                const stageMeta = STAGE_META[batch.stage];
+
+                                return (
+                                  <TableRow
+                                    key={batch.id}
+                                    className={`cursor-pointer transition-colors hover:bg-slate-50 ${isSelected ? "bg-[#eef4ff]" : ""}`}
+                                    onClick={() => setSelectedBatchId(batch.id)}
+                                  >
+                                    <TableCell className="align-top font-mono text-[12px] text-slate-600">
+                                      {order?.production_id ?? "-"}
+                                    </TableCell>
+                                    <TableCell className="align-top">
+                                      <div className="text-[12px] font-semibold text-slate-900">{resolveDisplayBatchNo(batch)}</div>
+                                      <div className="mt-1 text-[11px] text-slate-500">
+                                        {batch.stage} — {stageMeta.label}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <StatusBadge status={resolveBatchStatusLabel(batch)} classes={BATCH_STATUS_CLASSES} />
+                                    </TableCell>
+                                    <TableCell className="text-[12px] text-slate-600">{formatDateTime(batch.started_at)}</TableCell>
+                                    <TableCell className="text-[12px] text-slate-600">{formatDateTime(batch.completed_at)}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className={`${productionCardBaseClassName} overflow-hidden bg-white`}>
+                      <div className="border-b border-slate-200/70 px-4 py-3">
+                        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-[15px] font-semibold leading-tight text-slate-950">
+                                {order?.production_id ?? "-"} / {productionFor}
+                              </h2>
+                              {displayedBatch ? (
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${displayedStageMeta?.accentClassName}`}>
+                                  {displayedBatch.stage}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="text-[11px] text-slate-500">{detailSubtitle}</p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {currentManageStage !== "AD" ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 rounded-md px-3 text-xs"
+                                onClick={handleHeaderAction}
+                                disabled={!canRunHeaderAction}
+                              >
+                                {currentManageStage === "BL" || currentManageStage === "GL" ? <Plus className="mr-2 h-3.5 w-3.5" /> : null}
+                                {headerActionLabel}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as typeof detailTab)}>
+                        <div className="border-b border-slate-200/70 px-4 py-2">
+                          <TabsList className="h-10 rounded-lg bg-slate-100 p-1">
+                            <TabsTrigger value="general" className="h-8 px-3 text-[11px]">General</TabsTrigger>
+                            <TabsTrigger value="movement" className="h-8 px-3 text-[11px]">Material Movement</TabsTrigger>
+                            <TabsTrigger value="transactions" className="h-8 px-3 text-[11px]">PRDN Transactions</TabsTrigger>
+                            <TabsTrigger value="summary" className="h-8 px-3 text-[11px]">Summary</TabsTrigger>
                           </TabsList>
                         </div>
 
-                        <div className="px-5 py-5">
-                          {STAGES.map((stage) => (
-                            <TabsContent key={stage} value={stage} className="mt-0 outline-none">
-                              {batchesByStage(stage).length === 0 ? (
-                                <EmptyState
-                                  title={`No ${stage} batches`}
-                                  description="Create a batch using the New Batch button above."
-                                />
-                              ) : (
-                                <div className="space-y-4">
-                                  {batchesByStage(stage).map((batch) => {
-                                    const stageMeta = STAGE_META[batch.stage];
-
-                                    return (
-                                      <div
-                                        key={batch.id}
-                                        className="rounded-[24px] border border-slate-200/90 bg-white p-5 shadow-[0_18px_45px_-34px_rgba(15,23,42,0.38)]"
-                                      >
-                                        <div className="flex flex-wrap items-start justify-between gap-4">
-                                          <div className="space-y-3">
-                                            <div className="flex flex-wrap items-center gap-3">
-                                              <p className="font-mono text-base font-semibold text-slate-950">
-                                                {batch.batch_no}
-                                              </p>
-                                              <span
-                                                className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${stageMeta.mutedClassName}`}
-                                              >
-                                                {batch.stage} · {stageMeta.label}
-                                              </span>
-                                            </div>
-
-                                            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                                              <span>Machine: {batch.machine_name || "Not assigned"}</span>
-                                              <span>BOM: {batch.bom_variant_name || "None"}</span>
-                                              <span>Total: {batch.total_weight_grams ?? "0"}g</span>
-                                            </div>
-                                          </div>
-
-                                          <div className="flex flex-wrap items-center gap-2">
-                                            <StatusBadge status={batch.status} classes={BATCH_STATUS_CLASSES} />
-
-                                            {batch.status === "PENDING" ? (
-                                              <Button
-                                                size="sm"
-                                                className="rounded-xl bg-[#2d6cdf] text-white hover:bg-[#255fc8]"
-                                                onClick={() => startBatchMutation.mutate(batch)}
-                                                disabled={startBatchMutation.isPending}
-                                              >
-                                                Start
-                                              </Button>
-                                            ) : null}
-
-                                            {batch.status === "IN_PROGRESS" ? (
-                                              <>
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="rounded-xl"
-                                                  onClick={() => openWeightEntry(batch)}
-                                                >
-                                                  Weigh
-                                                </Button>
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="rounded-xl"
-                                                  onClick={() => openRegrind(batch)}
-                                                >
-                                                  Regrind
-                                                </Button>
-                                                <Button
-                                                  size="sm"
-                                                  className="rounded-xl bg-green-600 text-white hover:bg-green-700"
-                                                  onClick={() => confirmBatchMutation.mutate(batch)}
-                                                  disabled={confirmBatchMutation.isPending}
-                                                >
-                                                  Confirm
-                                                </Button>
-                                              </>
-                                            ) : null}
-
-                                            {batch.status === "COMPLETED" ? (
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="rounded-xl"
-                                                onClick={() => openWeightEntry(batch)}
-                                              >
-                                                View Weights
-                                              </Button>
-                                            ) : null}
-                                          </div>
-                                        </div>
-
-                                        {batch.weight_entries.length > 0 ? (
-                                          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                                            {batch.weight_entries.map((entry) => (
-                                              <div
-                                                key={entry.id}
-                                                className={`rounded-2xl border px-3 py-3 text-sm ${
-                                                  entry.is_valid === true
-                                                    ? "border-green-200 bg-green-50"
-                                                    : entry.is_valid === false
-                                                      ? "border-red-200 bg-red-50"
-                                                      : "border-slate-200 bg-slate-50"
-                                                }`}
-                                              >
-                                                <p className="truncate font-medium text-slate-900">{entry.item_name}</p>
-                                                <p className="mt-1 text-xs text-slate-500">
-                                                  {entry.entered_weight_grams ? `${entry.entered_weight_grams}g` : "—"} /{" "}
-                                                  {entry.target_weight_grams}g
-                                                </p>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : null}
-                                      </div>
-                                    );
-                                  })}
+                        <TabsContent value="general" className="m-0 p-4">
+                          {!displayedBatch ? (
+                            <EmptyState
+                              title="No batch selected"
+                              description="Create a new batch, then select it from the left-side list to review details."
+                            />
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5">
+                                <div className="flex items-center gap-2 text-[12px] text-slate-600">
+                                  <span>Batch Status:</span>
+                                  <StatusBadge status={resolveBatchStatusLabel(displayedBatch)} classes={BATCH_STATUS_CLASSES} />
                                 </div>
-                              )}
-                            </TabsContent>
-                          ))}
-                        </div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {displayedBatch.status === "PENDING" ? (
+                                    <Button
+                                      size="sm"
+                                      className="h-8 rounded-md bg-[#2d6cdf] px-2.5 text-xs text-white hover:bg-[#255fc8]"
+                                      onClick={() => startBatchMutation.mutate(displayedBatch)}
+                                      disabled={startBatchMutation.isPending}
+                                    >
+                                      Start
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px]">
+                                <div className="rounded-lg border border-slate-200/80">
+                                  <div className="border-b border-slate-200/70 bg-slate-50 px-3 py-2 text-[12px] font-semibold text-slate-800">
+                                    Production Order: <StatusBadge status={order?.status ?? "PLANNED"} classes={ORDER_STATUS_CLASSES} />
+                                  </div>
+                                  <div className="grid grid-cols-[200px_minmax(0,1fr)] text-[12px] leading-5">
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Finished Goods / Production For</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2 font-medium text-slate-900">{productionFor}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Production Type</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{displayedProductionType}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Production Status</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{order?.status?.replace(/_/g, " ") || "-"}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Batch</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{detailBatchValue}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Production Date</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{order ? formatDate(order.production_date) : "-"}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Shift</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{order?.shift || "-"}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Line No / Machine</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{detailMachine}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Start Date Time</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{displayedBatch.started_at ? formatDateTime(displayedBatch.started_at) : (order?.start_date_time ? formatDateTime(order.start_date_time) : "-")}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Plan ID</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{detailPlanId}</div>
+                                    <div className="border-b border-r border-slate-200/70 px-3 py-2 text-slate-600">Planned Qty</div>
+                                    <div className="border-b border-slate-200/70 px-3 py-2">{order ? formatDecimal(order.planned_quantity) : "-"}</div>
+                                    <div className="border-r border-slate-200/70 px-3 py-2 text-slate-600">Total Weight</div>
+                                    <div className="px-3 py-2">{formatDecimal(selectedTotalWeight)} g</div>
+                                  </div>
+                                </div>
+
+                                <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-4">
+                                  <div className="mb-3 text-[12px] font-semibold text-slate-900">Totals</div>
+                                  <div className="space-y-2 text-[12px]">
+                                    <div className="flex items-center justify-between rounded bg-white px-3 py-2"><span>Plan Qty</span><span className="font-semibold">{order ? formatDecimal(order.planned_quantity) : "-"}</span></div>
+                                    <div className="flex items-center justify-between rounded bg-white px-3 py-2"><span>Prdn Qty</span><span className="font-semibold">{order ? formatDecimal(order.total_quantity) : "-"}</span></div>
+                                    <div className="flex items-center justify-between rounded bg-white px-3 py-2"><span>Total Weight</span><span className="font-semibold">{formatDecimal(selectedTotalWeight)}</span></div>
+                                    <div className="flex items-center justify-between rounded bg-white px-3 py-2"><span>OK</span><span className="font-semibold text-emerald-700">{okCount}</span></div>
+                                    <div className="flex items-center justify-between rounded bg-white px-3 py-2"><span>Rejected</span><span className="font-semibold text-red-600">{rejectedCount}</span></div>
+                                    <div className="flex items-center justify-between rounded bg-white px-3 py-2"><span>Stacked</span><span className="font-semibold">-</span></div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </TabsContent>
+
+                        <TabsContent value="movement" className="m-0 p-4">
+                          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-[12px] text-slate-500">
+                            Material Movement will be added for the {displayedStageMeta?.label.toLowerCase() ?? "selected batch"} workspace in the next step.
+                          </div>
+                        </TabsContent>
+                        <TabsContent value="transactions" className="m-0 p-4">
+                          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-[12px] text-slate-500">
+                            PRDN Transactions will be added for the {displayedStageMeta?.label.toLowerCase() ?? "selected batch"} workspace in the next step.
+                          </div>
+                        </TabsContent>
+                        <TabsContent value="summary" className="m-0 p-4">
+                          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-[12px] text-slate-500">
+                            Summary will be added for the {displayedStageMeta?.label.toLowerCase() ?? "selected batch"} workspace in the next step.
+                          </div>
+                        </TabsContent>
                       </Tabs>
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
-            </div>
           </div>
         </div>
       </div>
-
-      <Dialog open={createBatchOpen} onOpenChange={(open) => !open && setCreateBatchOpen(false)}>
-        <DialogContent className={`max-w-xl ${dialogContentClassName}`}>
-          <DialogHeader className={dialogHeaderClassName}>
-            <DialogTitle className="text-xl font-semibold text-slate-950">Create New Batch</DialogTitle>
-            <DialogDescription className="text-sm text-slate-500">
-              For order: <span className="font-medium text-slate-700">{order?.production_id ?? "--"}</span>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className={dialogBodyClassName}>
-            <Form {...batchForm}>
-              <form
-                onSubmit={batchForm.handleSubmit((values) => {
-                  setActiveStage(values.stage);
-                  createBatchMutation.mutate(values);
-                })}
-                className="space-y-4"
-              >
-                <FormField
-                  control={batchForm.control}
-                  name="stage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>Stage</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className={productionCompactInputClassName}>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="AD">AD — Raw Mix</SelectItem>
-                          <SelectItem value="BL">BL — Blending</SelectItem>
-                          <SelectItem value="GL">GL — Granulation</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={batchForm.control}
-                  name="bom_variant"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>BOM Variant</FormLabel>
-                      <Select
-                        value={field.value ? String(field.value) : "none"}
-                        onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}
-                      >
-                        <FormControl>
-                          <SelectTrigger className={productionCompactInputClassName}>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {(bomVariantsQ.data ?? []).map((bom) => (
-                            <SelectItem key={bom.id} value={String(bom.id)}>
-                              {bom.variant_code} — {bom.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className={productionHelperTextClassName}>Optional. Keeps the existing payload structure unchanged.</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={batchForm.control}
-                  name="machine"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>Machine</FormLabel>
-                      <Select
-                        value={field.value ? String(field.value) : "none"}
-                        onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}
-                      >
-                        <FormControl>
-                          <SelectTrigger className={productionCompactInputClassName}>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {(machinesQ.data ?? []).map((machine) => (
-                            <SelectItem key={machine.id} value={String(machine.id)}>
-                              {machine.machine_code} — {machine.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={batchForm.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={productionFieldLabelClassName}>Notes</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} rows={3} className={productionDialogTextareaClassName} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setCreateBatchOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="rounded-xl bg-[#2d6cdf] text-white hover:bg-[#255fc8]"
-                    disabled={createBatchMutation.isPending}
-                  >
-                    Create Batch
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={weightEntryOpen} onOpenChange={(open) => !open && setWeightEntryOpen(false)}>
         <DialogContent className={`max-w-4xl ${dialogContentClassName}`}>
           <DialogHeader className={dialogHeaderClassName}>
             <DialogTitle className="text-xl font-semibold text-slate-950">
-              Weight Entries — {selectedBatch?.batch_no}
+              Weight Entries — {resolveDisplayBatchNo(selectedBatch)}
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500">
               Stage: {selectedBatch?.stage} · BOM: {selectedBatch?.bom_variant_name ?? "None"} · Status:{" "}
-              {selectedBatch ? <StatusBadge status={selectedBatch.status} classes={BATCH_STATUS_CLASSES} /> : "--"}
+              {selectedBatch ? <StatusBadge status={resolveBatchStatusLabel(selectedBatch)} classes={BATCH_STATUS_CLASSES} /> : "--"}
             </DialogDescription>
           </DialogHeader>
 
@@ -926,7 +936,7 @@ const ProductionManageBatchPage = () => {
         <DialogContent className={`max-w-3xl ${dialogContentClassName}`}>
           <DialogHeader className={dialogHeaderClassName}>
             <DialogTitle className="text-xl font-semibold text-slate-950">
-              Regrind Material — {selectedBatch?.batch_no}
+              Regrind Material — {resolveDisplayBatchNo(selectedBatch)}
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500">
               Add LDPE/HDPE regrind material entries for this batch.

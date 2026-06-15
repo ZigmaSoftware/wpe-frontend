@@ -20,7 +20,10 @@ type ProductCategoryListProps = {
   isLoading: boolean;
   isError: boolean;
   errorDescription: string;
+  emptyDescription?: string;
+  emptyTitle?: string;
   search: string;
+  searchPlaceholder?: string;
   onSearchChange: (value: string) => void;
   status: ProductTypeStatusFilterValue;
   onStatusChange: (value: ProductTypeStatusFilterValue) => void;
@@ -35,7 +38,12 @@ type ProductCategoryListProps = {
   onEditCategory?: (record: ProductTypeCategoryRecord) => void;
   onToggleCategory?: (record: ProductTypeCategoryRecord) => void;
   onDeleteCategory?: (record: ProductTypeCategoryRecord) => void;
+  panelDescription?: string;
+  panelEyebrow?: string;
+  panelTitle?: string;
+  typeLabel?: string;
   canAdd: boolean;
+  createLabel?: string;
 };
 
 const tableTemplate = "64px minmax(0,1.8fr) minmax(0,1.1fr) 120px 120px 120px";
@@ -45,7 +53,10 @@ const ProductCategoryList = ({
   isLoading,
   isError,
   errorDescription,
+  emptyDescription,
+  emptyTitle,
   search,
+  searchPlaceholder,
   onSearchChange,
   status,
   onStatusChange,
@@ -60,7 +71,12 @@ const ProductCategoryList = ({
   onEditCategory,
   onToggleCategory,
   onDeleteCategory,
+  panelDescription,
+  panelEyebrow,
+  panelTitle,
+  typeLabel = "Category",
   canAdd,
+  createLabel = "Add Item Category",
 }: ProductCategoryListProps) => {
   const hasFilters = Boolean(search.trim()) || status !== "all";
 
@@ -70,11 +86,11 @@ const ProductCategoryList = ({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Category Master
+              {panelEyebrow ?? "Item Category"}
             </p>
-            <div className="text-lg font-semibold text-slate-950">Product Categories</div>
+            <div className="text-lg font-semibold text-slate-950">{panelTitle ?? "Item Categories"}</div>
             <p className="text-sm text-slate-500">
-              Click a category to open its dedicated subtype workspace.
+              {panelDescription ?? "Click an item category to open a dedicated page with its related item sub categories."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -92,7 +108,7 @@ const ProductCategoryList = ({
             <Input
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search categories by name or code"
+              placeholder={searchPlaceholder ?? "Search item categories by name or code"}
               className="h-11 rounded-xl border-slate-200 bg-white pl-10 shadow-sm shadow-slate-100"
             />
           </div>
@@ -113,7 +129,7 @@ const ProductCategoryList = ({
             {canAdd ? (
               <Button onClick={onCreateCategory} className="h-11 rounded-xl px-4">
                 <Plus className="h-4 w-4" />
-                Add Category
+                {createLabel}
               </Button>
             ) : null}
           </div>
@@ -136,11 +152,11 @@ const ProductCategoryList = ({
       ) : !records.length ? (
         <div className="p-5">
           <EmptyState
-            title={hasFilters ? "No categories match your filters" : "No categories found"}
+            title={hasFilters ? `No ${typeLabel.toLowerCase()} records match your filters` : emptyTitle ?? `No ${typeLabel.toLowerCase()} records found`}
             description={
               hasFilters
-                ? "Adjust the category search or status filter to reveal more records."
-                : "Create a product type category to start governing the hierarchy."
+                ? `Adjust the ${typeLabel.toLowerCase()} search or status filter to reveal more records.`
+                : emptyDescription ?? "Create the first item category to start governing the hierarchy."
             }
           />
         </div>
@@ -152,9 +168,9 @@ const ProductCategoryList = ({
                 <TableHeader className="bg-slate-50/80">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="w-16 text-center">S.No</TableHead>
-                    <TableHead>Category</TableHead>
+                    <TableHead>{typeLabel}</TableHead>
                     <TableHead>Code</TableHead>
-                    <TableHead>Subtypes</TableHead>
+                    <TableHead>Item Sub Categories</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -202,6 +218,7 @@ const ProductCategoryList = ({
                             onEdit={onEditCategory ? () => onEditCategory(record) : undefined}
                             onToggle={onToggleCategory ? () => onToggleCategory(record) : undefined}
                             onDelete={onDeleteCategory ? () => onDeleteCategory(record) : undefined}
+                            isActive={record.is_active}
                           />
                         </TableCell>
                       </TableRow>

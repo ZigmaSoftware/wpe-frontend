@@ -10,7 +10,9 @@ import type { ProductTypeSubtypeFormValues } from "@/features/wpe-masters/schema
 
 
 type ProductTypeSubtypeFormProps = {
+  categoryLocked?: boolean;
   categoryOptions: LookupItem[];
+  codePreview: string;
   form: UseFormReturn<ProductTypeSubtypeFormValues>;
   isSubmitting: boolean;
   submitLabel: string;
@@ -19,7 +21,9 @@ type ProductTypeSubtypeFormProps = {
 
 
 const ProductTypeSubtypeForm = ({
+  categoryLocked = false,
   categoryOptions,
+  codePreview,
   form,
   isSubmitting,
   submitLabel,
@@ -27,16 +31,26 @@ const ProductTypeSubtypeForm = ({
 }: ProductTypeSubtypeFormProps) => (
   <Form {...form}>
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <FormItem>
+        <FormLabel>Sub Category Code</FormLabel>
+        <FormControl>
+          <Input value={codePreview} readOnly placeholder="Generating..." className="bg-muted/40 font-mono" />
+        </FormControl>
+      </FormItem>
       <FormField
         control={form.control}
         name="category"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Category</FormLabel>
-            <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
+            <FormLabel>Item Category*</FormLabel>
+            <Select
+              value={field.value ? String(field.value) : undefined}
+              onValueChange={(value) => field.onChange(Number(value))}
+              disabled={categoryLocked}
+            >
               <FormControl>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Select Item Category" />
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
@@ -56,9 +70,9 @@ const ProductTypeSubtypeForm = ({
         name="name"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Subtype name</FormLabel>
+            <FormLabel>Sub Category Name*</FormLabel>
             <FormControl>
-              <Input {...field} placeholder="WPE" />
+              <Input {...field} placeholder="Enter item sub category name" />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -71,39 +85,24 @@ const ProductTypeSubtypeForm = ({
           <FormItem>
             <FormLabel>Description</FormLabel>
             <FormControl>
-              <Textarea {...field} rows={3} placeholder="Optional description for downstream ERP users." />
+              <Textarea {...field} rows={3} placeholder="Add a clear description for downstream users." />
             </FormControl>
             <FormMessage />
           </FormItem>
         )}
       />
-      <div className="grid gap-4 md:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="sort_order"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Sort order</FormLabel>
-              <FormControl>
-                <Input type="number" min={1} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="is_active"
-          render={({ field }) => (
-            <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
-              <FormLabel>Active status</FormLabel>
-              <FormControl>
-                <Switch checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-      </div>
+      <FormField
+        control={form.control}
+        name="is_active"
+        render={({ field }) => (
+          <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
+            <FormLabel>Active Status*</FormLabel>
+            <FormControl>
+              <Switch checked={field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+          </FormItem>
+        )}
+      />
       <div className="flex justify-end">
         <Button type="submit" disabled={isSubmitting}>
           {submitLabel}

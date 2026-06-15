@@ -77,8 +77,8 @@ const SuppliersPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Suppliers"
-        description="Manage supplier profiles, GST status, banking, contact persons, and document records."
+        title="Supplier Creations"
+        description="Create and maintain supplier master records."
       />
       <MasterToolbar
         search={table.search}
@@ -135,6 +135,7 @@ const SuppliersPage = () => {
                 onView={() => navigate(`/masters/suppliers/${record.id}`)}
                 onToggle={() => setToggleTarget(record)}
                 onDelete={() => setDeleteTarget(record)}
+                isActive={record.is_active}
               />
             ),
           },

@@ -1,13 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, FileSpreadsheet, MoveRight, Plus, RefreshCw, XCircle } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, FileSpreadsheet, MoveRight, Plus, RefreshCw } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import StatCard from "@/components/StatCard";
+import StoreTablePagination from "@/features/store/components/StoreTablePagination";
+import StoreTableToolbar, { type StoreExportFormat, type StorePageSizeValue } from "@/features/store/components/StoreTableToolbar";
+import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
+import { getPageCount, getPageSerialNumber, getPageSizeNumber, paginateRows } from "@/features/store/utils/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,9 +27,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
+import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
+import type { LookupItem } from "@/features/wpe-masters/types";
+import {
+  GRN_GATE_ENTRY_STATUS,
+  GRN_PENDING_STATUS,
+  GRN_QCR_STATUS,
+} from "@/features/grn/grnShared";
+import {
+  GRN_PROCESS_CREATE_ROUTE,
+  getGrnProcessEditRoute,
+} from "@/features/grn/utils/routes";
 import { grnApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage, normalizeGrnResponse, summarizeImportResponse } from "@/lib/api-helpers";
-import type { GrnListResponse, GrnRecord, ImportResponse, QcrRecord } from "@/lib/types";
+import type { GrnListResponse, GrnPendingItemLine, GrnRecord, ImportResponse, QcrItemLine, QcrRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const grnItemSchema = z.object({
@@ -114,7 +130,14 @@ type DetailFieldProps = {
   emphasized?: boolean;
 };
 
+type GrnPageModule = "process" | "status";
 type RecordScope = "active" | "moved";
+type GrnTabValue = "active" | "grn-pending" | "moved-to-qcr" | "next-grn" | "rejected";
+type GrnTableFilterState = {
+  fromDate: string;
+  toDate: string;
+  status: string;
+};
 
 type EnterpriseFieldTone = "editable" | "synced" | "protected" | "system";
 
@@ -143,6 +166,41 @@ type EnterpriseSectionDefinition = {
   title: string;
   description: string;
   groups: EnterpriseFieldGroup[];
+};
+
+type PendingMoveFormItem = {
+  lineIndex: number;
+  itemName: string;
+  sentQty: string;
+  receivedQty: string;
+  storeInId: string;
+  storeInName: string;
+  unit: string;
+};
+
+type QcrCompletionFormItem = {
+  lineIndex: number;
+  itemId: string;
+  itemName: string;
+  sentQty: string;
+  receivedQty: string;
+  acceptedQty: string;
+  rejectedQty: string;
+  reason: string;
+  unit: string;
+  storeInName: string;
+};
+
+type CompletedGrnStatusGroup = "Approved" | "Partial Rejected" | "Rejected";
+
+type CompletedGrnDisplayStatus = "Approved" | "Rejected";
+
+type CompletedGrnDisplayRow = {
+  rowId: string;
+  record: QcrRecord;
+  statusGroup: CompletedGrnStatusGroup;
+  displayStatus: CompletedGrnDisplayStatus;
+  quantity: string | number | null;
 };
 
 const documentFieldNames = [
@@ -293,10 +351,233 @@ const defaultValues: GrnFormValues = {
   },
 };
 
+const grnTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr", "next-grn", "rejected"];
+const processTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr", "next-grn"];
+const statusTabs: GrnTabValue[] = ["next-grn"];
+
+const completedGrnStatusOptions = ["Approved", "Rejected"] as const;
+
+const GRN_MODULE_META: Record<GrnPageModule, { title: string; description: string; defaultTab: GrnTabValue }> = {
+  process: {
+    title: "Gate Entry",
+    description: "Manage Gate Entry, GRN Pending, QCR, and Completed GRN movement from one workspace.",
+    defaultTab: "active",
+  },
+  status: {
+    title: "Completed GRN",
+    description: "Review approved and rejected GRN records.",
+    defaultTab: "next-grn",
+  },
+};
+
+const createDefaultTabTextState = () =>
+  grnTabs.reduce<Record<GrnTabValue, string>>(
+    (state, tab) => ({ ...state, [tab]: "" }),
+    { active: "", "grn-pending": "", "moved-to-qcr": "", "next-grn": "", rejected: "" },
+  );
+
+const createDefaultTabPageState = () =>
+  grnTabs.reduce<Record<GrnTabValue, number>>(
+    (state, tab) => ({ ...state, [tab]: 1 }),
+    { active: 1, "grn-pending": 1, "moved-to-qcr": 1, "next-grn": 1, rejected: 1 },
+  );
+
+const createDefaultTabPageSizeState = () =>
+  grnTabs.reduce<Record<GrnTabValue, StorePageSizeValue>>(
+    (state, tab) => ({ ...state, [tab]: "10" }),
+    { active: "10", "grn-pending": "10", "moved-to-qcr": "10", "next-grn": "10", rejected: "10" },
+  );
+
+const createDefaultTabFiltersState = () =>
+  grnTabs.reduce<Record<GrnTabValue, GrnTableFilterState>>(
+    (state, tab) => ({ ...state, [tab]: { fromDate: "", toDate: "", status: "" } }),
+    {
+      active: { fromDate: "", toDate: "", status: "" },
+      "grn-pending": { fromDate: "", toDate: "", status: "" },
+      "moved-to-qcr": { fromDate: "", toDate: "", status: "" },
+      "next-grn": { fromDate: "", toDate: "", status: "" },
+      rejected: { fromDate: "", toDate: "", status: "" },
+    },
+  );
+
 const getPrimaryItemQuantity = (record: GrnRecord) =>
   record.items?.[0]?.quantity ?? record.items?.[0]?.total_quantity ?? null;
 
-const getGrnDepartment = (record: GrnRecord) => record.document_requirement_details.req_department?.trim() || "Unassigned";
+const getPendingSentQty = (item: GrnPendingItemLine | undefined, recordItem: GrnRecord["items"][number] | undefined) =>
+  item?.sent_qty ?? recordItem?.quantity ?? recordItem?.total_quantity ?? null;
+
+const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const getRecordField = (source: Record<string, unknown> | undefined, key: string) => {
+  const value = source?.[key];
+  return isRecord(value) ? value : undefined;
+};
+
+const getRecordList = (source: Record<string, unknown> | undefined, key: string) => {
+  const value = source?.[key];
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+};
+
+const readQcrItemValue = (...values: unknown[]) => {
+  for (const value of values) {
+    if (value !== null && value !== undefined && value !== "") {
+      return String(value);
+    }
+  }
+  return "";
+};
+
+const parseQcrNumber = (value: string) => {
+  if (!value.trim()) return Number.NaN;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+};
+
+const isNonNegativeDecimalDraft = (value: string) => /^\d*(?:\.\d*)?$/.test(value);
+
+const shouldBlockQuantityKey = (key: string) => key === "-";
+
+const getReceivedQtyError = (value: string, sentQty: string) => {
+  if (!value.trim()) return "Received Qty is required.";
+  if (value.includes("-")) return "Received Qty cannot be negative.";
+  if (!isNonNegativeDecimalDraft(value)) return "Received Qty must be numeric.";
+
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) return "Received Qty must be numeric.";
+  if (parsedValue < 0) return "Received Qty cannot be negative.";
+
+  const parsedSentQty = sentQty ? Number(sentQty) : Number.NaN;
+  if (Number.isFinite(parsedSentQty) && parsedValue > parsedSentQty) {
+    return "Received Qty cannot exceed Sent Qty.";
+  }
+  return undefined;
+};
+
+const getRejectedQtyError = (value: string, receivedQty: string) => {
+  if (!value.trim()) return undefined;
+  if (value.includes("-")) return "Rejected Qty cannot be negative.";
+  if (!isNonNegativeDecimalDraft(value)) return "Rejected Qty must be numeric.";
+
+  const rejected = Number(value);
+  if (!Number.isFinite(rejected)) return "Rejected Qty must be numeric.";
+  if (rejected < 0) return "Rejected Qty cannot be negative.";
+
+  const received = Number(receivedQty);
+  if (Number.isFinite(received) && rejected > received) {
+    return "Rejected Qty cannot exceed Accepted Qty.";
+  }
+  return undefined;
+};
+
+const calculateAcceptedQty = (receivedQty: string, rejectedQty: string) => {
+  const received = parseQcrNumber(receivedQty);
+  if (!Number.isFinite(received)) return "";
+  const rejected = rejectedQty.trim() ? parseQcrNumber(rejectedQty) : 0;
+  if (!Number.isFinite(rejected)) return "";
+  const accepted = received - rejected;
+  if (accepted < 0) return "";
+  return String(accepted);
+};
+
+const buildQcrCompletionFormItems = (record: QcrRecord): QcrCompletionFormItem[] => {
+  const snapshot = isRecord(record.snapshot) ? record.snapshot : undefined;
+  const sourceGrn = isRecord(record.source_grn_data) ? record.source_grn_data : undefined;
+  const snapshotPayload = getRecordField(snapshot, "raw_payload");
+  const sourcePayload = getRecordField(sourceGrn, "raw_payload");
+  const rawItems = getRecordList(snapshotPayload, "items").length
+    ? getRecordList(snapshotPayload, "items")
+    : getRecordList(sourcePayload, "items");
+  const pendingItems = getRecordList(snapshot, "grn_pending_items").length
+    ? getRecordList(snapshot, "grn_pending_items")
+    : getRecordList(sourceGrn, "grn_pending_items");
+  const completedItems = Array.isArray(record.qcr_items) ? (record.qcr_items as QcrItemLine[]) : [];
+  const rowCount = Math.max(rawItems.length, pendingItems.length, completedItems.length, 1);
+
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rawItem = rawItems[index];
+    const pendingItem = pendingItems[index];
+    const completedItem = completedItems[index];
+    const receivedQty = readQcrItemValue(
+      completedItem?.received_qty,
+      pendingItem?.received_qty,
+      rawItem?.received_qty,
+      rawItem?.accepted_qty,
+      rawItem?.quantity,
+      rawItem?.total_quantity,
+    );
+    const rejectedQty = readQcrItemValue(completedItem?.rejected_qty, "");
+    const acceptedQty = readQcrItemValue(completedItem?.accepted_qty, calculateAcceptedQty(receivedQty, rejectedQty) || receivedQty);
+    return {
+      lineIndex: Number(completedItem?.line_index ?? pendingItem?.line_index ?? index),
+      itemId: readQcrItemValue(completedItem?.item_id, pendingItem?.item_id, rawItem?.item_id),
+      itemName: readQcrItemValue(
+        completedItem?.item_name,
+        pendingItem?.item_name,
+        rawItem?.product_description,
+        rawItem?.item_name,
+        rawItem?.item_id,
+        `Line ${index + 1}`,
+      ),
+      sentQty: readQcrItemValue(
+        completedItem?.sent_qty,
+        pendingItem?.sent_qty,
+        rawItem?.quantity,
+        rawItem?.total_quantity,
+      ),
+      receivedQty,
+      acceptedQty,
+      rejectedQty,
+      reason: readQcrItemValue(completedItem?.rejection_reason, ""),
+      unit: readQcrItemValue(completedItem?.unit, pendingItem?.unit, rawItem?.unit),
+      storeInName: readQcrItemValue(completedItem?.store_in_name, pendingItem?.store_in_name, rawItem?.store_in_name, rawItem?.store_in),
+    };
+  });
+};
+
+const buildPendingMoveFormItems = (record: GrnRecord): PendingMoveFormItem[] => {
+  const pendingItems = Array.isArray(record.grn_pending_items) ? record.grn_pending_items : [];
+  const sourceItems = record.items.length ? record.items : [defaultItem];
+
+  return sourceItems.map((item, index) => {
+    const pendingItem = pendingItems[index];
+    const sentQty = getPendingSentQty(pendingItem, item);
+    return {
+      lineIndex: pendingItem?.line_index ?? index,
+      itemName: String(pendingItem?.item_name ?? item.product_description ?? item.item_id ?? `Line ${index + 1}`),
+      sentQty: sentQty === null || sentQty === undefined ? "" : String(sentQty),
+      receivedQty: pendingItem?.received_qty === null || pendingItem?.received_qty === undefined ? "" : String(pendingItem.received_qty),
+      storeInId: pendingItem?.store_in_id === null || pendingItem?.store_in_id === undefined ? "" : String(pendingItem.store_in_id),
+      storeInName: pendingItem?.store_in_name ?? "",
+      unit: item.unit ? String(item.unit) : "",
+    };
+  });
+};
+
+const isValidReceivedQty = (value: string, sentQty: string) => {
+  return getReceivedQtyError(value, sentQty) === undefined;
+};
+
+const getQcrItemErrors = (items: QcrCompletionFormItem[]) =>
+  items.reduce<Record<number, { rejectedQty?: string; reason?: string }>>((errors, item, index) => {
+    const rejected = item.rejectedQty.trim() ? parseQcrNumber(item.rejectedQty) : 0;
+    const itemErrors: { rejectedQty?: string; reason?: string } = {};
+    const rejectedQtyError = getRejectedQtyError(item.rejectedQty, item.receivedQty);
+
+    if (!Number.isFinite(parseQcrNumber(item.receivedQty)) || parseQcrNumber(item.receivedQty) < 0) {
+      itemErrors.rejectedQty = "Received Qty is not available for this row.";
+    } else if (rejectedQtyError) {
+      itemErrors.rejectedQty = rejectedQtyError;
+    }
+
+    if (Number.isFinite(rejected) && rejected > 0 && !item.reason.trim()) {
+      itemErrors.reason = "Reason is required when Rejected Qty is greater than zero.";
+    }
+
+    if (itemErrors.rejectedQty || itemErrors.reason) {
+      errors[index] = itemErrors;
+    }
+    return errors;
+  }, {});
 
 const toFormString = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) {
@@ -317,15 +598,227 @@ const readText = (value: unknown) => {
   return String(value);
 };
 
-const getQcrField = (record: QcrRecord, key: string) => {
+const readTypedMessage = (value: unknown) => {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const message = (value as { message?: unknown }).message;
+  return typeof message === "string" ? message : "";
+};
+
+const toDecimalDisplayValue = (value: unknown): string | number | null => {
+  if (typeof value === "string" || typeof value === "number") {
+    return value;
+  }
+
+  return null;
+};
+
+const hasQcrValue = (value: unknown) => value !== null && value !== undefined && value !== "";
+
+const getQcrQuantityValue = (payload: Record<string, unknown> | undefined) => {
+  if (!payload) return undefined;
+
+  for (const fieldName of ["received_qty", "accepted_qty", "quantity", "total_quantity"]) {
+    const value = payload[fieldName];
+    if (hasQcrValue(value)) {
+      return value;
+    }
+  }
+
+  const itemLines = payload.items;
+  if (Array.isArray(itemLines)) {
+    const firstItem = itemLines.find((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object");
+    if (firstItem) {
+      for (const fieldName of ["received_qty", "accepted_qty", "quantity", "total_quantity"]) {
+        const value = firstItem[fieldName];
+        if (hasQcrValue(value)) {
+          return value;
+        }
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const getQcrField = (record: QcrRecord, key: string): unknown => {
+  if (key === "quantity") {
+    const quantityValue = getQcrQuantityValue(record.source_grn_data) ?? getQcrQuantityValue(record.snapshot);
+    if (hasQcrValue(quantityValue)) return quantityValue;
+  }
+
   const sourceValue = record.source_grn_data?.[key];
-  if (sourceValue !== null && sourceValue !== undefined && sourceValue !== "") return sourceValue;
+  if (hasQcrValue(sourceValue)) return sourceValue;
   return record.snapshot?.[key];
 };
 
-const getQcrDepartment = (record: QcrRecord) => {
-  const value = getQcrField(record, "req_department");
-  return value === null || value === undefined || value === "" ? "Unassigned" : String(value).trim();
+const getQcrOutcomeQuantity = (record: QcrRecord, key: "accepted_qty" | "rejected_qty"): string | number | null => {
+  const sourceValue = toDecimalDisplayValue(record.source_grn_data?.[key]);
+  if (sourceValue !== null) return sourceValue;
+
+  const snapshotValue = toDecimalDisplayValue(record.snapshot?.[key]);
+  if (snapshotValue !== null) return snapshotValue;
+
+  const completedItems = Array.isArray(record.qcr_items) ? record.qcr_items : [];
+  let total = 0;
+  let foundValue = false;
+
+  for (const item of completedItems) {
+    const rawValue = item?.[key];
+    if (!hasQcrValue(rawValue)) continue;
+    const parsedValue = Number(rawValue);
+    if (!Number.isFinite(parsedValue)) continue;
+    total += parsedValue;
+    foundValue = true;
+  }
+
+  return foundValue ? total : null;
+};
+
+const getQcrDisplayQuantity = (record: QcrRecord, tab: Exclude<GrnTabValue, "active">): string | number | null => {
+  if (tab === "next-grn") {
+    return getCompletedGrnOutcomeQuantities(record).acceptedQty;
+  }
+
+  if (tab === "rejected") {
+    return getQcrOutcomeQuantity(record, "rejected_qty") ?? toDecimalDisplayValue(getQcrField(record, "quantity"));
+  }
+
+  return toDecimalDisplayValue(getQcrField(record, "quantity"));
+};
+
+const getQcrDisplayStatus = (record: QcrRecord, tab: Exclude<GrnTabValue, "active">) => {
+  if (tab === "next-grn") {
+    const rawStatus = typeof record.status === "string" ? record.status : "";
+    const sourceStatus = typeof record.source_grn_data?.process_status === "string" ? record.source_grn_data.process_status : "";
+    return normalizeCompletedGrnStatus(rawStatus || sourceStatus);
+  }
+
+  if (tab === "rejected") {
+    return record.status === "Rejected" ? "Rejected" : "Partial Reject";
+  }
+
+  return readText(record.status);
+};
+
+const normalizeCompletedGrnStatus = (status: string): CompletedGrnStatusGroup => {
+  const normalized = status.trim().toLowerCase();
+
+  if (!normalized) {
+    return "Approved";
+  }
+
+  if (normalized.includes("moved to grn")) {
+    return "Approved";
+  }
+
+  if (normalized.includes("partial")) {
+    return "Partial Rejected";
+  }
+
+  if (normalized.includes("reject")) {
+    return normalized === "rejected" ? "Rejected" : "Partial Rejected";
+  }
+
+  if (normalized.includes("complete") || normalized.includes("approve")) {
+    return "Approved";
+  }
+
+  return "Approved";
+};
+
+const getCompletedGrnOutcomeQuantities = (record: QcrRecord) => {
+  const rawStatus = typeof record.status === "string" ? record.status : "";
+  const sourceStatus = typeof record.source_grn_data?.process_status === "string" ? record.source_grn_data.process_status : "";
+  const statusGroup = normalizeCompletedGrnStatus(rawStatus || sourceStatus);
+  const acceptedQty = getQcrOutcomeQuantity(record, "accepted_qty") ?? toDecimalDisplayValue(getQcrField(record, "quantity"));
+  const rejectedQty = getQcrOutcomeQuantity(record, "rejected_qty") ?? null;
+  return { statusGroup, acceptedQty, rejectedQty };
+};
+
+const getCompletedGrnDisplayRows = (record: QcrRecord): CompletedGrnDisplayRow[] => {
+  const { statusGroup, acceptedQty, rejectedQty } = getCompletedGrnOutcomeQuantities(record);
+  const hasAccepted = Number.isFinite(Number(acceptedQty)) && Number(acceptedQty) > 0;
+  const hasRejected = rejectedQty !== null && Number.isFinite(Number(rejectedQty)) && Number(rejectedQty) > 0;
+
+  if (hasAccepted && hasRejected) {
+    return [
+      {
+        rowId: `${record.id}-approved`,
+        record,
+        statusGroup,
+        displayStatus: "Approved",
+        quantity: acceptedQty,
+      },
+      {
+        rowId: `${record.id}-rejected`,
+        record,
+        statusGroup,
+        displayStatus: "Rejected",
+        quantity: rejectedQty,
+      },
+    ];
+  }
+
+  if (statusGroup === "Rejected" || (!hasAccepted && hasRejected)) {
+    return [
+      {
+        rowId: `${record.id}-rejected`,
+        record,
+        statusGroup: statusGroup === "Approved" ? "Rejected" : statusGroup,
+        displayStatus: "Rejected",
+        quantity: rejectedQty ?? acceptedQty,
+      },
+    ];
+  }
+
+  return [
+    {
+      rowId: `${record.id}-approved`,
+      record,
+      statusGroup: "Approved",
+      displayStatus: "Approved",
+      quantity: acceptedQty,
+    },
+  ];
+};
+
+
+const getActiveItemSummary = (record: GrnRecord) => {
+  const items = record.items ?? [];
+  if (!items.length) {
+    return { title: record.product_description || "-", subtitle: record.item_id || null, extra: null as string | null };
+  }
+
+  const [firstItem, ...restItems] = items;
+  return {
+    title: firstItem.product_description || firstItem.item_id || "-",
+    subtitle: firstItem.item_id || null,
+    extra: restItems.length ? `+${restItems.length} more` : null,
+  };
+};
+
+const toDateKey = (value: string | null | undefined) => {
+  if (!value) return "";
+  const source = String(value);
+  const match = source.match(/\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
+
+  const parsed = new Date(source);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+};
+
+const isWithinDateRange = (dateValue: string | null | undefined, fromDate: string, toDate: string) => {
+  const dateKey = toDateKey(dateValue);
+  if (!dateKey) {
+    return !fromDate && !toDate;
+  }
+  if (fromDate && dateKey < fromDate) return false;
+  if (toDate && dateKey > toDate) return false;
+  return true;
 };
 
 const toFieldLabel = (value: string) =>
@@ -1176,16 +1669,34 @@ const EnterpriseReadField = ({
   </div>
 );
 
-const GRNPage = () => {
+type GRNPageProps = {
+  module?: GrnPageModule;
+};
+
+const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [payloadRecord, setPayloadRecord] = useState<GrnRecord | null>(null);
   const [moveTarget, setMoveTarget] = useState<GrnRecord | null>(null);
-  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [pendingMoveTarget, setPendingMoveTarget] = useState<GrnRecord | null>(null);
+  const [pendingMoveItems, setPendingMoveItems] = useState<PendingMoveFormItem[]>([]);
+  const [pendingMoveErrors, setPendingMoveErrors] = useState<Record<number, { receivedQty?: string; storeIn?: string }>>({});
+  const today = new Date();
+  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+  const todayDateInputValue = today.toISOString().slice(0, 10);
+  const [activeTab, setActiveTab] = useState<GrnTabValue>(GRN_MODULE_META[module].defaultTab);
+  const [searchByTab, setSearchByTab] = useState<Record<GrnTabValue, string>>(createDefaultTabTextState);
+  const [pageByTab, setPageByTab] = useState<Record<GrnTabValue, number>>(createDefaultTabPageState);
+  const [pageSizeByTab, setPageSizeByTab] = useState<Record<GrnTabValue, StorePageSizeValue>>(createDefaultTabPageSizeState);
+  const [draftFiltersByTab, setDraftFiltersByTab] = useState<Record<GrnTabValue, GrnTableFilterState>>(createDefaultTabFiltersState);
+  const [appliedFiltersByTab, setAppliedFiltersByTab] = useState<Record<GrnTabValue, GrnTableFilterState>>(createDefaultTabFiltersState);
+  const [isFilterPending, startFilterTransition] = useTransition();
   const [detailState, setDetailState] = useState<{ scope: RecordScope; recordId: number } | null>(null);
   const [updateState, setUpdateState] = useState<{ scope: RecordScope; recordId: number } | null>(null);
   const [selectedItemIndex, setSelectedItemIndex] = useState(0);
+  const [itemListPreviewRecord, setItemListPreviewRecord] = useState<GrnRecord | null>(null);
   const form = useForm<GrnFormValues>({
     resolver: zodResolver(grnSchema),
     defaultValues,
@@ -1219,6 +1730,14 @@ const GRNPage = () => {
     },
   });
 
+  const pendingQuery = useQuery({
+    queryKey: ["grn-pending"],
+    queryFn: async () => {
+      const response = await grnApi.get<GrnListResponse>("/api/grn/pending/");
+      return normalizeGrnResponse(response.data);
+    },
+  });
+
   const qcrActiveQuery = useQuery({
     queryKey: ["qcr", "active"],
     queryFn: async () => {
@@ -1243,6 +1762,11 @@ const GRNPage = () => {
     },
   });
 
+  const locationLookupQuery = useQuery({
+    queryKey: ["wpe-masters", "locations", "lookup", "GRN_CENTER"],
+    queryFn: () => wpeMastersApi.locations.lookup({ center_type: "GRN_CENTER" }),
+  });
+
   const createMutation = useMutation({
     mutationFn: async (values: GrnFormValues) => {
       const response = await grnApi.post("/api/grn/", values);
@@ -1253,6 +1777,7 @@ const GRNPage = () => {
       setDialogOpen(false);
       form.reset(defaultValues);
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to create GRN record.")),
@@ -1269,6 +1794,7 @@ const GRNPage = () => {
       updateForm.reset(defaultValues);
       setDetailState({ scope: "active", recordId: payload.data.id });
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update GRN details.")),
@@ -1280,14 +1806,39 @@ const GRNPage = () => {
       return response.data;
     },
     onSuccess: (_payload, grnId) => {
-      toast.success("GRN moved to QCR.");
+      toast.success("Gate Entry moved to GRN Pending.");
       setMoveTarget(null);
       setDetailState((current) => (current?.scope === "active" && current.recordId === grnId ? null : current));
+      queryClient.invalidateQueries({ queryKey: ["grn-active"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move Gate Entry to GRN Pending.")),
+  });
+
+  const pendingToQcrMutation = useMutation({
+    mutationFn: async ({ grnId, items }: { grnId: number; items: PendingMoveFormItem[] }) => {
+      const response = await grnApi.post(`/api/grn/${grnId}/move-pending-to-qcr/`, {
+        items: items.map((item) => ({
+          line_index: item.lineIndex,
+          received_qty: item.receivedQty,
+          store_in_id: item.storeInId,
+          store_in_name: item.storeInName,
+        })),
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("GRN moved to QCR.");
+      setPendingMoveTarget(null);
+      setPendingMoveItems([]);
+      setPendingMoveErrors({});
+      queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
       queryClient.invalidateQueries({ queryKey: ["qcr"] });
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move GRN to QCR.")),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move GRN Pending to QCR.")),
   });
 
   const importMutation = useMutation({
@@ -1300,110 +1851,236 @@ const GRNPage = () => {
     onSuccess: (payload) => {
       toast.success(summarizeImportResponse(payload));
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to import GRN file.")),
   });
 
-  const [qcrDetailRecord, setQcrDetailRecord] = useState<QcrRecord | null>(null);
-  const [qcrRejectTarget, setQcrRejectTarget] = useState<QcrRecord | null>(null);
-  const [qcrRejectRemarks, setQcrRejectRemarks] = useState("");
-  const [qcrRemarksError, setQcrRemarksError] = useState("");
+  const [qcrEntryTarget, setQcrEntryTarget] = useState<QcrRecord | null>(null);
+  const [qcrEntryItems, setQcrEntryItems] = useState<QcrCompletionFormItem[]>([]);
+  const [qcrEntryErrors, setQcrEntryErrors] = useState<Record<number, { rejectedQty?: string; reason?: string }>>({});
+  const deferredActiveSearch = useDeferredValue(searchByTab.active.trim());
+  const deferredPendingSearch = useDeferredValue(searchByTab["grn-pending"].trim());
+  const deferredMovedToQcrSearch = useDeferredValue(searchByTab["moved-to-qcr"].trim());
+  const deferredCompletedSearch = useDeferredValue(searchByTab["next-grn"].trim());
 
-  const qcrStatusMutation = useMutation({
-    mutationFn: async ({ id, action, remarks }: { id: number; action: "move_to_grn" | "reject"; remarks?: string }) => {
-      const response = await grnApi.post(`/api/qcr/${id}/status/`, { action, remarks });
+  const qcrCompletionMutation = useMutation<{ message?: string }, unknown, { id: number; items: QcrCompletionFormItem[] }>({
+    mutationFn: async ({ id, items }: { id: number; items: QcrCompletionFormItem[] }) => {
+      const response = await grnApi.post(`/api/qcr/${id}/status/`, {
+        action: "complete",
+        items: items.map((item) => ({
+          line_index: item.lineIndex,
+          rejected_qty: item.rejectedQty.trim() || "0",
+          reason: item.reason.trim(),
+        })),
+      });
       return response.data;
     },
-    onSuccess: (_, variables) => {
-      toast.success(variables.action === "move_to_grn" ? "GRN approved and moved to store." : "QCR cancelled with remarks.");
+    onSuccess: (payload) => {
+      const successMessage = readTypedMessage(payload);
+      toast.success(successMessage.trim() ? successMessage : "QCR completed. Only accepted quantity was moved to store.");
+      setQcrEntryTarget(null);
+      setQcrEntryItems([]);
+      setQcrEntryErrors({});
       queryClient.invalidateQueries({ queryKey: ["qcr"] });
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
+      queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, "Unable to update QCR status."));
+      toast.error(getApiErrorMessage(error, "Unable to complete QCR."));
     },
   });
 
-  const openQcrRejectDialog = (record: QcrRecord) => {
-    setQcrRejectTarget(record);
-    setQcrRejectRemarks("");
-    setQcrRemarksError("");
+  const openQcrEntryDialog = (record: QcrRecord) => {
+    setQcrEntryTarget(record);
+    setQcrEntryItems(buildQcrCompletionFormItems(record));
+    setQcrEntryErrors({});
   };
 
-  const closeQcrRejectDialog = () => {
-    if (qcrStatusMutation.isPending) return;
-    setQcrRejectTarget(null);
-    setQcrRejectRemarks("");
-    setQcrRemarksError("");
+  const closeQcrEntryDialog = () => {
+    if (qcrCompletionMutation.isPending) return;
+    setQcrEntryTarget(null);
+    setQcrEntryItems([]);
+    setQcrEntryErrors({});
   };
 
-  const submitQcrReject = () => {
-    const trimmed = qcrRejectRemarks.trim();
-    if (!trimmed) {
-      setQcrRemarksError("Remarks are required when rejecting a QCR.");
+  const submitQcrEntry = () => {
+    if (!qcrEntryTarget) return;
+    const errors = getQcrItemErrors(qcrEntryItems);
+    if (Object.keys(errors).length) {
+      setQcrEntryErrors(errors);
       return;
     }
-    if (!qcrRejectTarget) return;
-    qcrStatusMutation.mutate(
-      { id: qcrRejectTarget.id, action: "reject", remarks: trimmed },
-      { onSuccess: () => closeQcrRejectDialog() },
-    );
+    qcrCompletionMutation.mutate({ id: qcrEntryTarget.id, items: qcrEntryItems });
   };
 
-  const departmentOptions = useMemo(() => {
-    const grnRecords = [...(activeQuery.data?.data ?? []), ...(movedQuery.data?.data ?? [])];
-    const qcrRecords = [...(qcrActiveQuery.data ?? []), ...(qcrMovedQuery.data ?? []), ...(qcrRejectedQuery.data ?? [])];
-    const grnDepts = grnRecords.map((r) => getGrnDepartment(r));
-    const qcrDepts = qcrRecords.map((r) => getQcrDepartment(r));
-    return Array.from(new Set([...grnDepts, ...qcrDepts])).sort((a, b) => a.localeCompare(b));
-  }, [activeQuery.data?.data, movedQuery.data?.data, qcrActiveQuery.data, qcrMovedQuery.data, qcrRejectedQuery.data]);
+  useEffect(() => {
+    setActiveTab(GRN_MODULE_META[module].defaultTab);
+  }, [module]);
+  const activeRecords = useMemo(() => activeQuery.data?.data ?? [], [activeQuery.data?.data]);
+  const pendingRecords = useMemo(() => pendingQuery.data?.data ?? [], [pendingQuery.data?.data]);
+  const movedRecords = useMemo(() => movedQuery.data?.data ?? [], [movedQuery.data?.data]);
+  const locationOptions = useMemo(() => locationLookupQuery.data ?? [], [locationLookupQuery.data]);
+  const qcrActiveRecords = useMemo(() => qcrActiveQuery.data ?? [], [qcrActiveQuery.data]);
+  const qcrMovedRecords = useMemo(() => qcrMovedQuery.data ?? [], [qcrMovedQuery.data]);
+  const qcrRejectedRecords = useMemo(() => qcrRejectedQuery.data ?? [], [qcrRejectedQuery.data]);
 
-  const activeRecords = useMemo(() => {
-    const records = activeQuery.data?.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((record) => getGrnDepartment(record) === departmentFilter);
-  }, [activeQuery.data?.data, departmentFilter]);
+  const activeAppliedFilters = appliedFiltersByTab.active;
+  const pendingAppliedFilters = appliedFiltersByTab["grn-pending"];
+  const movedToQcrAppliedFilters = appliedFiltersByTab["moved-to-qcr"];
+  const completedAppliedFilters = appliedFiltersByTab["next-grn"];
 
-  const movedRecords = useMemo(() => {
-    const records = movedQuery.data?.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((record) => getGrnDepartment(record) === departmentFilter);
-  }, [movedQuery.data?.data, departmentFilter]);
+  const filteredActiveRecords = useMemo(() => {
+    const search = deferredActiveSearch.toLowerCase();
+    const { fromDate, toDate } = activeAppliedFilters;
+    return activeRecords.filter((record) => {
+      if (!isWithinDateRange(record.grn_date, fromDate, toDate)) return false;
+      if (!search) return true;
+      const searchable = [
+        record.grn_no,
+        record.item_id,
+        record.product_description,
+        record.supplier_details.trade_name,
+        record.trade_name,
+        record.document_details.po_no,
+        ...record.items.flatMap((item) => [item.item_id, item.product_description]),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(search);
+    });
+  }, [activeAppliedFilters, activeRecords, deferredActiveSearch]);
 
-  const qcrActiveRecords = useMemo(() => {
-    const records = qcrActiveQuery.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
-  }, [qcrActiveQuery.data, departmentFilter]);
+  const filteredPendingRecords = useMemo(() => {
+    const search = deferredPendingSearch.toLowerCase();
+    const { fromDate, toDate } = pendingAppliedFilters;
+    return pendingRecords.filter((record) => {
+      if (!isWithinDateRange(record.grn_date, fromDate, toDate)) return false;
+      if (!search) return true;
+      const searchable = [
+        record.grn_no,
+        record.item_id,
+        record.product_description,
+        record.supplier_details.trade_name,
+        record.trade_name,
+        record.document_details.po_no,
+        ...record.items.flatMap((item) => [item.item_id, item.product_description]),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(search);
+    });
+  }, [deferredPendingSearch, pendingAppliedFilters, pendingRecords]);
 
-  const qcrMovedRecords = useMemo(() => {
-    const records = qcrMovedQuery.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
-  }, [qcrMovedQuery.data, departmentFilter]);
+  const filteredQcrActiveRecords = useMemo(() => {
+    const search = deferredMovedToQcrSearch.toLowerCase();
+    const { fromDate, toDate } = movedToQcrAppliedFilters;
+    return qcrActiveRecords.filter((record) => {
+      if (!isWithinDateRange(record.moved_to_qcr_at, fromDate, toDate)) return false;
+      if (!search) return true;
+      const searchable = [
+        record.grn_reference_no,
+        getQcrField(record, "product_description"),
+        getQcrField(record, "trade_name"),
+        getQcrField(record, "item_id"),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(search);
+    });
+  }, [deferredMovedToQcrSearch, movedToQcrAppliedFilters, qcrActiveRecords]);
 
-  const qcrRejectedRecords = useMemo(() => {
-    const records = qcrRejectedQuery.data ?? [];
-    return departmentFilter === "all" ? records : records.filter((r) => getQcrDepartment(r) === departmentFilter);
-  }, [qcrRejectedQuery.data, departmentFilter]);
+  const completedGrnRecords = useMemo(() => [...qcrMovedRecords, ...qcrRejectedRecords], [qcrMovedRecords, qcrRejectedRecords]);
 
-  const resolveScopedRecord = (scope: RecordScope, recordId: number) => {
-    const records = scope === "active" ? activeRecords : movedRecords;
-    return records.find((record) => record.id === recordId) ?? null;
+  const filteredCompletedGrnRows = useMemo(() => {
+    const search = deferredCompletedSearch.toLowerCase();
+    const { fromDate, toDate, status } = completedAppliedFilters;
+    return completedGrnRecords.flatMap((record) => {
+      if (!isWithinDateRange(record.moved_to_qcr_at, fromDate, toDate)) return [];
+      const searchable = [
+        record.grn_reference_no,
+        getQcrField(record, "product_description"),
+        getQcrField(record, "trade_name"),
+        getQcrField(record, "item_id"),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (search && !searchable.includes(search)) {
+        return [];
+      }
+
+      return getCompletedGrnDisplayRows(record).filter((row) => {
+        if (status && status !== "Partial Rejected" && row.displayStatus !== status) {
+          return false;
+        }
+        if (status === "Partial Rejected" && row.statusGroup !== "Partial Rejected") {
+          return false;
+        }
+        return true;
+      });
+    });
+  }, [completedAppliedFilters, completedGrnRecords, deferredCompletedSearch]);
+
+  const rowsByTab: Record<GrnTabValue, GrnRecord[] | QcrRecord[] | CompletedGrnDisplayRow[]> = {
+    active: filteredActiveRecords,
+    "grn-pending": filteredPendingRecords,
+    "moved-to-qcr": filteredQcrActiveRecords,
+    "next-grn": filteredCompletedGrnRows,
+    rejected: qcrRejectedRecords,
   };
+
+  const paginatedRowsByTab: Record<GrnTabValue, GrnRecord[] | QcrRecord[] | CompletedGrnDisplayRow[]> = {
+    active: paginateRows(filteredActiveRecords, pageByTab.active, pageSizeByTab.active),
+    "grn-pending": paginateRows(filteredPendingRecords, pageByTab["grn-pending"], pageSizeByTab["grn-pending"]),
+    "moved-to-qcr": paginateRows(filteredQcrActiveRecords, pageByTab["moved-to-qcr"], pageSizeByTab["moved-to-qcr"]),
+    "next-grn": paginateRows(filteredCompletedGrnRows, pageByTab["next-grn"], pageSizeByTab["next-grn"]),
+    rejected: paginateRows(qcrRejectedRecords, pageByTab.rejected, pageSizeByTab.rejected),
+  };
+
+  useEffect(() => {
+    const totalsByTab: Record<GrnTabValue, number> = {
+      active: filteredActiveRecords.length,
+      "grn-pending": filteredPendingRecords.length,
+      "moved-to-qcr": filteredQcrActiveRecords.length,
+      "next-grn": filteredCompletedGrnRows.length,
+      rejected: qcrRejectedRecords.length,
+    };
+    grnTabs.forEach((tab) => {
+      const totalPages = getPageCount(pageSizeByTab[tab], totalsByTab[tab]);
+      if (pageByTab[tab] > totalPages) {
+        setPageByTab((current) => ({ ...current, [tab]: totalPages }));
+      }
+    });
+  }, [
+    filteredActiveRecords.length,
+    filteredPendingRecords.length,
+    filteredQcrActiveRecords.length,
+    filteredCompletedGrnRows.length,
+    qcrRejectedRecords.length,
+    pageByTab,
+    pageSizeByTab,
+  ]);
 
   const detailRecord = useMemo(() => {
     if (!detailState) {
       return null;
     }
-
-    return resolveScopedRecord(detailState.scope, detailState.recordId);
+    const records = detailState.scope === "active" ? activeRecords : movedRecords;
+    return records.find((record) => record.id === detailState.recordId) ?? null;
   }, [activeRecords, detailState, movedRecords]);
 
   const updateRecord = useMemo(() => {
     if (!updateState) {
       return null;
     }
-
-    return resolveScopedRecord(updateState.scope, updateState.recordId);
+    const records = updateState.scope === "active" ? activeRecords : movedRecords;
+    return records.find((record) => record.id === updateState.recordId) ?? null;
   }, [activeRecords, movedRecords, updateState]);
 
   useEffect(() => {
@@ -1444,11 +2121,6 @@ const GRNPage = () => {
 
   const selectedActiveItem = detailRecord?.items[selectedItemIndex] ?? detailRecord?.items[0] ?? null;
 
-  const openDetailSheet = (scope: RecordScope, record: GrnRecord) => {
-    setSelectedItemIndex(0);
-    setDetailState({ scope, recordId: record.id });
-  };
-
   const openUpdateDialog = (scope: RecordScope, record: GrnRecord) => {
     updateForm.reset(mapRecordToFormValues(record));
     setUpdateState({ scope, recordId: record.id });
@@ -1468,6 +2140,126 @@ const GRNPage = () => {
 
     setUpdateState(null);
     updateForm.reset(defaultValues);
+  };
+
+  const openPendingMoveDialog = (record: GrnRecord) => {
+    setPendingMoveTarget(record);
+    setPendingMoveItems(buildPendingMoveFormItems(record));
+    setPendingMoveErrors({});
+  };
+
+  const closePendingMoveDialog = () => {
+    if (pendingToQcrMutation.isPending) return;
+    setPendingMoveTarget(null);
+    setPendingMoveItems([]);
+    setPendingMoveErrors({});
+  };
+
+  const submitPendingMove = () => {
+    if (!pendingMoveTarget) return;
+
+    const nextErrors: Record<number, { receivedQty?: string; storeIn?: string }> = {};
+    pendingMoveItems.forEach((item, index) => {
+      const receivedQtyError = getReceivedQtyError(item.receivedQty, item.sentQty);
+      if (receivedQtyError) {
+        nextErrors[index] = { ...(nextErrors[index] ?? {}), receivedQty: receivedQtyError };
+      }
+
+      if (!item.storeInId.trim()) {
+        nextErrors[index] = { ...(nextErrors[index] ?? {}), storeIn: "Store In is required." };
+      }
+    });
+
+    setPendingMoveErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    pendingToQcrMutation.mutate({ grnId: pendingMoveTarget.id, items: pendingMoveItems });
+  };
+
+  const currentSearch = searchByTab[activeTab];
+  const currentPageSize = pageSizeByTab[activeTab];
+  const currentDraftFilters = draftFiltersByTab[activeTab];
+  const currentRows = rowsByTab[activeTab];
+  const visibleTabs = module === "process" ? processTabs : statusTabs;
+  const showCompletedStatusFilter = activeTab === "next-grn";
+  const isPendingMoveReady =
+    pendingMoveItems.length > 0 &&
+    pendingMoveItems.every((item) => item.receivedQty.trim() && item.storeInId.trim() && isValidReceivedQty(item.receivedQty, item.sentQty));
+
+  const handleToolbarExport = (format: StoreExportFormat) => {
+    if (activeTab === "active" || activeTab === "grn-pending") {
+      const isPendingTab = activeTab === "grn-pending";
+      const rows = isPendingTab ? filteredPendingRecords : filteredActiveRecords;
+      const columns: StoreExportColumn<GrnRecord>[] = [
+        { label: "S.No", value: (_row, index) => index + 1 },
+        { label: "GRN No", value: (row) => row.grn_no },
+        { label: "Supplier", value: (row) => row.supplier_details.trade_name || row.trade_name || "-" },
+        {
+          label: "Item",
+          value: (row) => {
+            const summary = getActiveItemSummary(row);
+            return summary.extra ? `${summary.title} ${summary.extra}` : summary.title;
+          },
+        },
+        { label: "Quantity", value: (row) => formatDecimal(getPrimaryItemQuantity(row)) },
+        { label: "Status", value: (row) => row.process_status },
+        { label: "GRN Date", value: (row) => formatDate(row.grn_date) },
+      ];
+      exportTableData({
+        title: isPendingTab ? "GRN Pending Records" : "Gate Entry Records",
+        filename: isPendingTab ? "grn-pending-records" : "gate-entry-records",
+        rows,
+        columns,
+        format,
+      });
+      return;
+    }
+
+    const qcrTab: Exclude<GrnTabValue, "active"> = activeTab === "moved-to-qcr" ? "moved-to-qcr" : "next-grn";
+    const rows =
+      activeTab === "moved-to-qcr"
+        ? filteredQcrActiveRecords
+        : activeTab === "next-grn"
+          ? filteredCompletedGrnRows
+          : qcrRejectedRecords;
+    const columns: StoreExportColumn<QcrRecord | CompletedGrnDisplayRow>[] = [
+      { label: "S.No", value: (_row, index) => index + 1 },
+      {
+        label: "GRN Reference",
+        value: (row) => ("record" in row ? row.record.grn_reference_no : row.grn_reference_no),
+      },
+      {
+        label: "Supplier",
+        value: (row) => ("record" in row ? readText(getQcrField(row.record, "trade_name")) : readText(getQcrField(row, "trade_name"))),
+      },
+      {
+        label: "Item",
+        value: (row) => ("record" in row ? readText(getQcrField(row.record, "product_description")) : readText(getQcrField(row, "product_description"))),
+      },
+      {
+        label: "Quantity",
+        value: (row) => ("record" in row ? formatDecimal(row.quantity) : formatDecimal(getQcrDisplayQuantity(row, qcrTab))),
+      },
+      {
+        label: "Status",
+        value: (row) => ("record" in row ? row.displayStatus : getQcrDisplayStatus(row, qcrTab)),
+      },
+      {
+        label: "Moved To QCR",
+        value: (row) => ("record" in row ? formatDateTime(row.record.moved_to_qcr_at) : formatDateTime(row.moved_to_qcr_at)),
+      },
+      {
+        label: "Moved By",
+        value: (row) => ("record" in row ? row.record.moved_to_qcr_by || "-" : row.moved_to_qcr_by || "-"),
+      },
+    ];
+    exportTableData({
+      title: activeTab === "next-grn" ? "GRN Completed Records" : "GRN QCR Records",
+      filename: activeTab === "next-grn" ? "grn-completed-records" : `grn-${activeTab}-records`,
+      rows,
+      columns,
+      format,
+    });
   };
 
   const renderDetailSheet = () => {
@@ -1510,7 +2302,7 @@ const GRNPage = () => {
                   {isActiveRecord ? (
                     <Button variant="outline" onClick={() => setMoveTarget(detailRecord)}>
                       <MoveRight className="mr-2 h-4 w-4" />
-                      Move to QCR
+                      Move to GRN Pending
                     </Button>
                   ) : null}
                 </div>
@@ -1663,80 +2455,11 @@ const GRNPage = () => {
     );
   };
 
-  const renderMovedTable = () => {
-    if (!movedRecords.length) {
-      return <EmptyState title="No moved GRN records" description="Records moved out of active GRN appear here." />;
-    }
-
-    return (
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>GRN No</TableHead>
-                <TableHead>GRN Date</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>PO No</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Total After Tax</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Moved To QCR</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {movedRecords.map((record, index) => {
-                const isSelected = detailState?.scope === "moved" && detailState.recordId === record.id;
-                return (
-                  <TableRow
-                    key={record.id}
-                    className={cn("cursor-pointer transition-colors hover:bg-muted/50", isSelected ? "bg-primary/5" : "")}
-                    onClick={() => openDetailSheet("moved", record)}
-                  >
-                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                    <TableCell>
-                      <div className="font-medium text-foreground">{record.grn_no}</div>
-                      <div className="text-xs text-muted-foreground">{record.document_details.po_no || "-"}</div>
-                    </TableCell>
-                    <TableCell>{formatDate(record.grn_date)}</TableCell>
-                    <TableCell>{record.supplier_details.trade_name || record.trade_name || "-"}</TableCell>
-                    <TableCell>{record.document_details.po_no || "-"}</TableCell>
-                    <TableCell>{formatDecimal(getPrimaryItemQuantity(record))}</TableCell>
-                    <TableCell>{formatDecimal(record.value_details.total_after_tax ?? record.total_after_tax, 2)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="border-warning/20 bg-warning/10 text-warning">
-                        {record.process_status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openUpdateDialog("moved", record);
-                        }}
-                      >
-                        Update
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const renderQcrTable = (records: QcrRecord[], showActions: boolean) => {
+  const renderQcrTable = (tab: Exclude<GrnTabValue, "active">, records: QcrRecord[]) => {
     if (!records.length) {
       return <EmptyState title="No records found" description="This stage currently has no records." />;
     }
+    const paginatedRows = paginatedRowsByTab[tab] as QcrRecord[];
     return (
       <Card className="overflow-hidden">
         <CardContent className="p-0">
@@ -1748,75 +2471,139 @@ const GRNPage = () => {
                 <TableHead>Supplier</TableHead>
                 <TableHead>Item</TableHead>
                 <TableHead>Quantity</TableHead>
-                <TableHead>Department</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Moved To QCR</TableHead>
                 <TableHead>Moved By</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="w-16 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map((record, index) => (
-                <TableRow key={record.id}>
-                  <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                  <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
-                  <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
-                  <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
-                  <TableCell>{readText(getQcrField(record, "quantity"))}</TableCell>
-                  <TableCell>{readText(getQcrField(record, "req_department"))}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        record.status === "Active"
-                          ? "border-warning/20 bg-warning/10 text-warning"
-                          : record.status === "Cancelled"
-                            ? "border-destructive/20 bg-destructive/10 text-destructive"
-                            : "border-success/20 bg-success/10 text-success"
-                      }
-                    >
-                      {record.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
-                  <TableCell>{record.moved_to_qcr_by || "-"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="icon" onClick={() => setQcrDetailRecord(record)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      {showActions ? (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={qcrStatusMutation.isPending}
-                            onClick={() => qcrStatusMutation.mutate({ id: record.id, action: "move_to_grn" })}
-                          >
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Approve
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => openQcrRejectDialog(record)}>
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Not Approve
-                          </Button>
-                        </>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {paginatedRows.map((record, index) => {
+                const displayStatus = getQcrDisplayStatus(record, tab);
+                const badgeClassName =
+                  tab === "moved-to-qcr"
+                    ? "border-warning/20 bg-warning/10 text-warning"
+                    : displayStatus === "Partial Rejected"
+                      ? "border-warning/20 bg-warning/10 text-warning"
+                      : displayStatus === "Rejected"
+                        ? "border-destructive/20 bg-destructive/10 text-destructive"
+                        : "border-success/20 bg-success/10 text-success";
+
+                return (
+                  <TableRow key={record.id} className="transition-colors hover:bg-muted/50">
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {getPageSerialNumber(pageByTab[tab], pageSizeByTab[tab], records.length, index)}
+                    </TableCell>
+                    <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
+                    <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
+                    <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
+                    <TableCell>{formatDecimal(getQcrDisplayQuantity(record, tab))}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={badgeClassName}>
+                        {displayStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{formatDateTime(record.moved_to_qcr_at)}</TableCell>
+                    <TableCell>{record.moved_to_qcr_by || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      {record.status === "Active" ? (
+                        <Button type="button" variant="outline" size="sm" onClick={() => openQcrEntryDialog(record)} disabled={qcrCompletionMutation.isPending}>
+                          QC Entry
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
+        <StoreTablePagination
+          page={pageByTab[tab]}
+          pageSize={getPageSizeNumber(pageSizeByTab[tab], records.length)}
+          total={records.length}
+          onPageChange={(value) => setPageByTab((current) => ({ ...current, [tab]: value }))}
+        />
       </Card>
     );
   };
 
-  const renderActiveTable = () => {
-    if (!activeRecords.length) {
-      return <EmptyState title="No active GRN records" description="Create a GRN or import an Excel workbook to populate the active queue." />;
+  const renderCompletedGrnTable = (rows: CompletedGrnDisplayRow[]) => {
+    if (!rows.length) {
+      return <EmptyState title="No records found" description="This stage currently has no records." />;
     }
+
+    const paginatedRows = paginatedRowsByTab["next-grn"] as CompletedGrnDisplayRow[];
+
+    return (
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16 text-center">S.No</TableHead>
+                <TableHead>GRN Reference</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead>Item</TableHead>
+                <TableHead>Quantity</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Moved To QCR</TableHead>
+                <TableHead>Moved By</TableHead>
+                <TableHead className="w-16 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedRows.map((row, index) => {
+                const badgeClassName =
+                  row.statusGroup === "Partial Rejected"
+                    ? "border-warning/20 bg-warning/10 text-warning"
+                    : row.displayStatus === "Rejected"
+                      ? "border-destructive/20 bg-destructive/10 text-destructive"
+                      : "border-success/20 bg-success/10 text-success";
+
+                return (
+                  <TableRow key={row.rowId} className="transition-colors hover:bg-muted/50">
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {getPageSerialNumber(pageByTab["next-grn"], pageSizeByTab["next-grn"], rows.length, index)}
+                    </TableCell>
+                    <TableCell className="font-medium">{row.record.grn_reference_no}</TableCell>
+                    <TableCell>{readText(getQcrField(row.record, "trade_name"))}</TableCell>
+                    <TableCell>{readText(getQcrField(row.record, "product_description"))}</TableCell>
+                    <TableCell>{formatDecimal(row.quantity)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={badgeClassName}>
+                        {row.displayStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{formatDateTime(row.record.moved_to_qcr_at)}</TableCell>
+                    <TableCell>{row.record.moved_to_qcr_by || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-muted-foreground">—</span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+        <StoreTablePagination
+          page={pageByTab["next-grn"]}
+          pageSize={getPageSizeNumber(pageSizeByTab["next-grn"], rows.length)}
+          total={rows.length}
+          onPageChange={(value) => setPageByTab((current) => ({ ...current, "next-grn": value }))}
+        />
+      </Card>
+    );
+  };
+
+  const renderActiveTable = (records: GrnRecord[]) => {
+    if (!records.length) {
+      return <EmptyState title="No Gate Entry records" description="Create a GRN or import an Excel workbook to populate the Gate Entry queue." />;
+    }
+
+    const paginatedRows = paginatedRowsByTab.active as GrnRecord[];
 
     return (
       <Card className="overflow-hidden">
@@ -1833,19 +2620,21 @@ const GRNPage = () => {
                 <TableHead>Total After Tax</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Details</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {activeRecords.map((record, index) => {
+              {paginatedRows.map((record, index) => {
                 const isSelected = detailState?.scope === "active" && detailState.recordId === record.id;
+                const itemSummary = getActiveItemSummary(record);
                 return (
                   <TableRow
                     key={record.id}
                     className={cn("cursor-pointer transition-colors hover:bg-muted/50", isSelected ? "bg-primary/5" : "")}
-                    onClick={() => openDetailSheet("active", record)}
+                    onClick={() => navigate(getGrnProcessEditRoute(record.id))}
                   >
-                    <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {getPageSerialNumber(pageByTab.active, pageSizeByTab.active, records.length, index)}
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium text-foreground">{record.grn_no}</div>
                       <div className="text-xs text-muted-foreground">{formatDate(record.grn_date)}</div>
@@ -1855,7 +2644,20 @@ const GRNPage = () => {
                       <div className="text-xs text-muted-foreground">{record.document_details.supplier_invoice_no || "No invoice"}</div>
                     </TableCell>
                     <TableCell>{record.document_details.po_no || "-"}</TableCell>
-                    <TableCell>{record.items.length || 1}</TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        className="space-y-0.5 text-left transition-colors hover:text-primary"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setItemListPreviewRecord(record);
+                        }}
+                      >
+                        <div className="font-medium text-card-foreground">{itemSummary.title}</div>
+                        {itemSummary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{itemSummary.subtitle}</div> : null}
+                        {itemSummary.extra ? <div className="text-xs text-primary">{itemSummary.extra}</div> : null}
+                      </button>
+                    </TableCell>
                     <TableCell>{formatDecimal(getPrimaryItemQuantity(record))}</TableCell>
                     <TableCell>{formatDecimal(record.value_details.total_after_tax ?? record.total_after_tax, 2)}</TableCell>
                     <TableCell>{record.document_requirement_details.req_department || "-"}</TableCell>
@@ -1864,15 +2666,77 @@ const GRNPage = () => {
                         {record.process_status}
                       </Badge>
                     </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+        <StoreTablePagination
+          page={pageByTab.active}
+          pageSize={getPageSizeNumber(pageSizeByTab.active, records.length)}
+          total={records.length}
+          onPageChange={(value) => setPageByTab((current) => ({ ...current, active: value }))}
+        />
+      </Card>
+    );
+  };
+
+  const renderPendingTable = (records: GrnRecord[]) => {
+    if (!records.length) {
+      return <EmptyState title="No GRN Pending records" description="Records moved from Gate Entry will appear here for QCR handoff." />;
+    }
+
+    const paginatedRows = paginatedRowsByTab["grn-pending"] as GrnRecord[];
+
+    return (
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16 text-center">S.No</TableHead>
+                <TableHead>GRN No</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead>PO No</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead>Sent Qty</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-28 text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedRows.map((record, index) => {
+                const itemSummary = getActiveItemSummary(record);
+                return (
+                  <TableRow key={record.id} className="transition-colors hover:bg-muted/50">
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {getPageSerialNumber(pageByTab["grn-pending"], pageSizeByTab["grn-pending"], records.length, index)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium text-foreground">{record.grn_no}</div>
+                      <div className="text-xs text-muted-foreground">{formatDate(record.grn_date)}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium text-foreground">{record.supplier_details.trade_name || record.trade_name || "-"}</div>
+                      <div className="text-xs text-muted-foreground">{record.document_details.supplier_invoice_no || "No invoice"}</div>
+                    </TableCell>
+                    <TableCell>{record.document_details.po_no || "-"}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-card-foreground">{itemSummary.title}</div>
+                      {itemSummary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{itemSummary.subtitle}</div> : null}
+                      {itemSummary.extra ? <div className="text-xs text-primary">{itemSummary.extra}</div> : null}
+                    </TableCell>
+                    <TableCell>{formatDecimal(getPrimaryItemQuantity(record))}</TableCell>
+                    <TableCell>{record.document_requirement_details.req_department || "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="border-warning/20 bg-warning/10 text-warning">
+                        {record.process_status || GRN_PENDING_STATUS}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openDetailSheet("active", record);
-                        }}
-                      >
+                      <Button type="button" variant="outline" size="sm" onClick={() => openPendingMoveDialog(record)}>
                         Open
                       </Button>
                     </TableCell>
@@ -1882,38 +2746,62 @@ const GRNPage = () => {
             </TableBody>
           </Table>
         </CardContent>
+        <StoreTablePagination
+          page={pageByTab["grn-pending"]}
+          pageSize={getPageSizeNumber(pageSizeByTab["grn-pending"], records.length)}
+          total={records.length}
+          onPageChange={(value) => setPageByTab((current) => ({ ...current, "grn-pending": value }))}
+        />
       </Card>
     );
   };
 
   return (
     <div className="space-y-6">
+      {module === "status" ? (
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto rounded-none px-0 text-sm font-semibold text-slate-600 hover:bg-transparent hover:text-slate-950"
+            onClick={() => navigate(-1)}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
+      ) : null}
       <PageHeader
-        title="GRN Management"
-        description="Active GRN with inline detail selection, guarded update controls, moved-to-QCR records, and Excel import against the GRN service."
+        title={GRN_MODULE_META[module].title}
+        description={GRN_MODULE_META[module].description}
         actions={
           <>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx,.xlsm,.xltx,.xltm"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) {
-                  importMutation.mutate(file);
-                }
-              }}
-            />
-            <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importMutation.isPending}>
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Import Excel
-            </Button>
+            {module === "process" ? (
+              <>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx,.xlsm,.xltx,.xltm"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) {
+                      importMutation.mutate(file);
+                    }
+                  }}
+                />
+                <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importMutation.isPending}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Import Excel
+                </Button>
+              </>
+            ) : null}
             <Button
               variant="outline"
               onClick={() => {
                 activeQuery.refetch();
+                pendingQuery.refetch();
                 movedQuery.refetch();
                 qcrActiveQuery.refetch();
                 qcrMovedQuery.refetch();
@@ -1923,61 +2811,189 @@ const GRNPage = () => {
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create GRN
-            </Button>
+            {module === "process" ? (
+              <Button onClick={() => navigate(GRN_PROCESS_CREATE_ROUTE)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Gate Entry
+              </Button>
+            ) : null}
           </>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active GRN" value={activeQuery.data?.count ?? 0} />
-        <StatCard label="Moved to QCR" value={qcrActiveQuery.data?.length ?? 0} />
-        <StatCard label="Completed GRN" value={qcrMovedQuery.data?.length ?? 0} />
-        <StatCard label="Rejected" value={qcrRejectedQuery.data?.length ?? 0} />
-      </div>
-
-      <div className="flex justify-end">
-        <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-          <SelectTrigger className="w-full sm:w-64">
-            <SelectValue placeholder="Filter by department" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {departmentOptions.map((department) => (
-              <SelectItem key={department} value={department}>
-                {department}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {activeQuery.isLoading || qcrActiveQuery.isLoading || qcrMovedQuery.isLoading || qcrRejectedQuery.isLoading ? (
+      {activeQuery.isLoading || pendingQuery.isLoading || qcrActiveQuery.isLoading || qcrMovedQuery.isLoading || qcrRejectedQuery.isLoading || locationLookupQuery.isLoading ? (
         <LoadingState label="Loading GRN records..." />
       ) : null}
-      {activeQuery.isError || qcrActiveQuery.isError || qcrMovedQuery.isError || qcrRejectedQuery.isError ? (
+      {activeQuery.isError || pendingQuery.isError || qcrActiveQuery.isError || qcrMovedQuery.isError || qcrRejectedQuery.isError || locationLookupQuery.isError ? (
         <ErrorState description="GRN records could not be loaded from the GRN service." />
       ) : null}
 
-      {!activeQuery.isLoading && !qcrActiveQuery.isLoading && !qcrMovedQuery.isLoading && !qcrRejectedQuery.isLoading &&
-       !activeQuery.isError && !qcrActiveQuery.isError && !qcrMovedQuery.isError && !qcrRejectedQuery.isError ? (
-        <Tabs defaultValue="active" className="space-y-4">
+      {!activeQuery.isLoading && !pendingQuery.isLoading && !qcrActiveQuery.isLoading && !qcrMovedQuery.isLoading && !qcrRejectedQuery.isLoading &&
+       !activeQuery.isError && !pendingQuery.isError && !qcrActiveQuery.isError && !qcrMovedQuery.isError && !qcrRejectedQuery.isError && !locationLookupQuery.isError ? (
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as GrnTabValue)} className="space-y-4">
           <TabsList>
-            <TabsTrigger value="active">Active GRN</TabsTrigger>
-            <TabsTrigger value="moved-to-qcr">Moved to QCR</TabsTrigger>
-            <TabsTrigger value="next-grn">Completed GRN</TabsTrigger>
-            <TabsTrigger value="rejected">Rejected</TabsTrigger>
+            {visibleTabs.includes("active") ? <TabsTrigger value="active">Gate Entry</TabsTrigger> : null}
+            {visibleTabs.includes("grn-pending") ? <TabsTrigger value="grn-pending">GRN Pending</TabsTrigger> : null}
+            {visibleTabs.includes("moved-to-qcr") ? <TabsTrigger value="moved-to-qcr">QCR</TabsTrigger> : null}
+            {visibleTabs.includes("next-grn") ? <TabsTrigger value="next-grn">Completed GRN</TabsTrigger> : null}
           </TabsList>
-          <TabsContent value="active">{renderActiveTable()}</TabsContent>
-          <TabsContent value="moved-to-qcr">{renderQcrTable(qcrActiveRecords, true)}</TabsContent>
-          <TabsContent value="next-grn">{renderQcrTable(qcrMovedRecords, false)}</TabsContent>
-          <TabsContent value="rejected">{renderQcrTable(qcrRejectedRecords, false)}</TabsContent>
+          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <StoreTableToolbar
+              searchValue={currentSearch}
+              onSearchChange={(value) => {
+                setSearchByTab((current) => ({ ...current, [activeTab]: value }));
+                setPageByTab((current) => ({ ...current, [activeTab]: 1 }));
+              }}
+              filterContent={
+                <div className={cn("grid gap-3 md:grid-cols-2", showCompletedStatusFilter ? "xl:grid-cols-[1fr_1fr_1fr_auto]" : "xl:grid-cols-[1fr_1fr_auto]")}>
+                  <div className="space-y-1">
+                    <label htmlFor={`grn-filter-from-${activeTab}`} className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      From Date
+                    </label>
+                    <Input
+                      id={`grn-filter-from-${activeTab}`}
+                      type="date"
+                      value={currentDraftFilters.fromDate}
+                      onChange={(event) =>
+                        setDraftFiltersByTab((current) => ({
+                          ...current,
+                          [activeTab]: { ...current[activeTab], fromDate: event.target.value },
+                        }))
+                      }
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor={`grn-filter-to-${activeTab}`} className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      To Date
+                    </label>
+                    <Input
+                      id={`grn-filter-to-${activeTab}`}
+                      type="date"
+                      value={currentDraftFilters.toDate}
+                      onChange={(event) =>
+                        setDraftFiltersByTab((current) => ({
+                          ...current,
+                          [activeTab]: { ...current[activeTab], toDate: event.target.value },
+                        }))
+                      }
+                      className="h-9"
+                    />
+                  </div>
+                  {showCompletedStatusFilter ? (
+                    <div className="space-y-1">
+                      <label htmlFor={`grn-filter-status-${activeTab}`} className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Status
+                      </label>
+                      <Select
+                        value={currentDraftFilters.status || "__all__"}
+                        onValueChange={(value) =>
+                          setDraftFiltersByTab((current) => ({
+                            ...current,
+                            [activeTab]: { ...current[activeTab], status: value === "__all__" ? "" : value },
+                          }))
+                        }
+                      >
+                        <SelectTrigger id={`grn-filter-status-${activeTab}`} className="h-9">
+                          <SelectValue placeholder="All statuses" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All statuses</SelectItem>
+                          {completedGrnStatusOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      className="h-9 w-full"
+                      disabled={isFilterPending}
+                      onClick={() =>
+                        startFilterTransition(() => {
+                          setAppliedFiltersByTab((current) => ({ ...current, [activeTab]: draftFiltersByTab[activeTab] }));
+                          setPageByTab((current) => ({ ...current, [activeTab]: 1 }));
+                        })
+                      }
+                    >
+                      Go
+                    </Button>
+                  </div>
+                </div>
+              }
+              pageSize={currentPageSize}
+              onPageSizeChange={(value) => {
+                setPageSizeByTab((current) => ({ ...current, [activeTab]: value }));
+                setPageByTab((current) => ({ ...current, [activeTab]: 1 }));
+              }}
+              onExport={handleToolbarExport}
+              summaryText={`${currentRows.length} records in the current result set`}
+              isFetching={
+                activeQuery.isFetching ||
+                pendingQuery.isFetching ||
+                movedQuery.isFetching ||
+                qcrActiveQuery.isFetching ||
+                qcrMovedQuery.isFetching ||
+                qcrRejectedQuery.isFetching
+              }
+            />
+
+            {visibleTabs.includes("active") ? (
+              <TabsContent value="active">{renderActiveTable(filteredActiveRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("grn-pending") ? (
+              <TabsContent value="grn-pending">{renderPendingTable(filteredPendingRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("moved-to-qcr") ? (
+              <TabsContent value="moved-to-qcr">{renderQcrTable("moved-to-qcr", filteredQcrActiveRecords)}</TabsContent>
+            ) : null}
+            {visibleTabs.includes("next-grn") ? (
+              <TabsContent value="next-grn">{renderCompletedGrnTable(filteredCompletedGrnRows)}</TabsContent>
+            ) : null}
+          </div>
         </Tabs>
       ) : null}
 
       {renderDetailSheet()}
+
+      <Dialog open={Boolean(itemListPreviewRecord)} onOpenChange={(open) => !open && setItemListPreviewRecord(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{itemListPreviewRecord?.grn_no || "GRN Items"}</DialogTitle>
+            <DialogDescription>All products for the selected GRN record.</DialogDescription>
+          </DialogHeader>
+          {itemListPreviewRecord ? (
+            <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border/70">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16 text-center">S.No</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Accepted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(itemListPreviewRecord.items.length ? itemListPreviewRecord.items : [defaultItem]).map((item, index) => (
+                    <TableRow key={`${itemListPreviewRecord.id}-${item.item_id || "line"}-${index}`}>
+                      <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell>{item.product_description || "-"}</TableCell>
+                      <TableCell className="font-mono text-xs">{item.item_id || "-"}</TableCell>
+                      <TableCell className="text-right">{formatDecimal(item.quantity ?? item.total_quantity)}</TableCell>
+                      <TableCell className="text-right">{formatDecimal(item.accepted_qty)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-6xl">
@@ -2208,6 +3224,12 @@ const GRNPage = () => {
                                                 <Input
                                                   {...field}
                                                   type={sectionField.type === "date" ? "date" : "text"}
+                                                  max={
+                                                    sectionField.formPath === "document_details.gateentry_bookdate" &&
+                                                    sectionField.type === "date"
+                                                      ? todayDateInputValue
+                                                      : undefined
+                                                  }
                                                   className="bg-background"
                                                 />
                                               )}
@@ -2372,6 +3394,131 @@ const GRNPage = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={Boolean(pendingMoveTarget)} onOpenChange={(open) => !open && closePendingMoveDialog()}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Move to QCR</DialogTitle>
+            <DialogDescription>
+              Complete received quantity and store allocation for every item in <span className="font-semibold">{pendingMoveTarget?.grn_no}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:grid-cols-3">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">GRN No</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{pendingMoveTarget?.grn_no ?? "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Supplier</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{pendingMoveTarget?.supplier_details.trade_name || pendingMoveTarget?.trade_name || "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{pendingMoveTarget?.process_status ?? GRN_PENDING_STATUS}</div>
+              </div>
+            </div>
+
+            {pendingMoveItems.map((item, index) => (
+              <div key={`${item.lineIndex}-${index}`} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+                <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)]">
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Item Name</div>
+                    <div className="mt-1 text-sm font-semibold text-foreground">{item.itemName}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Sent Qty</div>
+                    <div className="mt-1 text-sm font-semibold text-foreground">
+                      {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor={`pending-received-${index}`}>
+                      Received Qty <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id={`pending-received-${index}`}
+                      inputMode="decimal"
+                      value={item.receivedQty}
+                      onKeyDown={(event) => {
+                        if (shouldBlockQuantityKey(event.key)) {
+                          event.preventDefault();
+                        }
+                      }}
+                      onPaste={(event) => {
+                        const pastedValue = event.clipboardData.getData("text");
+                        const pastedError = getReceivedQtyError(pastedValue, item.sentQty);
+                        if (pastedError) {
+                          event.preventDefault();
+                          setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: pastedError } }));
+                        }
+                      }}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        const nextError = nextValue.trim() ? getReceivedQtyError(nextValue, item.sentQty) : undefined;
+                        if (nextError) {
+                          setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: nextError } }));
+                          return;
+                        }
+                        setPendingMoveItems((current) => current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, receivedQty: nextValue } : entry)));
+                        setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: undefined } }));
+                      }}
+                      placeholder="Enter received quantity"
+                      className={pendingMoveErrors[index]?.receivedQty ? "border-destructive" : ""}
+                    />
+                    {pendingMoveErrors[index]?.receivedQty ? <p className="text-xs text-destructive">{pendingMoveErrors[index]?.receivedQty}</p> : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Store In <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={item.storeInId}
+                      onValueChange={(value) => {
+                        const selectedOption = locationOptions.find((option) => String(option.id) === value);
+                        setPendingMoveItems((current) =>
+                          current.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? {
+                                  ...entry,
+                                  storeInId: value,
+                                  storeInName: selectedOption?.name ?? "",
+                                }
+                              : entry,
+                          ),
+                        );
+                        setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], storeIn: undefined } }));
+                      }}
+                    >
+                      <SelectTrigger className={pendingMoveErrors[index]?.storeIn ? "border-destructive" : ""}>
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locationOptions.map((option) => (
+                          <SelectItem key={option.id} value={String(option.id)}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {pendingMoveErrors[index]?.storeIn ? <p className="text-xs text-destructive">{pendingMoveErrors[index]?.storeIn}</p> : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closePendingMoveDialog} disabled={pendingToQcrMutation.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={submitPendingMove} disabled={pendingToQcrMutation.isPending || !isPendingMoveReady}>
+              {pendingToQcrMutation.isPending ? "Moving..." : "Move to QCR"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={Boolean(moveTarget)}
         onOpenChange={(open) => {
@@ -2379,9 +3526,9 @@ const GRNPage = () => {
             setMoveTarget(null);
           }
         }}
-        title="Move GRN to QCR"
-        description={`Move ${moveTarget?.grn_no ?? "this GRN"} to QCR? This will inactivate the GRN and create an active QCR record.`}
-        confirmLabel="Move to QCR"
+        title="Move Gate Entry to GRN Pending"
+        description={`Move ${moveTarget?.grn_no ?? "this GRN"} to GRN Pending? This completes Gate Entry and sends the record to the pending handoff queue.`}
+        confirmLabel="Move to GRN Pending"
         onConfirm={() => {
           if (moveTarget) {
             moveMutation.mutate(moveTarget.id);
@@ -2389,78 +3536,142 @@ const GRNPage = () => {
         }}
       />
 
-      {/* QCR Detail Dialog */}
-      <Dialog open={Boolean(qcrDetailRecord)} onOpenChange={(open) => !open && setQcrDetailRecord(null)}>
+      <Dialog open={Boolean(qcrEntryTarget)} onOpenChange={(open) => !open && closeQcrEntryDialog()}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
-            <DialogTitle>{qcrDetailRecord?.grn_reference_no}</DialogTitle>
-            <DialogDescription>QCR record details, source GRN data, and snapshot.</DialogDescription>
-          </DialogHeader>
-          {qcrDetailRecord ? (
-            <div className="max-h-[70vh] space-y-4 overflow-y-auto">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard label="Status" value={qcrDetailRecord.status} />
-                <StatCard label="Unique Id" value={qcrDetailRecord.unique_id} />
-                <StatCard label="Moved To QCR" value={formatDateTime(qcrDetailRecord.moved_to_qcr_at)} />
-                <StatCard label="Moved By" value={qcrDetailRecord.moved_to_qcr_by || "-"} />
-              </div>
-              {qcrDetailRecord.remarks ? (
-                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-destructive">Rejection Remarks</p>
-                  <p className="text-sm text-foreground">{qcrDetailRecord.remarks}</p>
-                </div>
-              ) : null}
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold text-foreground">Source GRN Data</h3>
-                  <pre className="overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">
-                    {JSON.stringify(qcrDetailRecord.source_grn_data, null, 2)}
-                  </pre>
-                </div>
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold text-foreground">Snapshot</h3>
-                  <pre className="overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">
-                    {JSON.stringify(qcrDetailRecord.snapshot, null, 2)}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
-      {/* QCR Reject Dialog */}
-      <Dialog open={Boolean(qcrRejectTarget)} onOpenChange={(open) => !open && closeQcrRejectDialog()}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Not Approve QCR</DialogTitle>
+            <DialogTitle>QCR Entry</DialogTitle>
             <DialogDescription>
-              GRN <span className="font-semibold">{qcrRejectTarget?.grn_reference_no}</span> will be marked as not approved. Stock will not be moved to store. Remarks are mandatory.
+              Review every received line for <span className="font-semibold">{qcrEntryTarget?.grn_reference_no}</span>. Only accepted quantity will be moved to store stock.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="qcr-reject-remarks">
-              Rejection Remarks <span className="text-destructive">*</span>
-            </Label>
-            <Textarea
-              id="qcr-reject-remarks"
-              rows={4}
-              placeholder="Enter reason for not approving this QCR..."
-              value={qcrRejectRemarks}
-              onChange={(e) => {
-                setQcrRejectRemarks(e.target.value);
-                if (e.target.value.trim()) setQcrRemarksError("");
-              }}
-              className={qcrRemarksError ? "border-destructive" : ""}
-            />
-            {qcrRemarksError ? <p className="text-xs text-destructive">{qcrRemarksError}</p> : null}
+          <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:grid-cols-3">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">GRN No</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{qcrEntryTarget?.grn_reference_no ?? "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Supplier</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">
+                  {qcrEntryTarget ? readText(getQcrField(qcrEntryTarget, "trade_name")) : "-"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">QCR</div>
+              </div>
+            </div>
+
+            {qcrEntryItems.map((item, index) => (
+              <div key={`${item.lineIndex}-${index}`} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+                <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)]">
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Item Name</div>
+                    <div className="mt-1 text-sm font-semibold text-foreground">{item.itemName}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {item.itemId || "-"}{item.unit ? ` | ${item.unit}` : ""}{item.storeInName ? ` | Store In: ${item.storeInName}` : ""}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Sent Qty</div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">
+                        {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Received Qty</div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">
+                        {item.receivedQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1.4fr)]">
+                  <div className="space-y-2">
+                    <Label htmlFor={`qcr-rejected-${index}`}>Rejected Qty</Label>
+                    <Input
+                      id={`qcr-rejected-${index}`}
+                      inputMode="decimal"
+                      value={item.rejectedQty}
+                      onKeyDown={(event) => {
+                        if (shouldBlockQuantityKey(event.key)) {
+                          event.preventDefault();
+                        }
+                      }}
+                      onPaste={(event) => {
+                        const pastedValue = event.clipboardData.getData("text");
+                        const pastedError = getRejectedQtyError(pastedValue, item.receivedQty);
+                        if (pastedError) {
+                          event.preventDefault();
+                          setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: pastedError } }));
+                        }
+                      }}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        const nextError = getRejectedQtyError(nextValue, item.receivedQty);
+                        if (nextError) {
+                          setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: nextError } }));
+                          return;
+                        }
+                        setQcrEntryItems((current) =>
+                          current.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? {
+                                  ...entry,
+                                  rejectedQty: nextValue,
+                                  acceptedQty: calculateAcceptedQty(entry.receivedQty, nextValue) || "",
+                                }
+                              : entry,
+                          ),
+                        );
+                        setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: undefined } }));
+                      }}
+                      placeholder="Enter rejected quantity"
+                      className={qcrEntryErrors[index]?.rejectedQty ? "border-destructive" : ""}
+                    />
+                    {qcrEntryErrors[index]?.rejectedQty ? <p className="text-xs text-destructive">{qcrEntryErrors[index]?.rejectedQty}</p> : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`qcr-accepted-${index}`}>Accepted Qty</Label>
+                    <Input
+                      id={`qcr-accepted-${index}`}
+                      value={item.acceptedQty}
+                      readOnly
+                      tabIndex={-1}
+                      className="bg-muted/40 text-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`qcr-reason-${index}`}>
+                      Reason{item.rejectedQty.trim() && Number(item.rejectedQty) > 0 ? <span className="text-destructive"> *</span> : null}
+                    </Label>
+                    <Textarea
+                      id={`qcr-reason-${index}`}
+                      rows={3}
+                      value={item.reason}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setQcrEntryItems((current) =>
+                          current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reason: nextValue } : entry)),
+                        );
+                        setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], reason: undefined } }));
+                      }}
+                      placeholder="Enter rejection reason when rejected quantity is greater than zero"
+                      className={qcrEntryErrors[index]?.reason ? "border-destructive" : ""}
+                    />
+                    {qcrEntryErrors[index]?.reason ? <p className="text-xs text-destructive">{qcrEntryErrors[index]?.reason}</p> : null}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeQcrRejectDialog} disabled={qcrStatusMutation.isPending}>
+            <Button variant="outline" onClick={closeQcrEntryDialog} disabled={qcrCompletionMutation.isPending}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={submitQcrReject} disabled={qcrStatusMutation.isPending}>
-              {qcrStatusMutation.isPending ? "Saving..." : "Confirm Not Approve"}
+            <Button onClick={submitQcrEntry} disabled={qcrCompletionMutation.isPending || !qcrEntryItems.length}>
+              {qcrCompletionMutation.isPending ? "Submitting..." : "Submit QCR"}
             </Button>
           </DialogFooter>
         </DialogContent>

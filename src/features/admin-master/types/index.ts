@@ -85,6 +85,12 @@ export type LookupOption = {
   staff_code?: string;
   mobile?: string | null;
   email?: string | null;
+  designation_id?: number | null;
+  designation_name?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
+  role_id?: number | null;
+  role_name?: string | null;
 };
 
 export type MainScreenRecord = {
@@ -127,86 +133,106 @@ export type UserScreenRecord = {
   updated_at?: string;
 };
 
-export type StaffRecord = {
-  id: number;
-  unique_id?: string;
-  staff_id?: string;
-  staff_name: string;
-  mobile_no?: string | null;
-  email?: string | null;
-  department?: number | null;
-  department_name?: string;
-  designation?: string | null;
-  is_active: boolean;
-};
-
 export type UserTypeRecord = {
   id: number;
   unique_id?: string;
-  user_type: string;
-  code?: string | null;
+  department?: number | null;
+  department_name?: string | null;
+  role?: number | null;
+  role_name?: string | null;
   is_active: boolean;
-  under_users?: string | null;
-  company_wise: boolean;
-  project_wise: boolean;
-  department_wise: boolean;
-  user_wise: boolean;
   created_at?: string;
   updated_at?: string;
 };
 
-export type UserAccountRecord = {
+export type UserTypeWritePayload = {
+  department: number;
+  role: number;
+  is_active: boolean;
+};
+
+export type StaffCreationRecord = {
+  id: number;
+  unique_id?: string;
+  staff_code?: string | null;
+  name: string;
+  age?: number | null;
+  department?: number | null;
+  department_name?: string | null;
+  designation?: number | null;
+  designation_name?: string | null;
+  role?: number | null;
+  role_name?: string | null;
+  mobile?: string | null;
+  email?: string | null;
+  joining_date?: string | null;
+  gender?: "male" | "female" | "other" | null;
+  address?: string | null;
+  emergency_contact_no?: string | null;
+  photo?: string | null;
+  photo_url?: string | null;
+  is_active: boolean;
+  remarks?: string | null;
+};
+
+export type StaffCreationWritePayload = {
+  staff_code: string;
+  name: string;
+  age: number;
+  designation: number;
+  mobile: string;
+  email: string;
+  joining_date?: string | null;
+  gender?: "male" | "female" | "other" | "" | null;
+  address?: string | null;
+  emergency_contact_no?: string | null;
+  photo?: File | null;
+  photo_url?: string;
+  is_active: boolean;
+  remarks?: string | null;
+};
+
+export type UserCreationRecord = {
   id: number;
   unique_id?: string;
   user?: number | null;
   username: string;
   staff: number;
   staff_id?: string;
-  staff_name?: string;
+  full_name?: string;
+  user_type?: number | null;
+  user_type_name?: string | null;
   mobile_no?: string | null;
   email?: string | null;
-  user_type: number;
-  user_type_name?: string;
-  company?: number | null;
-  company_name?: string;
   department?: number | null;
-  department_name?: string;
-  project?: string | null;
-  under_users?: string | null;
+  department_name?: string | null;
+  role?: number | null;
+  role_name?: string | null;
+  company?: number | null;
+  company_name?: string | null;
   account_status: "active" | "inactive" | "locked";
   is_active: boolean;
+  password?: string | null;
   last_login?: string | null;
   password_changed_at?: string | null;
   failed_login_attempts?: number;
-  force_password_change: boolean;
-  is_team_head: boolean;
-  team_members: number[];
   created_at?: string;
   updated_at?: string;
 };
 
-export type UserAccountWritePayload = {
+export type UserCreationWritePayload = {
   staff: number;
+  user_type: number;
+  company: number;
   username: string;
   password?: string;
   confirm_password?: string;
-  user_type: number;
   mobile_no?: string | null;
   email?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  company?: number | null;
-  department?: number | null;
-  project?: string | null;
-  under_users?: string | null;
   account_status: "active" | "inactive" | "locked";
-  force_password_change: boolean;
-  is_team_head: boolean;
-  team_members?: number[];
-  designation?: string | null;
 };
 
-export type UserPermissionRecord = {
+export type UserScreenPermissionRecord = {
   id: number;
   unique_id?: string;
   user_type: number;
@@ -222,6 +248,13 @@ export type UserPermissionRecord = {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+};
+
+export type UserScreenPermissionSummaryRecord = {
+  id: number;
+  user_type: number;
+  user_type_name?: string;
+  is_active: boolean;
 };
 
 export type PermissionAssignmentEntry = {

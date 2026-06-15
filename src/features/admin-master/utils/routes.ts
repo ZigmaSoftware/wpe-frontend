@@ -1,11 +1,142 @@
-export const adminRouteRegistry: Record<string, { path: string; title: string }> = {
-  "main-screen-master": { path: "/admin/main-screens", title: "Main Screens" },
-  "screen-section-master": { path: "/admin/screen-sections", title: "Screen Sections" },
-  "user-screen-master": { path: "/admin/user-screens", title: "User Screens" },
-  "staff-master": { path: "/admin/staff", title: "Staff" },
-  "user-type-master": { path: "/admin/user-types", title: "User Types" },
-  "user-account-master": { path: "/admin/user-accounts", title: "User Accounts" },
-  "user-permission-master": { path: "/admin/user-permissions", title: "User Permissions" },
+import {
+  BriefcaseBusiness,
+  Building2,
+  IdCard,
+  Layers,
+  Layout,
+  Monitor,
+  Shield,
+  UserRoundCog,
+  UserCog,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import type { AdminMenuMain } from "@/features/admin-master/types";
+
+export const ADMIN_MASTERS_ROUTE = "/admin/admin-masters";
+
+export type AdminModuleDefinition = {
+  codes: readonly string[];
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  description: string;
+  alwaysVisible?: boolean;
+};
+
+export const adminModuleDefinitions: AdminModuleDefinition[] = [
+  {
+    codes: ["main-screen-master"],
+    to: "/admin/main-screens",
+    icon: Monitor,
+    label: "Main Screens",
+    description: "Configure primary application modules and main navigation entries.",
+  },
+  {
+    codes: ["screen-section-master"],
+    to: "/admin/screen-sections",
+    icon: Layers,
+    label: "Screen Sections",
+    description: "Manage section-level grouping inside each main screen.",
+  },
+  {
+    codes: ["user-screen-master"],
+    to: "/admin/user-screens",
+    icon: Layout,
+    label: "User Screens",
+    description: "Configure user-facing screens mapped to application sections.",
+  },
+  {
+    codes: ["department-master"],
+    to: "/wpe-masters/departments",
+    icon: Building2,
+    label: "Department",
+    description: "Manage department structure, heads, and administrative ownership.",
+  },
+  {
+    codes: ["designation-master"],
+    to: "/wpe-masters/designations",
+    icon: IdCard,
+    label: "Desigination",
+    description: "Manage desigination records and the department mapping used in staff setup.",
+  },
+  {
+    codes: ["staff-creation-master"],
+    to: "/admin/staff-creation",
+    icon: BriefcaseBusiness,
+    label: "Staff Creation",
+    description: "Create and maintain employee master records, contacts, and active status.",
+  },
+  {
+    codes: ["role-master"],
+    to: "/wpe-masters/roles",
+    icon: UserRoundCog,
+    label: "Role",
+    description: "Manage roles mapped to designations and user setup.",
+  },
+  {
+    codes: ["user-account-master", "user-creation-master"],
+    to: "/admin/user-creation",
+    icon: UserCog,
+    label: "User Creation",
+    description: "Create authenticated users from the staff master and map them to company access.",
+  },
+  {
+    codes: ["user-type-master"],
+    to: "/admin/user-types",
+    icon: Users,
+    label: "User Type / Role Mapping",
+    description: "Map department and role combinations that become assignable user types.",
+  },
+  {
+    codes: ["user-permission-master", "user-screen-permission-master"],
+    to: "/admin/user-screen-permission",
+    icon: Shield,
+    label: "User Type Permissions",
+    description: "Configure screen-level access and action permissions for user types.",
+  },
+];
+
+export const adminModuleIconMap: Record<string, LucideIcon> = Object.fromEntries(
+  adminModuleDefinitions.flatMap((module) => module.codes.map((code) => [code, module.icon])),
+);
+
+export const adminRouteRegistry: Record<string, { path: string; title: string }> = Object.fromEntries(
+  adminModuleDefinitions.flatMap((module) =>
+    module.codes.map((code) => [code, { path: module.to, title: module.label }]),
+  ),
+);
+
+const normalizeAdminKey = (value?: string | null) =>
+  (value ?? "").trim().toLowerCase().replace(/\s+/g, "-");
+
+export const isAdminMastersSection = (code?: string | null, fallbackName?: string | null) => {
+  const codeKey = normalizeAdminKey(code);
+  const nameKey = normalizeAdminKey(fallbackName);
+
+  return (
+    codeKey === "admin-master" ||
+    codeKey === "admin-masters" ||
+    nameKey === "admin-master" ||
+    nameKey === "admin-masters"
+  );
+};
+
+export const getAdminSectionTitle = (code?: string | null, fallbackName?: string | null) =>
+  isAdminMastersSection(code, fallbackName) ? "Admin Masters" : fallbackName?.trim() || "Admin Section";
+
+export const getAdminMastersModulesFromMenu = (menu: AdminMenuMain[]) => {
+  const availableCodes = new Set(
+    menu.flatMap((main) =>
+      main.sections
+        .filter((section) => isAdminMastersSection(section.code, section.name))
+        .flatMap((section) => section.screens.map((screen) => screen.code)),
+    ),
+  );
+
+  return adminModuleDefinitions.filter(
+    (module) => module.alwaysVisible || module.codes.some((code) => availableCodes.has(code)),
+  );
 };
 
 export const resolveAdminRoutePath = (screenCode: string, backendRoutePath?: string | null) => {

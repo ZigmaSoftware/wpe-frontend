@@ -312,7 +312,7 @@ const SupplierDetailPage = () => {
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => navigate("/masters/suppliers")}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Suppliers
+          Back to Supplier Creations
         </Button>
         {supplier ? <MasterStatusBadge active={supplier.is_active} /> : null}
       </div>

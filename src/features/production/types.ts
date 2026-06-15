@@ -199,3 +199,20 @@ export interface MaterialFlowCard {
   quantity: number;
   unit: string;
 }
+
+export interface MaterialMovementFilters extends PaginationParams {
+  movement_type?: MaterialMovementType;
+  status?: MaterialMovementStatus;
+  production_order?: string;
+}
+
+export interface ProductionTransactionFilters extends PaginationParams {
+  transaction_type?: TransactionType;
+  transaction_date?: string;
+  production_order?: string;
+}
+
+export interface ProductionSummaryFilters extends PaginationParams {
+  is_finalized?: boolean;
+  production_order?: string;
+}

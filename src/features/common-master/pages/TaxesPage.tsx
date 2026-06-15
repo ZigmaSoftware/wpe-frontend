@@ -25,7 +25,8 @@ import { useTableSearchParams } from "@/features/common-master/hooks/useTableSea
 import { applyBackendErrors } from "@/features/common-master/hooks/useFormErrorMapper";
 
 const defaultValues: TaxFormValues = {
-  country: null,
+  code: "",
+  country: 0,
   name: "",
   value: 0,
   is_active: true,
@@ -42,6 +43,11 @@ const TaxesPage = () => {
     queryKey: commonMasterKeys.taxes(table.page, table.pageSize, debouncedSearch),
     queryFn: () => commonMasterApi.listTaxes({ page: table.page, pageSize: table.pageSize, search: debouncedSearch }),
   });
+  const nextCodeQuery = useQuery({
+    queryKey: commonMasterKeys.nextCode("taxes"),
+    queryFn: commonMasterApi.getNextTaxCode,
+    enabled: false,
+  });
 
   const createMutation = useCommonMasterMutations({
     mutationFn: commonMasterApi.createTax,
@@ -56,9 +62,11 @@ const TaxesPage = () => {
     errorMessage: "Unable to update tax status.",
   });
 
-  const openCreate = () => {
+  const openCreate = async () => {
     form.reset(defaultValues);
     setDialogOpen(true);
+    const result = await nextCodeQuery.refetch();
+    form.setValue("code", result.data ?? "");
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -76,12 +84,13 @@ const TaxesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Taxes"
-        description="Tax master with country-scoped rates for downstream commercial documents."
+        title="Tax"
+        description="Configure tax percentages by country."
       />
       <MasterToolbar search={table.search} onSearchChange={table.setSearch} createLabel="Add Tax" onCreate={openCreate} />
       <MasterTable
         columns={[
+          { key: "tax_code", title: "Tax Code", render: (record) => <span className="font-mono text-xs">{record.tax_code}</span> },
           { key: "tax_name", title: "Tax", render: (record) => <div className="font-medium">{record.tax_name}</div> },
           { key: "tax_value", title: "Rate (%)", render: (record) => record.tax_value.toFixed(2) },
           { key: "country", title: "Country", render: (record) => record.country },
@@ -90,13 +99,13 @@ const TaxesPage = () => {
             key: "actions",
             title: "Actions",
             className: "w-[120px] text-right",
-            render: (record) => <RowActions onToggle={() => setToggleTarget(record)} />,
+            render: (record) => <RowActions onToggle={() => setToggleTarget(record)} isActive={record.is_active} />,
           },
         ]}
         records={result?.items ?? []}
         isLoading={taxesQuery.isLoading}
         isError={taxesQuery.isError}
-        errorDescription="Taxes could not be loaded."
+        errorDescription="Tax records could not be loaded."
         emptyTitle="No taxes found"
         emptyDescription="Create taxes to support country-specific billing and statutory setup."
         page={table.page}
@@ -110,13 +119,19 @@ const TaxesPage = () => {
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
+              <FormField control={form.control} name="code" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tax Code*</FormLabel>
+                  <FormControl><Input {...field} value={field.value ?? ""} readOnly placeholder="Generating..." className="bg-slate-50 text-slate-700" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
               <FormField control={form.control} name="country" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Country</FormLabel>
-                  <Select value={field.value ? String(field.value) : "none"} onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger></FormControl>
+                  <FormLabel>Country*</FormLabel>
+                  <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      <SelectItem value="none">Global tax</SelectItem>
                       {(countryOptionsQuery.data ?? []).map((country) => (
                         <SelectItem key={country.id} value={String(country.id)}>{country.name}</SelectItem>
                       ))}
@@ -126,15 +141,15 @@ const TaxesPage = () => {
                 </FormItem>
               )} />
               <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem><FormLabel>Tax name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Tax Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="value" render={({ field }) => (
-                <FormItem><FormLabel>Tax percentage</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Tax Percentage*</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
             </div>
             <FormField control={form.control} name="is_active" render={({ field }) => (
               <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
-                <FormLabel>Active status</FormLabel>
+                <FormLabel>Active Status*</FormLabel>
                 <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
               </FormItem>
             )} />

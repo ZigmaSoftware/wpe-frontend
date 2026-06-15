@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   productionFieldLabelClassName,
   productionHelperTextClassName,
-  productionInputClassName,
+  productionCompactInputClassName,
 } from "./productionOrderFormStyles";
 
 type BomVariantSelectorProps = {
@@ -47,7 +47,7 @@ const BomVariantSelector = ({
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className={cn(productionInputClassName, "w-full justify-between px-3 font-normal")}
+              className={cn(productionCompactInputClassName, "w-full justify-between px-3 font-normal")}
             >
               <span className="truncate text-left">
                 {selectedOption ? `${selectedOption.variant_code} · ${selectedOption.name}` : "Search or select BOM variant"}
@@ -56,7 +56,7 @@ const BomVariantSelector = ({
             </Button>
           </FormControl>
         </PopoverTrigger>
-        <PopoverContent className="w-[420px] max-w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <PopoverContent className="w-[400px] max-w-[var(--radix-popover-trigger-width)] p-0" align="start">
           <Command>
             <CommandInput placeholder="Search BOM variants..." />
             <CommandList>

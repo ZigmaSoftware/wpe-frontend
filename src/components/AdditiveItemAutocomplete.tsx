@@ -14,8 +14,19 @@ type AdditiveItemAutocompleteProps = {
   disabled?: boolean;
 };
 
-const unwrapStoreStockResults = (payload: StoreStockRecord[] | { data?: { results?: StoreStockRecord[] } }) =>
-  Array.isArray(payload) ? payload : payload.data?.results ?? [];
+type StoreStockResponsePayload =
+  | StoreStockRecord[]
+  | {
+      data?: {
+        results?: StoreStockRecord[];
+        next?: string | null;
+      };
+    };
+
+const unwrapStoreStockResults = (payload: StoreStockResponsePayload) => ({
+  results: Array.isArray(payload) ? payload : payload.data?.results ?? [],
+  next: Array.isArray(payload) ? null : payload.data?.next ?? null,
+});
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -29,7 +40,7 @@ const highlightText = (text: string, query: string) => {
 
   return parts.map((part, index) =>
     part.toLowerCase() === query.trim().toLowerCase() ? (
-      <mark key={`${part}-${index}`} className="rounded bg-amber-100 px-0.5 text-inherit">
+      <mark key={`${part}-${index}`} className="rounded bg-sky-100 px-0.5 text-slate-900">
         {part}
       </mark>
     ) : (
@@ -51,6 +62,13 @@ const matchesSearchTerm = (item: StoreStockRecord, query: string) => {
     .filter((value): value is string => Boolean(value))
     .some((value) => value.toLowerCase().includes(normalizedQuery));
 };
+
+const getAvailableQuantity = (item: StoreStockRecord) => {
+  const quantity = Number(item.quantity ?? 0);
+  return Number.isFinite(quantity) ? quantity : 0;
+};
+
+const isSelectableItem = (item: StoreStockRecord) => getAvailableQuantity(item) > 0;
 
 const AdditiveItemAutocomplete = ({
   selectedItem,
@@ -94,17 +112,28 @@ const AdditiveItemAutocomplete = ({
     queryKey: ["additive-item-suggestions", debouncedSearchTerm],
     enabled: open && debouncedSearchTerm.length > 0,
     queryFn: async () => {
-      const response = await coreApi.get<StoreStockRecord[] | { data?: { results?: StoreStockRecord[] } }>(
-        "/api/blending/request-stock/",
-        {
-          params: {
-            search: debouncedSearchTerm || undefined,
-            page_size: 20,
-          },
-        },
-      );
+      const results: StoreStockRecord[] = [];
+      let page = 1;
 
-      return unwrapStoreStockResults(response.data);
+      while (page <= 20) {
+        const response = await coreApi.get<StoreStockResponsePayload>("/api/blending/request-stock/", {
+          params: {
+            page,
+            page_size: 200,
+            search: debouncedSearchTerm || undefined,
+          },
+        });
+        const payload = unwrapStoreStockResults(response.data);
+        results.push(...payload.results);
+
+        if (!payload.next) {
+          break;
+        }
+
+        page += 1;
+      }
+
+      return results;
     },
   });
 
@@ -118,21 +147,25 @@ const AdditiveItemAutocomplete = ({
   const showNoResults = open && hasTypedValue && !suggestionsQuery.isLoading && suggestions.length === 0;
   const showSelectionPrompt = !open && hasTypedValue && !selectedItem;
   const helperMessage =
-    error || (showNoResults ? "No matching products found" : showSelectionPrompt ? "Please select a valid additive item" : undefined);
+    error || (showNoResults ? "No store stock items matched this search" : showSelectionPrompt ? "Please select a valid additive item" : undefined);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    setHighlightedIndex(suggestions.length ? 0 : -1);
-  }, [open, suggestions.length]);
+    setHighlightedIndex(suggestions.findIndex(isSelectableItem));
+  }, [open, suggestions]);
 
   const inputValue = selectedItem && hasExactSelection ? formatOptionLabel(selectedItem) : searchTerm;
 
   const canSubmitSelection = useMemo(() => selectedItem !== null && hasExactSelection, [selectedItem, hasExactSelection]);
 
   const handleSelect = (item: StoreStockRecord) => {
+    if (!isSelectableItem(item)) {
+      return;
+    }
+
     onSelectedItemChange(item);
     setSearchTerm(formatOptionLabel(item));
     setOpen(false);
@@ -179,7 +212,7 @@ const AdditiveItemAutocomplete = ({
     }
 
     if (event.key === "Enter" && open) {
-      if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+      if (highlightedIndex >= 0 && suggestions[highlightedIndex] && isSelectableItem(suggestions[highlightedIndex])) {
         event.preventDefault();
         handleSelect(suggestions[highlightedIndex]);
       }
@@ -197,7 +230,7 @@ const AdditiveItemAutocomplete = ({
       <div
         className={cn(
           "relative rounded-md transition-all",
-          open && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+          open && "ring-2 ring-sky-500/60 ring-offset-2 ring-offset-background",
         )}
       >
         <Input
@@ -216,7 +249,7 @@ const AdditiveItemAutocomplete = ({
           onKeyDown={handleKeyDown}
           autoComplete="off"
           disabled={disabled}
-          placeholder="Search additive from store stock"
+          placeholder="Search store stock items"
           aria-expanded={open}
           aria-controls={listboxId}
           aria-autocomplete="list"
@@ -250,7 +283,7 @@ const AdditiveItemAutocomplete = ({
         <div
           id={listboxId}
           role="listbox"
-          className="absolute top-[calc(100%+0.35rem)] z-50 w-full overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
+          className="absolute top-[calc(100%+0.35rem)] z-50 w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-lg animate-in fade-in-0 zoom-in-95"
         >
           <div className="max-h-80 overflow-y-auto py-1">
             {suggestionsQuery.isLoading ? (
@@ -270,6 +303,7 @@ const AdditiveItemAutocomplete = ({
               suggestions.map((item, index) => {
                 const isSelected = selectedItem?.item === item.item;
                 const isActive = highlightedIndex === index;
+                const isSelectable = isSelectableItem(item);
                 const query = debouncedSearchTerm || searchTerm;
 
                 return (
@@ -279,12 +313,22 @@ const AdditiveItemAutocomplete = ({
                     role="option"
                     aria-selected={isSelected}
                     className={cn(
-                      "flex w-full items-start gap-3 px-3 py-2.5 text-left text-sm transition-colors",
-                      isActive && "bg-accent text-accent-foreground",
+                      "flex w-full items-start gap-3 border-b border-slate-100 px-3 py-2.5 text-left text-sm transition-colors last:border-b-0",
+                      isSelected && "bg-sky-50",
+                      isActive ? "bg-slate-100 text-slate-900" : isSelectable ? "hover:bg-slate-50" : "",
+                      !isSelectable && "cursor-not-allowed opacity-65",
                     )}
-                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseDown={(event) => {
+                      if (!isSelectable) {
+                        event.preventDefault();
+                        return;
+                      }
+                      event.preventDefault();
+                    }}
                     onMouseEnter={() => setHighlightedIndex(index)}
                     onClick={() => handleSelect(item)}
+                    aria-disabled={!isSelectable}
+                    disabled={!isSelectable}
                   >
                     <Package2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
@@ -295,9 +339,10 @@ const AdditiveItemAutocomplete = ({
                           {item.quantity} {item.unit}
                         </span>
                         <span>{item.category}</span>
+                        {!isSelectable ? <span className="font-medium text-amber-700">Out of stock</span> : null}
                       </div>
                     </div>
-                    {isSelected ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : null}
+                    {isSelected ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" /> : null}
                   </button>
                 );
               })

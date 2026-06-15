@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 type ComponentSearchInputProps = {
   value: string;
   isLoading: boolean;
+  placeholder?: string;
   onChange: (value: string) => void;
   onFocus: () => void;
   onBlur: () => void;
@@ -14,6 +15,7 @@ type ComponentSearchInputProps = {
 const ComponentSearchInput = ({
   value,
   isLoading,
+  placeholder = "Search product type subcategory...",
   onChange,
   onFocus,
   onBlur,
@@ -27,7 +29,7 @@ const ComponentSearchInput = ({
       onFocus={onFocus}
       onBlur={onBlur}
       onKeyDown={onKeyDown}
-      placeholder="Search product type subcategory..."
+      placeholder={placeholder}
       autoComplete="off"
       className="h-11 pl-9 pr-10"
     />

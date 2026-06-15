@@ -3,19 +3,23 @@
  * Handles all API calls for production module
  */
 
-import { apiClient } from '../../../lib/api';
+import { coreApi as apiClient } from '../../../lib/api';
 import {
   ProductionOrder,
   ProductionOrderDetail,
   ProductionOrderListResponse,
   ProductionOrderFilters,
   MaterialMovement,
+  MaterialMovementFilters,
   ProductionTransaction,
+  ProductionTransactionFilters,
   ProductionSummary,
+  ProductionSummaryFilters,
   CostBreakdown,
 } from '../types';
 
 const API_BASE_URL = '/api/production';
+type ResultsListResponse<T> = { results: T[] };
 
 /**
  * Production Order APIs
@@ -40,7 +44,7 @@ export const productionOrderApi = {
     const queryString = params.toString();
     const url = `${API_BASE_URL}/production/${queryString ? '?' + queryString : ''}`;
 
-    const response = await apiClient.get(url);
+    const response = await apiClient.get<ProductionOrderListResponse>(url);
     return response.data;
   },
 
@@ -48,7 +52,7 @@ export const productionOrderApi = {
    * Get detailed production order with all related data
    */
   getDetail: async (id: number | string): Promise<ProductionOrderDetail> => {
-    const response = await apiClient.get(`${API_BASE_URL}/production/${id}/`);
+    const response = await apiClient.get<ProductionOrderDetail>(`${API_BASE_URL}/production/${id}/`);
     return response.data;
   },
 
@@ -56,7 +60,7 @@ export const productionOrderApi = {
    * Create a new production order
    */
   create: async (data: Partial<ProductionOrder>): Promise<ProductionOrder> => {
-    const response = await apiClient.post(`${API_BASE_URL}/production/`, data);
+    const response = await apiClient.post<ProductionOrder>(`${API_BASE_URL}/production/`, data);
     return response.data;
   },
 
@@ -64,7 +68,7 @@ export const productionOrderApi = {
    * Update a production order
    */
   update: async (id: number | string, data: Partial<ProductionOrder>): Promise<ProductionOrder> => {
-    const response = await apiClient.patch(`${API_BASE_URL}/production/${id}/`, data);
+    const response = await apiClient.patch<ProductionOrder>(`${API_BASE_URL}/production/${id}/`, data);
     return response.data;
   },
 
@@ -79,7 +83,7 @@ export const productionOrderApi = {
    * Get material movements for a production order
    */
   getMaterialMovements: async (id: number | string): Promise<MaterialMovement[]> => {
-    const response = await apiClient.get(`${API_BASE_URL}/production/${id}/material_movements/`);
+    const response = await apiClient.get<MaterialMovement[]>(`${API_BASE_URL}/production/${id}/material_movements/`);
     return response.data;
   },
 
@@ -87,7 +91,7 @@ export const productionOrderApi = {
    * Get transactions for a production order
    */
   getTransactions: async (id: number | string): Promise<ProductionTransaction[]> => {
-    const response = await apiClient.get(`${API_BASE_URL}/production/${id}/transactions/`);
+    const response = await apiClient.get<ProductionTransaction[]>(`${API_BASE_URL}/production/${id}/transactions/`);
     return response.data;
   },
 
@@ -95,7 +99,7 @@ export const productionOrderApi = {
    * Get summary for a production order
    */
   getSummary: async (id: number | string): Promise<ProductionSummary> => {
-    const response = await apiClient.get(`${API_BASE_URL}/production/${id}/summary/`);
+    const response = await apiClient.get<ProductionSummary>(`${API_BASE_URL}/production/${id}/summary/`);
     return response.data;
   },
 
@@ -103,7 +107,7 @@ export const productionOrderApi = {
    * Get cost breakdown for a production order
    */
   getCostBreakdown: async (id: number | string): Promise<CostBreakdown> => {
-    const response = await apiClient.get(`${API_BASE_URL}/production/${id}/cost_breakdown/`);
+    const response = await apiClient.get<CostBreakdown>(`${API_BASE_URL}/production/${id}/cost_breakdown/`);
     return response.data;
   },
 
@@ -111,7 +115,7 @@ export const productionOrderApi = {
    * Close a production order
    */
   close: async (id: number | string): Promise<ProductionOrder> => {
-    const response = await apiClient.post(`${API_BASE_URL}/production/${id}/close/`, {});
+    const response = await apiClient.post<ProductionOrder>(`${API_BASE_URL}/production/${id}/close/`, {});
     return response.data;
   },
 };
@@ -123,7 +127,7 @@ export const materialMovementApi = {
   /**
    * Get list of material movements
    */
-  getList: async (filters?: any): Promise<{ results: MaterialMovement[] }> => {
+  getList: async (filters?: MaterialMovementFilters): Promise<ResultsListResponse<MaterialMovement>> => {
     const params = new URLSearchParams();
 
     if (filters) {
@@ -135,7 +139,7 @@ export const materialMovementApi = {
     const queryString = params.toString();
     const url = `${API_BASE_URL}/material-movements/${queryString ? '?' + queryString : ''}`;
 
-    const response = await apiClient.get(url);
+    const response = await apiClient.get<ResultsListResponse<MaterialMovement>>(url);
     return response.data;
   },
 
@@ -143,7 +147,7 @@ export const materialMovementApi = {
    * Get material movement detail
    */
   getDetail: async (id: number | string): Promise<MaterialMovement> => {
-    const response = await apiClient.get(`${API_BASE_URL}/material-movements/${id}/`);
+    const response = await apiClient.get<MaterialMovement>(`${API_BASE_URL}/material-movements/${id}/`);
     return response.data;
   },
 
@@ -151,7 +155,7 @@ export const materialMovementApi = {
    * Create material movement
    */
   create: async (data: Partial<MaterialMovement>): Promise<MaterialMovement> => {
-    const response = await apiClient.post(`${API_BASE_URL}/material-movements/`, data);
+    const response = await apiClient.post<MaterialMovement>(`${API_BASE_URL}/material-movements/`, data);
     return response.data;
   },
 
@@ -159,7 +163,7 @@ export const materialMovementApi = {
    * Update material movement
    */
   update: async (id: number | string, data: Partial<MaterialMovement>): Promise<MaterialMovement> => {
-    const response = await apiClient.patch(`${API_BASE_URL}/material-movements/${id}/`, data);
+    const response = await apiClient.patch<MaterialMovement>(`${API_BASE_URL}/material-movements/${id}/`, data);
     return response.data;
   },
 
@@ -178,7 +182,7 @@ export const productionTransactionApi = {
   /**
    * Get list of transactions
    */
-  getList: async (filters?: any): Promise<{ results: ProductionTransaction[] }> => {
+  getList: async (filters?: ProductionTransactionFilters): Promise<ResultsListResponse<ProductionTransaction>> => {
     const params = new URLSearchParams();
 
     if (filters) {
@@ -190,7 +194,7 @@ export const productionTransactionApi = {
     const queryString = params.toString();
     const url = `${API_BASE_URL}/production-transactions/${queryString ? '?' + queryString : ''}`;
 
-    const response = await apiClient.get(url);
+    const response = await apiClient.get<ResultsListResponse<ProductionTransaction>>(url);
     return response.data;
   },
 
@@ -198,7 +202,7 @@ export const productionTransactionApi = {
    * Get transaction detail
    */
   getDetail: async (id: number | string): Promise<ProductionTransaction> => {
-    const response = await apiClient.get(`${API_BASE_URL}/production-transactions/${id}/`);
+    const response = await apiClient.get<ProductionTransaction>(`${API_BASE_URL}/production-transactions/${id}/`);
     return response.data;
   },
 
@@ -206,7 +210,7 @@ export const productionTransactionApi = {
    * Create transaction
    */
   create: async (data: Partial<ProductionTransaction>): Promise<ProductionTransaction> => {
-    const response = await apiClient.post(`${API_BASE_URL}/production-transactions/`, data);
+    const response = await apiClient.post<ProductionTransaction>(`${API_BASE_URL}/production-transactions/`, data);
     return response.data;
   },
 
@@ -214,7 +218,7 @@ export const productionTransactionApi = {
    * Update transaction
    */
   update: async (id: number | string, data: Partial<ProductionTransaction>): Promise<ProductionTransaction> => {
-    const response = await apiClient.patch(`${API_BASE_URL}/production-transactions/${id}/`, data);
+    const response = await apiClient.patch<ProductionTransaction>(`${API_BASE_URL}/production-transactions/${id}/`, data);
     return response.data;
   },
 
@@ -233,7 +237,7 @@ export const productionSummaryApi = {
   /**
    * Get list of summaries
    */
-  getList: async (filters?: any): Promise<{ results: ProductionSummary[] }> => {
+  getList: async (filters?: ProductionSummaryFilters): Promise<ResultsListResponse<ProductionSummary>> => {
     const params = new URLSearchParams();
 
     if (filters) {
@@ -245,7 +249,7 @@ export const productionSummaryApi = {
     const queryString = params.toString();
     const url = `${API_BASE_URL}/production-summaries/${queryString ? '?' + queryString : ''}`;
 
-    const response = await apiClient.get(url);
+    const response = await apiClient.get<ResultsListResponse<ProductionSummary>>(url);
     return response.data;
   },
 
@@ -253,7 +257,7 @@ export const productionSummaryApi = {
    * Get summary detail
    */
   getDetail: async (id: number | string): Promise<ProductionSummary> => {
-    const response = await apiClient.get(`${API_BASE_URL}/production-summaries/${id}/`);
+    const response = await apiClient.get<ProductionSummary>(`${API_BASE_URL}/production-summaries/${id}/`);
     return response.data;
   },
 
@@ -261,7 +265,7 @@ export const productionSummaryApi = {
    * Finalize a production summary
    */
   finalize: async (id: number | string): Promise<ProductionSummary> => {
-    const response = await apiClient.post(`${API_BASE_URL}/production-summaries/${id}/finalize/`, {});
+    const response = await apiClient.post<ProductionSummary>(`${API_BASE_URL}/production-summaries/${id}/finalize/`, {});
     return response.data;
   },
 };

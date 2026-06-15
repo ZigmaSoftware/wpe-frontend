@@ -25,6 +25,7 @@ import { useTableSearchParams } from "@/features/common-master/hooks/useTableSea
 import { applyBackendErrors } from "@/features/common-master/hooks/useFormErrorMapper";
 
 const defaultValues: CityFormValues = {
+  code: "",
   country: 0,
   state: 0,
   name: "",
@@ -45,14 +46,14 @@ const CitiesPage = () => {
   const countryOptionsQuery = useCountryOptions();
   const stateOptionsQuery = useStateOptions(selectedCountry);
   const cityTypeOptionsQuery = useCityTypeOptions();
-  const cityDetailQuery = useQuery({
-    queryKey: ["common-masters", "city-detail", editingId],
-    queryFn: () => commonMasterApi.getCity(editingId as number),
-    enabled: Boolean(editingId),
-  });
   const citiesQuery = useQuery({
     queryKey: commonMasterKeys.cities(table.page, table.pageSize, debouncedSearch),
     queryFn: () => commonMasterApi.listCities({ page: table.page, pageSize: table.pageSize, search: debouncedSearch }),
+  });
+  const nextCodeQuery = useQuery({
+    queryKey: commonMasterKeys.nextCode("cities"),
+    queryFn: commonMasterApi.getNextCityCode,
+    enabled: false,
   });
 
   const createMutation = useCommonMasterMutations({
@@ -75,16 +76,19 @@ const CitiesPage = () => {
     errorMessage: "Unable to update city status.",
   });
 
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditingId(null);
     form.reset(defaultValues);
     setDialogOpen(true);
+    const result = await nextCodeQuery.refetch();
+    form.setValue("code", result.data ?? "");
   };
 
   const openEdit = async (id: number) => {
     setEditingId(id);
     const detail = await commonMasterApi.getCity(id);
     form.reset({
+      code: detail.code ?? "",
       country: detail.country,
       state: detail.state,
       name: detail.name,
@@ -115,12 +119,13 @@ const CitiesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Cities"
-        description="Maintain cities with state and country dependencies plus optional city type metadata."
+        title="City"
+        description="Manage cities, pincodes, and city types."
       />
       <MasterToolbar search={table.search} onSearchChange={table.setSearch} createLabel="Add City" onCreate={openCreate} />
       <MasterTable
         columns={[
+          { key: "city_code", title: "City Code", render: (record) => <span className="font-mono text-xs">{record.city_code}</span> },
           { key: "city", title: "City", render: (record) => <div className="font-medium">{record.city}</div> },
           { key: "state", title: "State", render: (record) => record.state },
           { key: "country", title: "Country", render: (record) => record.country },
@@ -130,13 +135,13 @@ const CitiesPage = () => {
             key: "actions",
             title: "Actions",
             className: "w-[120px] text-right",
-            render: (record) => <RowActions onEdit={() => openEdit(record.id)} onToggle={() => setToggleTarget(record)} />,
+            render: (record) => <RowActions onEdit={() => openEdit(record.id)} onToggle={() => setToggleTarget(record)} isActive={record.is_active} />,
           },
         ]}
         records={result?.items ?? []}
         isLoading={citiesQuery.isLoading}
         isError={citiesQuery.isError}
-        errorDescription="Cities could not be loaded."
+        errorDescription="City records could not be loaded."
         emptyTitle="No cities found"
         emptyDescription="Create cities after defining countries and states."
         page={table.page}
@@ -150,14 +155,21 @@ const CitiesPage = () => {
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
+              <FormField control={form.control} name="code" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City Code*</FormLabel>
+                  <FormControl><Input {...field} value={field.value ?? ""} readOnly placeholder="Generating..." className="bg-slate-50 text-slate-700" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
               <FormField control={form.control} name="country" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Country</FormLabel>
+                  <FormLabel>Country*</FormLabel>
                   <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => {
                     field.onChange(Number(value));
                     form.setValue("state", 0);
                   }}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {(countryOptionsQuery.data ?? []).map((country) => (
                         <SelectItem key={country.id} value={String(country.id)}>{country.name}</SelectItem>
@@ -169,9 +181,9 @@ const CitiesPage = () => {
               )} />
               <FormField control={form.control} name="state" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>State</FormLabel>
+                  <FormLabel>State*</FormLabel>
                   <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select State" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {(stateOptionsQuery.data ?? []).map((state) => (
                         <SelectItem key={state.id} value={String(state.id)}>{state.name}</SelectItem>
@@ -182,16 +194,16 @@ const CitiesPage = () => {
                 </FormItem>
               )} />
               <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem><FormLabel>City name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>City Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="pincode" render={({ field }) => (
-                <FormItem><FormLabel>Pincode</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Pincode*</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="city_type" render={({ field }) => (
                 <FormItem>
                   <FormLabel>City type</FormLabel>
                   <Select value={field.value ? String(field.value) : "none"} onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select city type" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select City Type" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">No city type</SelectItem>
                       {(cityTypeOptionsQuery.data ?? []).map((option) => (
@@ -205,7 +217,7 @@ const CitiesPage = () => {
             </div>
             <FormField control={form.control} name="is_active" render={({ field }) => (
               <FormItem className="flex items-center justify-between rounded-xl border border-border p-4">
-                <FormLabel>Active status</FormLabel>
+                <FormLabel>Active Status*</FormLabel>
                 <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
               </FormItem>
             )} />

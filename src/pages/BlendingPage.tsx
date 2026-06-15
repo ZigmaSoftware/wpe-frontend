@@ -1,13 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FlaskConical, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { FlaskConical, Printer, Plus, Trash2 } from "lucide-react";
+import { useDeferredValue, useEffect, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import AdditiveItemAutocomplete from "@/components/AdditiveItemAutocomplete";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
-import StatCard from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,16 +25,54 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { coreApi } from "@/lib/api";
-import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
-import type { DepartmentStock, StoreStockRecord, StoreStockRequest } from "@/lib/types";
+import { blendingApi } from "@/features/blending/api/blendingApi";
+import {
+  BLENDING_STOCK_ROUTE,
+  BLENDING_TRANSACTIONS_ROUTE,
+} from "@/features/blending/utils/routes";
+import { itemsInventoryApi } from "@/features/items/api/inventoryApi";
+import InventoryStockTable from "@/features/items/components/InventoryStockTable";
+import type { InventorySummaryRow } from "@/features/items/types";
+import StoreTablePagination from "@/features/store/components/StoreTablePagination";
+import StoreTableToolbar, {
+  type StoreExportFormat,
+  type StorePageSizeValue,
+} from "@/features/store/components/StoreTableToolbar";
+import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
+import { printStoreRequest } from "@/features/blending/utils/printSR";
+import { getStoreRequestStatusLabel } from "@/features/blending/utils/requestStatus";
+import { getPageCount, getPageSerialNumber, paginateRows } from "@/features/store/utils/table";
 import { toast } from "@/components/ui/sonner";
+import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
+import type { StoreStockRecord, StoreStockRequest } from "@/lib/types";
+import { useAuth } from "@/providers/AuthProvider";
 
-const unwrapResults = <T,>(payload: { data?: { results?: T[] } } | T[]) =>
-  Array.isArray(payload) ? payload : payload.data?.results ?? [];
+type BlendingPageModule = "stock" | "requests" | "transactions";
+type RequestStatusFilter = "all" | "pending_head_approval" | "pending_store_issue" | "approved" | "partially_approved" | "cancelled";
+type TransactionStatusFilter = "all" | "pending_store_issue" | "approved" | "rejected";
+
+type RequestFilterState = {
+  fromDate: string;
+  toDate: string;
+  status: RequestStatusFilter;
+};
+
+type TransactionFilterState = {
+  fromDate: string;
+  toDate: string;
+  status: TransactionStatusFilter;
+};
+
+const BLENDING_DEPARTMENT = "BLENDING";
+
+const getTodayDateInputValue = () => {
+  const today = new Date();
+  const offset = today.getTimezoneOffset();
+  return new Date(today.getTime() - offset * 60_000).toISOString().slice(0, 10);
+};
 
 const additiveRequestLineSchema = z.object({
   item_id: z.string().min(1, "Additive item is required."),
@@ -49,31 +87,43 @@ const additiveRequestLineSchema = z.object({
 
 const additiveRequestSchema = z.object({
   items: z.array(additiveRequestLineSchema).min(1, "At least one additive item is required."),
-  requested_for_name: z.string().min(1, "Requested person is required."),
-  request_reason: z.string().min(1, "Reason is required."),
+  department: z.string().min(1, "Request department is required."),
+  request_date: z.string().min(1, "Request date is required."),
+  require_date: z.string().optional(),
+  require_time: z.string().optional(),
+  requested_for_name: z.string().min(1, "Request person is required."),
+  request_reason: z.string().min(1, "Request reason is required."),
 });
 
 type AdditiveRequestValues = z.infer<typeof additiveRequestSchema>;
 
-const additiveRequestDefaults: AdditiveRequestValues = {
+const createAdditiveRequestDefaults = (department: string): AdditiveRequestValues => ({
   items: [],
+  department,
+  request_date: getTodayDateInputValue(),
+  require_date: "",
+  require_time: "",
   requested_for_name: "",
   request_reason: "",
-};
+});
 
-const isAdditiveRecord = (record: { category?: string; group?: string; sub_group?: string; item_name?: string }) =>
-  [record.category, record.group, record.sub_group, record.item_name].some((value) =>
-    String(value ?? "").toLowerCase().includes("additive"),
-  );
+const createDefaultRequestFilters = (): RequestFilterState => ({
+  fromDate: "",
+  toDate: "",
+  status: "all",
+});
 
-const statusTone = (status: StoreStockRequest["status"]) => {
-  if (status === "APPROVED") {
-    return "text-emerald-700";
+const createDefaultTransactionFilters = (): TransactionFilterState => ({
+  fromDate: "",
+  toDate: "",
+  status: "all",
+});
+
+const toStatusParam = (status: RequestStatusFilter | TransactionStatusFilter) => {
+  if (status === "all") {
+    return "all";
   }
-  if (status === "REJECTED") {
-    return "text-rose-700";
-  }
-  return "text-amber-700";
+  return status.toUpperCase();
 };
 
 const readText = (value: unknown) => {
@@ -82,6 +132,9 @@ const readText = (value: unknown) => {
   }
   return String(value);
 };
+
+const getItemCategory = (item: NonNullable<StoreStockRequest["items"]>[number]) =>
+  item.sub_group || item.group || item.category || "-";
 
 const getRequestItemSummary = (request: StoreStockRequest) => {
   const items = request.items ?? [];
@@ -97,144 +150,153 @@ const getRequestItemSummary = (request: StoreStockRequest) => {
   return {
     title: firstItem.item_name,
     subtitle: firstItem.item_code,
-    extra: restItems.length ? `+${restItems.length} more item${restItems.length > 1 ? "s" : ""}` : null,
+    extra: restItems.length ? `+${restItems.length} more` : null,
   };
 };
 
-type StoreAdditiveRequestGroupItem = {
-  itemKey: string;
-  itemCode: string;
-  itemName: string;
-  unit: string;
-  category: string;
-  requestIds: string[];
-  requestedQty: number;
-  availableQty: string;
-  status: string;
-  department: string;
-};
+const getTransactionItemCodeSummary = (request: StoreStockRequest) => {
+  const items = request.items ?? [];
+  if (!items.length) {
+    return {
+      code: request.item_code || "-",
+      name: request.item_name || "-",
+      extra: null as string | null,
+    };
+  }
 
-type StoreAdditiveRequestGroup = {
-  key: string;
-  requestIds: string[];
-  requests: StoreStockRequest[];
-  items: StoreAdditiveRequestGroupItem[];
-  status: string;
-  department: string;
-  requestedAt: string | null;
+  const [firstItem, ...restItems] = items;
+  return {
+    code: firstItem.item_code || "-",
+    name: firstItem.item_name || "-",
+    extra: restItems.length ? `+${restItems.length} more` : null,
+  };
 };
 
 const getRequestDisplayId = (request: StoreStockRequest) => request.request_no || `SR-${request.id}`;
 
-const getRequestGroupKey = (request: StoreStockRequest) => {
-  const itemKeys = (request.items ?? [])
-    .map((item) => String(item.item))
-    .sort((left, right) => left.localeCompare(right));
-
-  return itemKeys.length ? itemKeys.join("|") : `request:${request.id}`;
+const statusClassName = (status: StoreStockRequest["status"]) => {
+  switch (status) {
+    case "APPROVED":
+      return "text-emerald-700";
+    case "REJECTED":
+      return "text-rose-700";
+    case "PENDING_HEAD_APPROVAL":
+    case "PENDING_STORE_ISSUE":
+      return "text-amber-700";
+    default:
+      return "text-slate-700";
+  }
 };
 
-const buildStoreAdditiveRequestGroups = (requests: StoreStockRequest[]): StoreAdditiveRequestGroup[] => {
-  const groups = requests.reduce<Map<string, StoreAdditiveRequestGroup>>((result, request) => {
-    const key = getRequestGroupKey(request);
-    const requestId = getRequestDisplayId(request);
-    const existingGroup =
-      result.get(key) ??
-      ({
-        key,
-        requestIds: [],
-        requests: [],
-        items: [],
-        status: request.status,
-        department: request.department,
-        requestedAt: request.requested_at || null,
-      } satisfies StoreAdditiveRequestGroup);
-
-    existingGroup.requestIds.push(requestId);
-    existingGroup.requests.push(request);
-
-    if (request.requested_at) {
-      const currentTime = existingGroup.requestedAt ? new Date(existingGroup.requestedAt).getTime() : 0;
-      const nextTime = new Date(request.requested_at).getTime();
-      if (nextTime > currentTime) {
-        existingGroup.requestedAt = request.requested_at;
-      }
-    }
-
-    const statuses = new Set(existingGroup.requests.map((row) => row.status));
-    existingGroup.status = statuses.size === 1 ? request.status : "MIXED";
-
-    const departments = new Set(existingGroup.requests.map((row) => row.department));
-    existingGroup.department = departments.size === 1 ? request.department : "Multiple";
-
-    (request.items ?? []).forEach((item) => {
-      const itemKey = String(item.item);
-      const existingItem = existingGroup.items.find((row) => row.itemKey === itemKey);
-      const requestedQty = Number(item.requested_qty || 0);
-
-      if (existingItem) {
-        existingItem.requestIds.push(requestId);
-        existingItem.requestedQty += Number.isFinite(requestedQty) ? requestedQty : 0;
-        existingItem.status = existingItem.status === request.status ? existingItem.status : "MIXED";
-        return;
-      }
-
-      existingGroup.items.push({
-        itemKey,
-        itemCode: item.item_code || "-",
-        itemName: item.item_name || "-",
-        unit: item.unit || "",
-        category: item.sub_group || item.group || item.category || "-",
-        requestIds: [requestId],
-        requestedQty: Number.isFinite(requestedQty) ? requestedQty : 0,
-        availableQty: item.available_qty || "0",
-        status: request.status,
-        department: request.department,
-      });
-    });
-
-    existingGroup.items.sort((left, right) => left.itemName.localeCompare(right.itemName));
-    result.set(key, existingGroup);
-    return result;
-  }, new Map());
-
-  return Array.from(groups.values()).sort((left, right) => {
-    const leftTime = left.requestedAt ? new Date(left.requestedAt).getTime() : 0;
-    const rightTime = right.requestedAt ? new Date(right.requestedAt).getTime() : 0;
-    return rightTime - leftTime;
-  });
+const getRequestItemsText = (request: StoreStockRequest) => {
+  if (request.items?.length) {
+    return request.items.map((item) => item.item_name).join(", ");
+  }
+  return readText(request.item_name);
 };
 
-const BlendingPage = () => {
+const getRequestItemCodes = (request: StoreStockRequest) => {
+  if (request.items?.length) {
+    return request.items.map((item) => item.item_code).join(", ");
+  }
+  return readText(request.item_code);
+};
+
+const BLENDING_MODULE_META: Record<BlendingPageModule, { title: string; description: string }> = {
+  stock: {
+    title: "Blending Stock",
+    description: "Monitor current blending stock balances and review stock movement by item.",
+  },
+  requests: {
+    title: "Store Request",
+    description: "Raise and manage store requests for blending material requirements.",
+  },
+  transactions: {
+    title: "Blending Transactions",
+    description: "Review approved transfer transactions and request movement history for blending.",
+  },
+};
+
+type BlendingPageProps = {
+  module?: BlendingPageModule;
+};
+
+const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [productPickerItem, setProductPickerItem] = useState<StoreStockRecord | null>(null);
+  const [productPickerResetKey, setProductPickerResetKey] = useState(0);
   const [selectedAdditiveItems, setSelectedAdditiveItems] = useState<StoreStockRecord[]>([]);
-  const [detailRequestGroup, setDetailRequestGroup] = useState<StoreAdditiveRequestGroup | null>(null);
+  const [previewRequest, setPreviewRequest] = useState<StoreStockRequest | null>(null);
+
+  const [stockSearch, setStockSearch] = useState("");
+  const [stockPage, setStockPage] = useState(1);
+  const [stockPageSize, setStockPageSize] = useState<StorePageSizeValue>("10");
+
+  const [requestSearch, setRequestSearch] = useState("");
+  const [requestPage, setRequestPage] = useState(1);
+  const [requestPageSize, setRequestPageSize] = useState<StorePageSizeValue>("10");
+  const [requestDraftFilters, setRequestDraftFilters] = useState<RequestFilterState>(createDefaultRequestFilters);
+  const [requestFilters, setRequestFilters] = useState<RequestFilterState>(createDefaultRequestFilters);
+  const [isRequestFilterPending, startRequestFilterTransition] = useTransition();
+
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [transactionPageSize, setTransactionPageSize] = useState<StorePageSizeValue>("10");
+  const [transactionDraftFilters, setTransactionDraftFilters] = useState<TransactionFilterState>(createDefaultTransactionFilters);
+  const [transactionFilters, setTransactionFilters] = useState<TransactionFilterState>(createDefaultTransactionFilters);
+  const [isTransactionFilterPending, startTransactionFilterTransition] = useTransition();
+
+  const deferredStockSearch = useDeferredValue(stockSearch.trim());
+  const deferredRequestSearch = useDeferredValue(requestSearch.trim());
+  const deferredTransactionSearch = useDeferredValue(transactionSearch.trim());
+  const requestDepartment = user?.department_name?.trim() || BLENDING_DEPARTMENT;
+
   const form = useForm<AdditiveRequestValues>({
     resolver: zodResolver(additiveRequestSchema),
-    defaultValues: additiveRequestDefaults,
+    defaultValues: createAdditiveRequestDefaults(requestDepartment),
+    mode: "onChange",
   });
   const itemsFieldArray = useFieldArray({
     control: form.control,
     name: "items",
   });
 
-  const blendingQuery = useQuery({
-    queryKey: ["blending-stock"],
-    queryFn: async () => {
-      const response = await coreApi.get<DepartmentStock[] | { data?: { results?: DepartmentStock[] } }>("/api/blending/stock/");
-      return unwrapResults(response.data);
-    },
+  const stockQuery = useQuery({
+    queryKey: ["blending", "inventory-summary", deferredStockSearch],
+    queryFn: () => itemsInventoryApi.listAllSummary("blending", { search: deferredStockSearch }),
+    enabled: module === "stock",
+    placeholderData: (previousData) => previousData,
   });
 
-
   const requestsQuery = useQuery({
-    queryKey: ["store-requests"],
-    queryFn: async () => {
-      const response = await coreApi.get<StoreStockRequest[] | { data?: { results?: StoreStockRequest[] } }>("/api/blending/store-requests/");
-      return unwrapResults(response.data);
-    },
+    queryKey: ["blending", "requests", requestDepartment, requestFilters, deferredRequestSearch],
+    queryFn: () =>
+      blendingApi.listRequests({
+        search: deferredRequestSearch,
+        status: toStatusParam(requestFilters.status),
+        dateFrom: requestFilters.fromDate,
+        dateTo: requestFilters.toDate,
+      }),
+    enabled: module === "requests",
+    placeholderData: (previousData) => previousData,
+  });
+
+  const transactionsQuery = useQuery({
+    queryKey: ["blending", "transactions", requestDepartment, transactionFilters, deferredTransactionSearch],
+    queryFn: () =>
+      blendingApi.listRequests({
+        search: deferredTransactionSearch,
+        status: toStatusParam(transactionFilters.status),
+        dateFrom: transactionFilters.fromDate,
+        dateTo: transactionFilters.toDate,
+        requestType: "ADDITIVE",
+        department: requestDepartment,
+      }),
+    enabled: module === "transactions",
+    placeholderData: (previousData) => previousData,
   });
 
   const requestStockMutation = useMutation({
@@ -255,49 +317,105 @@ const BlendingPage = () => {
         return result;
       }, []);
 
-      const response = await coreApi.post("/api/blending/store-requests/", {
+      const trimmedRequireDate = payload.require_date?.trim();
+      const trimmedRequireTime = payload.require_time?.trim();
+
+      return blendingApi.createStoreRequest({
         request_type: "ADDITIVE",
-        department: "BLENDING",
+        department: payload.department,
+        request_date: payload.request_date,
+        ...(trimmedRequireDate ? { require_date: trimmedRequireDate } : {}),
+        ...(trimmedRequireTime ? { require_time: trimmedRequireTime } : {}),
         requested_for_name: payload.requested_for_name,
         request_reason: payload.request_reason,
         items: normalizedItems,
       });
-      return response.data;
     },
     onSuccess: () => {
-      toast.success("Additive store request submitted.");
+      toast.success("Store request submitted.");
       handleDialogOpenChange(false);
-      queryClient.invalidateQueries({ queryKey: ["store-requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["blending"] });
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, "Unable to submit additive request."));
+      toast.error(getApiErrorMessage(error, "Unable to submit the store request."));
     },
   });
 
-  const additiveBlendingStock = useMemo(
-    () => (blendingQuery.data ?? []).filter((row) => isAdditiveRecord(row)),
-    [blendingQuery.data],
-  );
-  const additiveRequests = useMemo(
-    () =>
-      (requestsQuery.data ?? []).filter(
-        (row) => row.request_type === "ADDITIVE" && row.department.toUpperCase() === "BLENDING",
-      ),
-    [requestsQuery.data],
-  );
+  const stockRows = stockQuery.data ?? [];
+  const requestRows = requestsQuery.data ?? [];
+  const transactionRows = transactionsQuery.data ?? [];
 
-  const additiveRequestGroups = useMemo(() => buildStoreAdditiveRequestGroups(additiveRequests), [additiveRequests]);
+  useEffect(() => {
+    if (form.getValues("department") !== requestDepartment) {
+      form.setValue("department", requestDepartment, { shouldValidate: true });
+    }
+  }, [form, requestDepartment]);
 
-  const totalQuantity = additiveBlendingStock.reduce((sum, stock) => sum + Number(stock.quantity), 0);
-  const pendingRequests = additiveRequests.filter((request) => request.status === "PENDING").length;
+  useEffect(() => {
+    const totalPages = getPageCount(stockPageSize, stockRows.length);
+    if (stockPage > totalPages) {
+      setStockPage(totalPages);
+    }
+  }, [stockPage, stockPageSize, stockRows.length]);
+
+  useEffect(() => {
+    const totalPages = getPageCount(requestPageSize, requestRows.length);
+    if (requestPage > totalPages) {
+      setRequestPage(totalPages);
+    }
+  }, [requestPage, requestPageSize, requestRows.length]);
+
+  useEffect(() => {
+    const totalPages = getPageCount(transactionPageSize, transactionRows.length);
+    if (transactionPage > totalPages) {
+      setTransactionPage(totalPages);
+    }
+  }, [transactionPage, transactionPageSize, transactionRows.length]);
+
+  const paginatedRequestRows = paginateRows(requestRows, requestPage, requestPageSize);
+  const paginatedTransactionRows = paginateRows(transactionRows, transactionPage, transactionPageSize);
+
   const watchedItems = form.watch("items");
+  const watchedRequestedForName = form.watch("requested_for_name");
+  const watchedRequestReason = form.watch("request_reason");
+
   const hasDuplicateSelectedItems =
     watchedItems.filter((item) => item.item_id).length !== new Set(watchedItems.map((item) => item.item_id).filter(Boolean)).size;
+
   const canSubmitAdditiveRequest =
     watchedItems.length > 0 &&
-    watchedItems.every((item, index) => Boolean(item.item_id && item.quantity && Number(item.quantity) > 0 && selectedAdditiveItems[index])) &&
+    watchedItems.every((item, index) => {
+      const selectedItem = selectedAdditiveItems[index];
+      const qty = Number(item.quantity);
+      const available = Number(selectedItem?.quantity ?? 0);
+      return Boolean(item.item_id && item.quantity && qty > 0 && selectedItem && qty <= available);
+    }) &&
     !hasDuplicateSelectedItems &&
+    Boolean(watchedRequestedForName.trim()) &&
+    Boolean(watchedRequestReason.trim()) &&
     !requestStockMutation.isPending;
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+
+    if (!open) {
+      form.reset(createAdditiveRequestDefaults(requestDepartment));
+      setProductPickerItem(null);
+      setProductPickerResetKey(0);
+      setSelectedAdditiveItems([]);
+    }
+  };
+
+  useEffect(() => {
+    if (module !== "requests") {
+      setDialogOpen(false);
+      form.reset(createAdditiveRequestDefaults(requestDepartment));
+      setProductPickerItem(null);
+      setProductPickerResetKey(0);
+      setSelectedAdditiveItems([]);
+      setPreviewRequest(null);
+    }
+  }, [form, module, requestDepartment]);
 
   const handlePickerItemChange = (item: StoreStockRecord | null) => {
     if (!item) {
@@ -309,221 +427,448 @@ const BlendingPage = () => {
     if (alreadySelected) {
       toast.error("This product is already added to the request.");
       setProductPickerItem(null);
+      setProductPickerResetKey((current) => current + 1);
       return;
     }
 
     itemsFieldArray.append({ item_id: String(item.item), quantity: "" });
     setSelectedAdditiveItems((current) => [...current, item]);
     setProductPickerItem(null);
+    setProductPickerResetKey((current) => current + 1);
     form.clearErrors("items");
   };
 
-  const handleDialogOpenChange = (open: boolean) => {
-    setDialogOpen(open);
+  const handleStockExport = (format: StoreExportFormat) => {
+    try {
+      const columns: StoreExportColumn<InventorySummaryRow>[] = [
+        { label: "Item Code", value: (row) => row.item_code },
+        { label: "Item Name", value: (row) => row.item_name },
+        { label: "Current Stock", value: (row) => formatDecimal(row.current_stock) },
+        { label: "Unit", value: (row) => row.unit },
+        { label: "Total Inward", value: (row) => formatDecimal(row.total_inward) },
+        { label: "Total Outward", value: (row) => formatDecimal(row.total_outward) },
+        { label: "Last Updated", value: (row) => formatDateTime(row.last_updated) },
+      ];
 
-    if (!open) {
-      form.reset(additiveRequestDefaults);
-      setProductPickerItem(null);
-      setSelectedAdditiveItems([]);
+      exportTableData({
+        title: "Blending Stock",
+        filename: "blending-stock",
+        rows: stockRows,
+        columns,
+        format,
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Unable to export blending stock."));
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Blending Additive Requests"
-        description="Create store requests for additive materials, track approvals, and monitor additive stock available in blending."
+  const handleRequestExport = (format: StoreExportFormat) => {
+    try {
+      const columns: StoreExportColumn<StoreStockRequest>[] = [
+        { label: "Request ID", value: (row) => getRequestDisplayId(row) },
+        { label: "Item", value: (row) => getRequestItemsText(row) },
+        { label: "Requested By", value: (row) => row.requested_by_username },
+        { label: "Requested Date", value: (row) => formatDateTime(row.requested_at) },
+        { label: "Approved By", value: (row) => row.approved_by_username || "-" },
+        { label: "Status", value: (row) => getStoreRequestStatusLabel(row.status) },
+        { label: "Request Department", value: (row) => row.department },
+        { label: "Request Person", value: (row) => row.requested_for_name || "-" },
+        { label: "Require Date", value: (row) => row.require_date || "-" },
+        { label: "Require Time", value: (row) => row.require_time || "-" },
+        { label: "Request Reason", value: (row) => row.request_reason || "-" },
+      ];
+
+      exportTableData({
+        title: "Blending Store Requests",
+        filename: "blending-store-requests",
+        rows: requestRows,
+        columns,
+        format,
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Unable to export store requests."));
+    }
+  };
+
+  const handleTransactionExport = (format: StoreExportFormat) => {
+    try {
+      const columns: StoreExportColumn<StoreStockRequest>[] = [
+        { label: "Request ID", value: (row) => getRequestDisplayId(row) },
+        { label: "Item Codes", value: (row) => getRequestItemCodes(row) },
+        { label: "Requested Date", value: (row) => formatDateTime(row.requested_at) },
+        { label: "Approved Date", value: (row) => (row.approved_at ? formatDateTime(row.approved_at) : "-") },
+        { label: "Status", value: (row) => getStoreRequestStatusLabel(row.status) },
+      ];
+
+      exportTableData({
+        title: "Blending Transactions",
+        filename: "blending-transactions",
+        rows: transactionRows,
+        columns,
+        format,
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Unable to export blending transactions."));
+    }
+  };
+
+  const renderStockView = () => (
+    <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <StoreTableToolbar
+        searchValue={stockSearch}
+        onSearchChange={(value) => {
+          setStockSearch(value);
+          setStockPage(1);
+        }}
+        pageSize={stockPageSize}
+        onPageSizeChange={(value) => {
+          setStockPageSize(value);
+          setStockPage(1);
+        }}
+        onExport={handleStockExport}
+        summaryText={`${stockRows.length} blending rows available`}
+        isFetching={stockQuery.isFetching}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Additive Stock Rows" value={additiveBlendingStock.length} />
-        <StatCard label="Blending Qty" value={formatDecimal(totalQuantity)} />
-        <StatCard label="Pending Requests" value={pendingRequests} />
-        <StatCard label="Department" value="BLENDING" />
-      </div>
+      {stockQuery.isLoading ? <LoadingState label="Loading blending stock..." /> : null}
+      {stockQuery.isError ? <ErrorState description={getApiErrorMessage(stockQuery.error, "Unable to load blending stock.")} /> : null}
+      {!stockQuery.isLoading && !stockQuery.isError ? (
+        stockRows.length ? (
+          <InventoryStockTable
+            rows={stockRows}
+            page={stockPage}
+            pageSize={stockPageSize}
+            onPageChange={setStockPage}
+            onRowClick={(row) => navigate(`${BLENDING_STOCK_ROUTE}/${row.item_id}`, { state: { row } })}
+          />
+        ) : (
+          <EmptyState title="No blending stock rows" description="Approved store requests will start appearing here as current blending stock." />
+        )
+      ) : null}
+    </div>
+  );
 
-      <div className="flex justify-end">
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Additive Request
-        </Button>
-      </div>
+  const renderRequestView = () => (
+    <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <StoreTableToolbar
+        searchValue={requestSearch}
+        onSearchChange={(value) => {
+          setRequestSearch(value);
+          setRequestPage(1);
+        }}
+        filterContent={
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_auto]">
+            <div className="space-y-1">
+              <label htmlFor="blending-request-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                From Date
+              </label>
+              <Input
+                id="blending-request-from-date"
+                type="date"
+                value={requestDraftFilters.fromDate}
+                onChange={(event) => setRequestDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="blending-request-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                To Date
+              </label>
+              <Input
+                id="blending-request-to-date"
+                type="date"
+                value={requestDraftFilters.toDate}
+                onChange={(event) => setRequestDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
+              <Select
+                value={requestDraftFilters.status}
+                onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, status: value as RequestStatusFilter }))}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="pending_head_approval">Pending Blending Head Approval</SelectItem>
+                  <SelectItem value="pending_store_issue">Pending Store Issue</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="partially_approved">Partially Approved</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                className="h-9 w-full"
+                disabled={isRequestFilterPending}
+                onClick={() =>
+                  startRequestFilterTransition(() => {
+                    setRequestFilters(requestDraftFilters);
+                    setRequestPage(1);
+                  })
+                }
+              >
+                Go
+              </Button>
+            </div>
+          </div>
+        }
+        pageSize={requestPageSize}
+        onPageSizeChange={(value) => {
+          setRequestPageSize(value);
+          setRequestPage(1);
+        }}
+        onExport={handleRequestExport}
+        summaryText={`${requestRows.length} requests in the current queue`}
+        isFetching={requestsQuery.isFetching}
+      />
 
-      {blendingQuery.isLoading ? <LoadingState label="Loading blending workspace..." /> : null}
-      {blendingQuery.isError ? <ErrorState description="Blending stock could not be loaded from the backend." /> : null}
-
-      {!blendingQuery.isLoading && !blendingQuery.isError ? (
-        <Tabs defaultValue="stock" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="stock">Blending Stock</TabsTrigger>
-            <TabsTrigger value="requests">Store Requests</TabsTrigger>
-            <TabsTrigger value="store">Store Additives</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="stock">
-            {additiveBlendingStock.length ? (
-              <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-16 text-center">S.No</TableHead>
-                      <TableHead>Item Code</TableHead>
-                      <TableHead>Item Name</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead>Department</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {additiveBlendingStock.map((stock, index) => (
-                      <TableRow key={stock.id}>
-                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell className="font-mono text-xs">{stock.item_code}</TableCell>
-                        <TableCell>{stock.item_name}</TableCell>
-                        <TableCell>{stock.sub_group || stock.group || stock.category || "-"}</TableCell>
-                        <TableCell>{formatDecimal(stock.quantity)}</TableCell>
-                        <TableCell>{stock.unit}</TableCell>
-                        <TableCell>{stock.department}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <EmptyState title="No additive stock yet" description="Approved additive requests will increase the blending stock table." />
-            )}
-          </TabsContent>
-
-          <TabsContent value="requests">
-            {requestsQuery.isLoading ? <LoadingState label="Loading store requests..." /> : null}
-            {requestsQuery.isError ? <ErrorState description="Store requests could not be loaded." /> : null}
-            {!requestsQuery.isLoading && !requestsQuery.isError && additiveRequests.length ? (
-              <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-16 text-center">S.No</TableHead>
-                      <TableHead>Requested</TableHead>
-                      <TableHead>Item</TableHead>
-                      <TableHead>Qty</TableHead>
-                      <TableHead>Requested For</TableHead>
-                      <TableHead>Reason</TableHead>
-                      <TableHead>Requested By</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Approved By</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {additiveRequests.map((request, index) => {
-                      const summary = getRequestItemSummary(request);
-                      return (
+      {requestsQuery.isLoading ? <LoadingState label="Loading store requests..." /> : null}
+      {requestsQuery.isError ? <ErrorState description={getApiErrorMessage(requestsQuery.error, "Unable to load store requests.")} /> : null}
+      {!requestsQuery.isLoading && !requestsQuery.isError ? (
+        requestRows.length ? (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                  <TableRow className="hover:bg-card">
+                    <TableHead className="w-16 text-center">S.No</TableHead>
+                    <TableHead>Request ID</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Requested By</TableHead>
+                    <TableHead>Requested Date</TableHead>
+                    <TableHead>Approved By</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-20 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedRequestRows.map((request, index) => {
+                    const summary = getRequestItemSummary(request);
+                    return (
                       <TableRow key={request.id}>
-                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell>{formatDateTime(request.requested_at)}</TableCell>
-                        <TableCell>
-                          <div className="font-medium">{summary.title}</div>
-                          {summary.subtitle ? (
-                            <div className="font-mono text-xs text-muted-foreground">{summary.subtitle}</div>
-                          ) : null}
-                          {summary.extra ? (
-                            <div className="text-xs text-muted-foreground">{summary.extra}</div>
-                          ) : null}
+                        <TableCell className="text-center font-medium text-muted-foreground">
+                          {getPageSerialNumber(requestPage, requestPageSize, requestRows.length, index)}
                         </TableCell>
+                        <TableCell className="font-mono text-xs">{getRequestDisplayId(request)}</TableCell>
                         <TableCell>
-                          {formatDecimal(request.total_requested_qty ?? request.quantity)} {request.unit || request.items?.[0]?.unit || ""}
-                        </TableCell>
-                        <TableCell>{request.requested_for_name}</TableCell>
-                        <TableCell className="max-w-xs truncate" title={request.request_reason}>
-                          {request.request_reason}
+                          <button
+                            type="button"
+                            className="space-y-0.5 text-left transition-colors hover:text-primary"
+                            onClick={() => setPreviewRequest(request)}
+                          >
+                            <div className="font-medium text-card-foreground">{summary.title}</div>
+                            {summary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{summary.subtitle}</div> : null}
+                            {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
+                          </button>
                         </TableCell>
                         <TableCell>{request.requested_by_username}</TableCell>
-                        <TableCell className={statusTone(request.status)}>{request.status}</TableCell>
+                        <TableCell>{formatDateTime(request.requested_at)}</TableCell>
                         <TableCell>{request.approved_by_username || "-"}</TableCell>
+                        <TableCell className={statusClassName(request.status)}>{getStoreRequestStatusLabel(request.status)}</TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            title="Print SR"
+                            onClick={() => printStoreRequest(request)}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <EmptyState title="No additive requests yet" description="Create the first store request for blending additives." />
-            )}
-          </TabsContent>
-
-          <TabsContent value="store">
-            {additiveRequestGroups.length ? (
-              <div className="grid gap-4">
-                {additiveRequestGroups.map((group, groupIndex) => (
-                  <div key={group.key} className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                    <div className="flex flex-col gap-3 border-b border-border px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Group {groupIndex + 1}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                          <p className="font-semibold text-foreground">{group.requestIds.length} request ID{group.requestIds.length > 1 ? "s" : ""}</p>
-                          <p className={group.status === "MIXED" ? "text-muted-foreground" : statusTone(group.status as StoreStockRequest["status"])}>{group.status}</p>
-                          <p className="text-sm text-muted-foreground">{formatDateTime(group.requestedAt)}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {group.items.length} item{group.items.length > 1 ? "s" : ""}
-                          </p>
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">{group.requestIds.join(", ")}</p>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => setDetailRequestGroup(group)}>
-                        View
-                      </Button>
-                    </div>
-
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16 text-center">S.No</TableHead>
-                          <TableHead>Request ID</TableHead>
-                          <TableHead>Item Code</TableHead>
-                          <TableHead>Item Name</TableHead>
-                          <TableHead>Requested Qty</TableHead>
-                          <TableHead>Available Qty</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Department</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {group.items.map((item, index) => (
-                          <TableRow key={item.itemKey}>
-                            <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                            <TableCell className="font-mono text-xs">{item.requestIds.join(", ")}</TableCell>
-                            <TableCell className="font-mono text-xs">{item.itemCode}</TableCell>
-                            <TableCell>{item.itemName}</TableCell>
-                            <TableCell>
-                              {formatDecimal(String(item.requestedQty))} {item.unit}
-                            </TableCell>
-                            <TableCell>
-                              {formatDecimal(item.availableQty)} {item.unit}
-                            </TableCell>
-                            <TableCell className={item.status === "MIXED" ? "text-muted-foreground" : statusTone(item.status as StoreStockRequest["status"])}>{item.status}</TableCell>
-                            <TableCell>{item.department}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="No grouped additive requests" description="Create an additive request to see the selected products grouped together." />
-            )}
-          </TabsContent>
-        </Tabs>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <StoreTablePagination
+              page={requestPage}
+              pageSize={requestPageSize === "all" ? requestRows.length || 1 : Number(requestPageSize)}
+              total={requestRows.length}
+              onPageChange={setRequestPage}
+            />
+          </div>
+        ) : (
+          <EmptyState title="No store requests" description="No requests matched the selected search, date range, or status." />
+        )
       ) : null}
+    </div>
+  );
+
+  const renderTransactionView = () => (
+    <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <StoreTableToolbar
+        searchValue={transactionSearch}
+        onSearchChange={(value) => {
+          setTransactionSearch(value);
+          setTransactionPage(1);
+        }}
+        filterContent={
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_auto]">
+            <div className="space-y-1">
+              <label htmlFor="blending-transaction-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                From Date
+              </label>
+              <Input
+                id="blending-transaction-from-date"
+                type="date"
+                value={transactionDraftFilters.fromDate}
+                onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="blending-transaction-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                To Date
+              </label>
+              <Input
+                id="blending-transaction-to-date"
+                type="date"
+                value={transactionDraftFilters.toDate}
+                onChange={(event) => setTransactionDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
+              <Select
+                value={transactionDraftFilters.status}
+                onValueChange={(value) => setTransactionDraftFilters((current) => ({ ...current, status: value as TransactionStatusFilter }))}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="pending_store_issue">Pending Store Issue</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                className="h-9 w-full"
+                disabled={isTransactionFilterPending}
+                onClick={() =>
+                  startTransactionFilterTransition(() => {
+                    setTransactionFilters(transactionDraftFilters);
+                    setTransactionPage(1);
+                  })
+                }
+              >
+                Go
+              </Button>
+            </div>
+          </div>
+        }
+        pageSize={transactionPageSize}
+        onPageSizeChange={(value) => {
+          setTransactionPageSize(value);
+          setTransactionPage(1);
+        }}
+        onExport={handleTransactionExport}
+        summaryText={`${transactionRows.length} transactions in the current result set`}
+        isFetching={transactionsQuery.isFetching}
+      />
+
+      {transactionsQuery.isLoading ? <LoadingState label="Loading blending transactions..." /> : null}
+      {transactionsQuery.isError ? <ErrorState description={getApiErrorMessage(transactionsQuery.error, "Unable to load blending transactions.")} /> : null}
+      {!transactionsQuery.isLoading && !transactionsQuery.isError ? (
+        transactionRows.length ? (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                  <TableRow className="hover:bg-card">
+                    <TableHead className="w-16 text-center">S.No</TableHead>
+                    <TableHead>Request ID</TableHead>
+                    <TableHead>Item Code</TableHead>
+                    <TableHead>Requested Date</TableHead>
+                    <TableHead>Approved Date</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedTransactionRows.map((request, index) => {
+                    const summary = getTransactionItemCodeSummary(request);
+                    return (
+                      <TableRow
+                        key={request.id}
+                        tabIndex={0}
+                        role="button"
+                        className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => navigate(`${BLENDING_TRANSACTIONS_ROUTE}/${request.id}`)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(`${BLENDING_TRANSACTIONS_ROUTE}/${request.id}`);
+                          }
+                        }}
+                      >
+                        <TableCell className="text-center font-medium text-muted-foreground">
+                          {getPageSerialNumber(transactionPage, transactionPageSize, transactionRows.length, index)}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{getRequestDisplayId(request)}</TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <div className="font-mono text-xs text-card-foreground">{summary.code}</div>
+                            <div className="text-sm text-muted-foreground">{summary.name}</div>
+                            {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatDateTime(request.requested_at)}</TableCell>
+                        <TableCell>{request.approved_at ? formatDateTime(request.approved_at) : "-"}</TableCell>
+                        <TableCell className={statusClassName(request.status)}>{getStoreRequestStatusLabel(request.status)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <StoreTablePagination
+              page={transactionPage}
+              pageSize={transactionPageSize === "all" ? transactionRows.length || 1 : Number(transactionPageSize)}
+              total={transactionRows.length}
+              onPageChange={setTransactionPage}
+            />
+          </div>
+        ) : (
+          <EmptyState title="No blending transactions" description="No transactions matched the selected search, date range, or status." />
+        )
+      ) : null}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <PageHeader
+        title={BLENDING_MODULE_META[module].title}
+        description={BLENDING_MODULE_META[module].description}
+        actions={module === "requests" ? (
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Store Request
+          </Button>
+        ) : undefined}
+      />
+      {module === "stock" ? renderStockView() : null}
+      {module === "requests" ? renderRequestView() : null}
+      {module === "transactions" ? renderTransactionView() : null}
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create Additive Store Request</DialogTitle>
+            <DialogTitle>Create Store Request</DialogTitle>
             <DialogDescription>
-              Sends one pending store request to `POST /api/blending/store-requests/` with one or more product lines for the blending team.
+              Submit a blending store request with one or more product lines for store approval.
             </DialogDescription>
           </DialogHeader>
 
@@ -531,9 +876,10 @@ const BlendingPage = () => {
             <form onSubmit={form.handleSubmit((values) => requestStockMutation.mutate(values))} className="space-y-4">
               <div className="space-y-3">
                 <FormItem>
-                  <FormLabel>Additive Items</FormLabel>
+                  <FormLabel>Additive Items*</FormLabel>
                   <FormControl>
                     <AdditiveItemAutocomplete
+                      key={productPickerResetKey}
                       selectedItem={productPickerItem}
                       onSelectedItemChange={handlePickerItemChange}
                       error={typeof form.formState.errors.items?.message === "string" ? form.formState.errors.items.message : undefined}
@@ -558,13 +904,16 @@ const BlendingPage = () => {
                       <TableBody>
                         {itemsFieldArray.fields.map((itemField, index) => {
                           const selectedItem = selectedAdditiveItems[index];
+                          const available = Number(selectedItem?.quantity ?? 0);
+                          const enteredQty = Number(watchedItems[index]?.quantity || 0);
+                          const exceedsStock = enteredQty > 0 && enteredQty > available;
                           return (
                             <TableRow key={itemField.id}>
                               <TableCell>
                                 <div className="font-medium">{selectedItem?.item_name || "-"}</div>
                                 <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
                                   <span className="font-mono">{selectedItem?.item_code || "-"}</span>
-                                  <span>
+                                  <span className={exceedsStock ? "font-semibold text-destructive" : ""}>
                                     {formatDecimal(selectedItem?.quantity || "0")} {selectedItem?.unit || ""} available
                                   </span>
                                 </div>
@@ -576,9 +925,18 @@ const BlendingPage = () => {
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormControl>
-                                        <Input {...field} placeholder="0.000" />
+                                        <Input
+                                          {...field}
+                                          placeholder="0.000"
+                                          className={exceedsStock ? "border-destructive focus-visible:ring-destructive" : ""}
+                                        />
                                       </FormControl>
                                       <FormMessage />
+                                      {exceedsStock ? (
+                                        <p className="text-xs text-destructive">
+                                          Exceeds available stock ({formatDecimal(String(available))} {selectedItem?.unit})
+                                        </p>
+                                      ) : null}
                                     </FormItem>
                                   )}
                                 />
@@ -609,31 +967,88 @@ const BlendingPage = () => {
                     Search and select products from the dropdown to add them to this request.
                   </div>
                 )}
-
               </div>
 
-              <FormField
-                control={form.control}
-                name="requested_for_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Requested Person</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Blending operator or supervisor" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="department"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Request Department*</FormLabel>
+                      <FormControl>
+                        <Input {...field} readOnly className="bg-slate-50" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="request_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Request Date*</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="date" readOnly className="bg-slate-50" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="requested_for_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Request Person*</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Blending operator or supervisor" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="require_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Require Date</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="require_time"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Require Time</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="time" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}
                 name="request_reason"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reason</FormLabel>
+                    <FormLabel>Request Reason*</FormLabel>
                     <FormControl>
-                      <Textarea {...field} rows={4} placeholder="Reason for additive request, batch, or production need" />
+                      <Textarea {...field} rows={4} placeholder="Reason for store request, batch, or production need" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -643,9 +1058,9 @@ const BlendingPage = () => {
               <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2 font-medium text-foreground">
                   <FlaskConical className="h-4 w-4" />
-                  Request Type: Additive Store Request
+                  Request Type: Store Request
                 </div>
-                <p className="mt-1">Department is fixed to BLENDING. Store will approve or reject this request from the store workspace.</p>
+                <p className="mt-1">Blending Head will review this request. After approval, Store can issue the material into Blending Inventory.</p>
               </div>
 
               <div className="flex justify-end gap-2">
@@ -661,52 +1076,41 @@ const BlendingPage = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(detailRequestGroup)} onOpenChange={(open) => !open && setDetailRequestGroup(null)}>
-        <DialogContent className="max-w-5xl">
+      <Dialog open={Boolean(previewRequest)} onOpenChange={(open) => !open && setPreviewRequest(null)}>
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>{detailRequestGroup?.requestIds.join(", ") || "Store Additive Requests"}</DialogTitle>
-            <DialogDescription>Matching products grouped together across these additive store requests.</DialogDescription>
+            <DialogTitle>{previewRequest ? getRequestDisplayId(previewRequest) : "Store Request Items"}</DialogTitle>
+            <DialogDescription>Full product list for this store request.</DialogDescription>
           </DialogHeader>
 
-          {detailRequestGroup ? (
-            <div className="max-h-[70vh] space-y-4 overflow-y-auto">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard label="Status" value={detailRequestGroup.status} />
-                <StatCard label="Request IDs" value={detailRequestGroup.requestIds.length} />
-                <StatCard label="Items" value={detailRequestGroup.items.length} />
-                <StatCard label="Department" value={detailRequestGroup.department} />
-              </div>
-
-              <div className="rounded-xl border border-border bg-card shadow-sm">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-16 text-center">S.No</TableHead>
-                      <TableHead>Request ID</TableHead>
-                      <TableHead>Item Code</TableHead>
-                      <TableHead>Item Name</TableHead>
-                      <TableHead>Requested Qty</TableHead>
-                      <TableHead>Available Qty</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead>Category</TableHead>
+          {previewRequest ? (
+            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16 text-center">S.No</TableHead>
+                    <TableHead>Item Code</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-right">Requested Qty</TableHead>
+                    <TableHead className="text-right">Available Qty</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Category</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(previewRequest.items ?? []).map((item, index) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell className="font-mono text-xs">{readText(item.item_code)}</TableCell>
+                      <TableCell>{readText(item.item_name)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatDecimal(item.requested_qty)}</TableCell>
+                      <TableCell className="text-right">{formatDecimal(item.available_qty)}</TableCell>
+                      <TableCell>{readText(item.unit)}</TableCell>
+                      <TableCell>{getItemCategory(item)}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {detailRequestGroup.items.map((item, index) => (
-                      <TableRow key={item.itemKey}>
-                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell className="font-mono text-xs">{item.requestIds.join(", ")}</TableCell>
-                        <TableCell className="font-mono text-xs">{readText(item.itemCode)}</TableCell>
-                        <TableCell>{readText(item.itemName)}</TableCell>
-                        <TableCell>{formatDecimal(String(item.requestedQty))}</TableCell>
-                        <TableCell>{formatDecimal(item.availableQty)}</TableCell>
-                        <TableCell>{readText(item.unit)}</TableCell>
-                        <TableCell>{readText(item.category)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           ) : null}
         </DialogContent>
@@ -716,3 +1120,4 @@ const BlendingPage = () => {
 };
 
 export default BlendingPage;
+  

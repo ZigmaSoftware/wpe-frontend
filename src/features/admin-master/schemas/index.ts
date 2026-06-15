@@ -32,46 +32,46 @@ export const userScreenSchema = z.object({
   available_actions: z.array(z.enum(["add", "update", "list", "delete", "view", "print"])).min(1, "Select at least one action."),
 });
 
-export const staffSchema = z.object({
-  staff_name: z.string().trim().min(1, "Staff name is required."),
-  mobile_no: z.string().trim().optional().or(z.literal("")).nullable(),
-  email: z.string().email("Enter a valid email.").optional().or(z.literal("")).nullable(),
-  department: optionalNumber(),
-  designation: optionalString(),
-  is_active: z.boolean(),
-});
-
 export const userTypeSchema = z.object({
-  user_type: z.string().trim().min(1, "User type is required."),
-  code: optionalString(),
+  department: z.coerce.number().min(1, "Department is required."),
+  role: z.coerce.number().min(1, "Role is required."),
   is_active: z.boolean(),
-  under_users: optionalString(),
-  company_wise: z.boolean(),
-  project_wise: z.boolean(),
-  department_wise: z.boolean(),
-  user_wise: z.boolean(),
 });
 
-export const userAccountSchema = z
+export const staffCreationSchema = z.object({
+  staff_code: z.string().trim().min(1, "Employee ID is required."),
+  name: z.string().trim().min(1, "Name is required."),
+  age: z.coerce.number().min(1, "Age is required."),
+  designation: z.coerce.number().min(1, "Designation is required."),
+  mobile: z.string().trim().regex(/^\+?[0-9]{10,15}$/, "Enter a valid phone number."),
+  email: z.string().trim().email("Enter a valid email."),
+  joining_date: optionalString(),
+  gender: z.enum(["male", "female", "other"]).optional().or(z.literal("")).nullable(),
+  address: optionalString(),
+  emergency_contact_no: z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9]{10,15}$/, "Enter a valid emergency contact number.")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  photo: z.instanceof(File).nullable().optional(),
+  photo_url: z.string().optional(),
+  is_active: z.boolean(),
+  remarks: optionalString(),
+});
+
+export const userCreationSchema = z
   .object({
     staff: z.coerce.number().min(1, "Staff is required."),
+    user_type: z.coerce.number().min(1, "User type is required."),
+    company: z.coerce.number().min(1, "Company is required."),
     username: z.string().trim().min(1, "Username is required."),
     password: z.string().optional().or(z.literal("")),
     confirm_password: z.string().optional().or(z.literal("")),
-    user_type: z.coerce.number().min(1, "User type is required."),
     mobile_no: z.string().trim().optional().or(z.literal("")).nullable(),
     email: z.string().email("Enter a valid email.").optional().or(z.literal("")).nullable(),
-    first_name: optionalString(),
-    last_name: optionalString(),
-    company: optionalNumber(),
-    department: optionalNumber(),
-    project: optionalString(),
-    under_users: optionalString(),
     account_status: z.enum(["active", "inactive", "locked"]),
-    force_password_change: z.boolean(),
-    is_team_head: z.boolean(),
-    team_members: z.array(z.number()).default([]),
-    designation: optionalString(),
   })
   .superRefine((values, ctx) => {
     if (values.password && values.password !== values.confirm_password) {
@@ -83,7 +83,7 @@ export const userAccountSchema = z
     }
   });
 
-export const userPermissionSchema = z.object({
+export const userScreenPermissionSchema = z.object({
   user_type: z.coerce.number().min(1, "User type is required."),
   scope_type: z.enum(["main_screen", "section", "screen"]),
   main_screen: z.coerce.number().min(1, "Main screen is required."),
@@ -104,7 +104,7 @@ export const userPermissionSchema = z.object({
 export type MainScreenFormValues = z.infer<typeof mainScreenSchema>;
 export type ScreenSectionFormValues = z.infer<typeof screenSectionSchema>;
 export type UserScreenFormValues = z.infer<typeof userScreenSchema>;
-export type StaffFormValues = z.infer<typeof staffSchema>;
 export type UserTypeFormValues = z.infer<typeof userTypeSchema>;
-export type UserAccountFormValues = z.infer<typeof userAccountSchema>;
-export type UserPermissionFormValues = z.infer<typeof userPermissionSchema>;
+export type StaffCreationFormValues = z.infer<typeof staffCreationSchema>;
+export type UserCreationFormValues = z.infer<typeof userCreationSchema>;
+export type UserScreenPermissionFormValues = z.infer<typeof userScreenPermissionSchema>;

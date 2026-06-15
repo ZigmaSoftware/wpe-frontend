@@ -1,4 +1,4 @@
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import { NotebookText } from "lucide-react";
 import { FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import type { ProductionOrderFormValues } from "./productionOrderForm";
 import {
   productionFieldLabelClassName,
   productionInputClassName,
+  productionTextareaClassName,
 } from "./productionOrderFormStyles";
 
 type ProductionNotesSectionProps = {
@@ -15,16 +16,16 @@ type ProductionNotesSectionProps = {
 };
 
 const ProductionNotesSection = ({ form }: ProductionNotesSectionProps) => {
-  const notesValue = form.watch("notes");
+  const notesValue = useWatch({ control: form.control, name: "notes" }) ?? "";
 
   return (
     <ProductionSectionCard
       title="Notes"
-      description="Operational context for production, planning, and handover."
-      tone="slate"
+      description="Add context, purpose, or special instructions for this production order."
+      tone="blue"
       icon={NotebookText}
     >
-      <div className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-[0.95fr_1.05fr]">
         <FormField
           control={form.control}
           name="production_for"
@@ -44,14 +45,14 @@ const ProductionNotesSection = ({ form }: ProductionNotesSectionProps) => {
             <FormItem>
               <div className="flex items-center justify-between gap-3">
                 <FormLabel className={productionFieldLabelClassName}>Notes</FormLabel>
-                <span className="text-xs text-slate-400">{notesValue.length}/2000</span>
+                <span className="text-xs text-slate-400">{notesValue.length} / 2000</span>
               </div>
               <Textarea
                 {...field}
-                rows={4}
+                rows={3}
                 maxLength={2000}
                 placeholder="Add production notes, special instructions, or planning remarks."
-                className="min-h-[152px] rounded-xl border-slate-200/90 bg-white text-[15px] text-slate-900 placeholder:text-slate-300 focus-visible:border-[#2d6cdf] focus-visible:ring-[#2d6cdf]/20"
+                className={productionTextareaClassName}
               />
               <FormMessage />
             </FormItem>

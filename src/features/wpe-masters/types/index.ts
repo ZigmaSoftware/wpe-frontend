@@ -12,6 +12,120 @@ export interface MasterWritePayload {
   is_active?: boolean;
 }
 
+export type LocationCenterType = "GRN_CENTER" | "BLENDING_CENTER" | "WAREHOUSE_CENTER";
+
+export interface LocationMasterRecord extends MasterRecord {
+  center_type: LocationCenterType;
+}
+
+export interface LocationMasterWritePayload extends MasterWritePayload {
+  center_type: LocationCenterType;
+}
+
+export interface CodeMasterRecord extends MasterRecord {
+  code: string | null;
+  description: string;
+}
+
+export interface CodeMasterWritePayload extends MasterWritePayload {
+  description?: string;
+}
+
+export interface WarehouseMasterRecord extends CodeMasterRecord {
+  warehouse_type: "FG" | "RM" | "SCRAP";
+}
+
+export interface WarehouseMasterWritePayload extends CodeMasterWritePayload {
+  warehouse_type: "FG" | "RM" | "SCRAP";
+}
+
+export type StoreMasterRecord = CodeMasterRecord;
+
+export interface DepartmentMasterRecord extends CodeMasterRecord {
+  department_head: number | null;
+  department_head_name: string | null;
+}
+
+export interface DepartmentMasterWritePayload extends CodeMasterWritePayload {
+  department_head?: number | null;
+}
+
+export interface DesignationMasterRecord extends CodeMasterRecord {
+  department: number;
+  department_name: string;
+}
+
+export interface DesignationMasterWritePayload extends CodeMasterWritePayload {
+  department: number;
+}
+
+export interface RoleMasterRecord extends CodeMasterRecord {
+  designation: number | null;
+  designation_name: string | null;
+}
+
+export interface RoleMasterWritePayload extends CodeMasterWritePayload {
+  designation: number;
+}
+
+export interface UnitMasterRecord {
+  id: number;
+  unique_id: string;
+  uom_code: string;
+  name: string;
+  decimal_allowed: boolean;
+  decimal_places: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UnitMasterWritePayload {
+  uom_code: string;
+  name: string;
+  decimal_allowed?: boolean;
+  decimal_places?: number;
+  is_active?: boolean;
+}
+
+export interface ItemMasterRecord {
+  id: number;
+  unique_id: string;
+  item_code: string | null;
+  item_name: string;
+  sub_category: number;
+  sub_category_name: string;
+  category: number;
+  category_name: string;
+  description: string;
+  item_type: "RM" | "ADDITIVE" | "PACKING" | "FG";
+  uom: number;
+  uom_code: string;
+  uom_name: string;
+  hsn_code: string;
+  gst_percentage: string;
+  minimum_stock: string;
+  maximum_stock: string;
+  reorder_level: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ItemMasterWritePayload {
+  item_name: string;
+  sub_category: number;
+  description?: string;
+  item_type: "RM" | "ADDITIVE" | "PACKING" | "FG";
+  uom: number;
+  hsn_code?: string;
+  gst_percentage: string | number;
+  minimum_stock: string | number;
+  maximum_stock: string | number;
+  reorder_level?: string | number;
+  is_active?: boolean;
+}
+
 export interface ProductTypeCategoryRecord {
   id: number;
   unique_id: string;
@@ -40,6 +154,7 @@ export interface ProductTypeSubtypeRecord {
   name: string;
   code: string;
   description: string;
+  variant_count: number;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -115,6 +230,15 @@ export interface WPEUserWritePayload {
 export interface LookupItem {
   id: number;
   name: string;
+  code?: string | null;
+  username?: string | null;
+  uom_code?: string | null;
+  decimal_allowed?: boolean;
+  decimal_places?: number;
+  designation_id?: number | null;
+  designation_name?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
 }
 
 export type ProductTypeStatusFilterValue = "all" | "active" | "inactive";
@@ -133,36 +257,3 @@ export interface TableParams {
   ordering?: string;
   [key: string]: string | number | boolean | null | undefined;
 }
-
-export interface PermissionRow {
-  role_id: number;
-  role_name: string;
-  view_all: boolean;
-  view_self: boolean;
-  can_add: boolean;
-  can_edit: boolean;
-  can_duplicate: boolean;
-  can_delete: boolean;
-  generate_invoice_access: boolean;
-  invoice_access: boolean;
-  access: boolean;
-}
-
-export type PermKey = keyof Omit<PermissionRow, "role_id" | "role_name">;
-
-export interface UserScreenPermRow {
-  user_screen_id: number;
-  screen_name: string;
-  screen_section_name: string;
-  view_all: boolean;
-  view_self: boolean;
-  can_add: boolean;
-  can_edit: boolean;
-  can_duplicate: boolean;
-  can_delete: boolean;
-  generate_invoice_access: boolean;
-  invoice_access: boolean;
-  access: boolean;
-}
-
-export type UserScreenPermKey = keyof Omit<UserScreenPermRow, "user_screen_id" | "screen_name" | "screen_section_name">;
