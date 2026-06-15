@@ -136,6 +136,7 @@ type GrnTabValue = "active" | "grn-pending" | "moved-to-qcr" | "next-grn" | "rej
 type GrnTableFilterState = {
   fromDate: string;
   toDate: string;
+  status: string;
 };
 
 type EnterpriseFieldTone = "editable" | "synced" | "protected" | "system";
@@ -188,6 +189,18 @@ type QcrCompletionFormItem = {
   reason: string;
   unit: string;
   storeInName: string;
+};
+
+type CompletedGrnStatusGroup = "Approved" | "Partial Rejected" | "Rejected";
+
+type CompletedGrnDisplayStatus = "Approved" | "Rejected";
+
+type CompletedGrnDisplayRow = {
+  rowId: string;
+  record: QcrRecord;
+  statusGroup: CompletedGrnStatusGroup;
+  displayStatus: CompletedGrnDisplayStatus;
+  quantity: string | number | null;
 };
 
 const documentFieldNames = [
@@ -339,18 +352,20 @@ const defaultValues: GrnFormValues = {
 };
 
 const grnTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr", "next-grn", "rejected"];
-const processTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr"];
-const statusTabs: GrnTabValue[] = ["next-grn", "rejected"];
+const processTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr", "next-grn"];
+const statusTabs: GrnTabValue[] = ["next-grn"];
+
+const completedGrnStatusOptions = ["Approved", "Rejected"] as const;
 
 const GRN_MODULE_META: Record<GrnPageModule, { title: string; description: string; defaultTab: GrnTabValue }> = {
   process: {
     title: "Gate Entry",
-    description: "Manage Gate Entry, GRN Pending, and QCR movement from one workspace.",
+    description: "Manage Gate Entry, GRN Pending, QCR, and Completed GRN movement from one workspace.",
     defaultTab: "active",
   },
   status: {
-    title: "GRN Status",
-    description: "Review completed and rejected GRN records.",
+    title: "Completed GRN",
+    description: "Review approved and rejected GRN records.",
     defaultTab: "next-grn",
   },
 };
@@ -375,13 +390,13 @@ const createDefaultTabPageSizeState = () =>
 
 const createDefaultTabFiltersState = () =>
   grnTabs.reduce<Record<GrnTabValue, GrnTableFilterState>>(
-    (state, tab) => ({ ...state, [tab]: { fromDate: "", toDate: "" } }),
+    (state, tab) => ({ ...state, [tab]: { fromDate: "", toDate: "", status: "" } }),
     {
-      active: { fromDate: "", toDate: "" },
-      "grn-pending": { fromDate: "", toDate: "" },
-      "moved-to-qcr": { fromDate: "", toDate: "" },
-      "next-grn": { fromDate: "", toDate: "" },
-      rejected: { fromDate: "", toDate: "" },
+      active: { fromDate: "", toDate: "", status: "" },
+      "grn-pending": { fromDate: "", toDate: "", status: "" },
+      "moved-to-qcr": { fromDate: "", toDate: "", status: "" },
+      "next-grn": { fromDate: "", toDate: "", status: "" },
+      rejected: { fromDate: "", toDate: "", status: "" },
     },
   );
 
@@ -664,7 +679,7 @@ const getQcrOutcomeQuantity = (record: QcrRecord, key: "accepted_qty" | "rejecte
 
 const getQcrDisplayQuantity = (record: QcrRecord, tab: Exclude<GrnTabValue, "active">): string | number | null => {
   if (tab === "next-grn") {
-    return getQcrOutcomeQuantity(record, "accepted_qty") ?? toDecimalDisplayValue(getQcrField(record, "quantity"));
+    return getCompletedGrnOutcomeQuantities(record).acceptedQty;
   }
 
   if (tab === "rejected") {
@@ -676,7 +691,9 @@ const getQcrDisplayQuantity = (record: QcrRecord, tab: Exclude<GrnTabValue, "act
 
 const getQcrDisplayStatus = (record: QcrRecord, tab: Exclude<GrnTabValue, "active">) => {
   if (tab === "next-grn") {
-    return readText(record.source_grn_data?.process_status ?? record.status);
+    const rawStatus = typeof record.status === "string" ? record.status : "";
+    const sourceStatus = typeof record.source_grn_data?.process_status === "string" ? record.source_grn_data.process_status : "";
+    return normalizeCompletedGrnStatus(rawStatus || sourceStatus);
   }
 
   if (tab === "rejected") {
@@ -684,6 +701,88 @@ const getQcrDisplayStatus = (record: QcrRecord, tab: Exclude<GrnTabValue, "activ
   }
 
   return readText(record.status);
+};
+
+const normalizeCompletedGrnStatus = (status: string): CompletedGrnStatusGroup => {
+  const normalized = status.trim().toLowerCase();
+
+  if (!normalized) {
+    return "Approved";
+  }
+
+  if (normalized.includes("moved to grn")) {
+    return "Approved";
+  }
+
+  if (normalized.includes("partial")) {
+    return "Partial Rejected";
+  }
+
+  if (normalized.includes("reject")) {
+    return normalized === "rejected" ? "Rejected" : "Partial Rejected";
+  }
+
+  if (normalized.includes("complete") || normalized.includes("approve")) {
+    return "Approved";
+  }
+
+  return "Approved";
+};
+
+const getCompletedGrnOutcomeQuantities = (record: QcrRecord) => {
+  const rawStatus = typeof record.status === "string" ? record.status : "";
+  const sourceStatus = typeof record.source_grn_data?.process_status === "string" ? record.source_grn_data.process_status : "";
+  const statusGroup = normalizeCompletedGrnStatus(rawStatus || sourceStatus);
+  const acceptedQty = getQcrOutcomeQuantity(record, "accepted_qty") ?? toDecimalDisplayValue(getQcrField(record, "quantity"));
+  const rejectedQty = getQcrOutcomeQuantity(record, "rejected_qty") ?? null;
+  return { statusGroup, acceptedQty, rejectedQty };
+};
+
+const getCompletedGrnDisplayRows = (record: QcrRecord): CompletedGrnDisplayRow[] => {
+  const { statusGroup, acceptedQty, rejectedQty } = getCompletedGrnOutcomeQuantities(record);
+  const hasAccepted = Number.isFinite(Number(acceptedQty)) && Number(acceptedQty) > 0;
+  const hasRejected = rejectedQty !== null && Number.isFinite(Number(rejectedQty)) && Number(rejectedQty) > 0;
+
+  if (hasAccepted && hasRejected) {
+    return [
+      {
+        rowId: `${record.id}-approved`,
+        record,
+        statusGroup,
+        displayStatus: "Approved",
+        quantity: acceptedQty,
+      },
+      {
+        rowId: `${record.id}-rejected`,
+        record,
+        statusGroup,
+        displayStatus: "Rejected",
+        quantity: rejectedQty,
+      },
+    ];
+  }
+
+  if (statusGroup === "Rejected" || (!hasAccepted && hasRejected)) {
+    return [
+      {
+        rowId: `${record.id}-rejected`,
+        record,
+        statusGroup: statusGroup === "Approved" ? "Rejected" : statusGroup,
+        displayStatus: "Rejected",
+        quantity: rejectedQty ?? acceptedQty,
+      },
+    ];
+  }
+
+  return [
+    {
+      rowId: `${record.id}-approved`,
+      record,
+      statusGroup: "Approved",
+      displayStatus: "Approved",
+      quantity: acceptedQty,
+    },
+  ];
 };
 
 
@@ -1765,7 +1864,6 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const deferredPendingSearch = useDeferredValue(searchByTab["grn-pending"].trim());
   const deferredMovedToQcrSearch = useDeferredValue(searchByTab["moved-to-qcr"].trim());
   const deferredCompletedSearch = useDeferredValue(searchByTab["next-grn"].trim());
-  const deferredRejectedSearch = useDeferredValue(searchByTab.rejected.trim());
 
   const qcrCompletionMutation = useMutation<{ message?: string }, unknown, { id: number; items: QcrCompletionFormItem[] }>({
     mutationFn: async ({ id, items }: { id: number; items: QcrCompletionFormItem[] }) => {
@@ -1833,7 +1931,6 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const pendingAppliedFilters = appliedFiltersByTab["grn-pending"];
   const movedToQcrAppliedFilters = appliedFiltersByTab["moved-to-qcr"];
   const completedAppliedFilters = appliedFiltersByTab["next-grn"];
-  const rejectedAppliedFilters = appliedFiltersByTab.rejected;
 
   const filteredActiveRecords = useMemo(() => {
     const search = deferredActiveSearch.toLowerCase();
@@ -1898,12 +1995,13 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
     });
   }, [deferredMovedToQcrSearch, movedToQcrAppliedFilters, qcrActiveRecords]);
 
-  const filteredQcrMovedRecords = useMemo(() => {
+  const completedGrnRecords = useMemo(() => [...qcrMovedRecords, ...qcrRejectedRecords], [qcrMovedRecords, qcrRejectedRecords]);
+
+  const filteredCompletedGrnRows = useMemo(() => {
     const search = deferredCompletedSearch.toLowerCase();
-    const { fromDate, toDate } = completedAppliedFilters;
-    return qcrMovedRecords.filter((record) => {
-      if (!isWithinDateRange(record.moved_to_qcr_at, fromDate, toDate)) return false;
-      if (!search) return true;
+    const { fromDate, toDate, status } = completedAppliedFilters;
+    return completedGrnRecords.flatMap((record) => {
+      if (!isWithinDateRange(record.moved_to_qcr_at, fromDate, toDate)) return [];
       const searchable = [
         record.grn_reference_no,
         getQcrField(record, "product_description"),
@@ -1913,43 +2011,36 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return searchable.includes(search);
-    });
-  }, [completedAppliedFilters, deferredCompletedSearch, qcrMovedRecords]);
+      if (search && !searchable.includes(search)) {
+        return [];
+      }
 
-  const filteredQcrRejectedRecords = useMemo(() => {
-    const search = deferredRejectedSearch.toLowerCase();
-    const { fromDate, toDate } = rejectedAppliedFilters;
-    return qcrRejectedRecords.filter((record) => {
-      if (!isWithinDateRange(record.moved_to_qcr_at, fromDate, toDate)) return false;
-      if (!search) return true;
-      const searchable = [
-        record.grn_reference_no,
-        getQcrField(record, "product_description"),
-        getQcrField(record, "trade_name"),
-        getQcrField(record, "item_id"),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return searchable.includes(search);
+      return getCompletedGrnDisplayRows(record).filter((row) => {
+        if (status && status !== "Partial Rejected" && row.displayStatus !== status) {
+          return false;
+        }
+        if (status === "Partial Rejected" && row.statusGroup !== "Partial Rejected") {
+          return false;
+        }
+        return true;
+      });
     });
-  }, [deferredRejectedSearch, qcrRejectedRecords, rejectedAppliedFilters]);
+  }, [completedAppliedFilters, completedGrnRecords, deferredCompletedSearch]);
 
-  const rowsByTab: Record<GrnTabValue, GrnRecord[] | QcrRecord[]> = {
+  const rowsByTab: Record<GrnTabValue, GrnRecord[] | QcrRecord[] | CompletedGrnDisplayRow[]> = {
     active: filteredActiveRecords,
     "grn-pending": filteredPendingRecords,
     "moved-to-qcr": filteredQcrActiveRecords,
-    "next-grn": filteredQcrMovedRecords,
-    rejected: filteredQcrRejectedRecords,
+    "next-grn": filteredCompletedGrnRows,
+    rejected: qcrRejectedRecords,
   };
 
-  const paginatedRowsByTab: Record<GrnTabValue, GrnRecord[] | QcrRecord[]> = {
+  const paginatedRowsByTab: Record<GrnTabValue, GrnRecord[] | QcrRecord[] | CompletedGrnDisplayRow[]> = {
     active: paginateRows(filteredActiveRecords, pageByTab.active, pageSizeByTab.active),
     "grn-pending": paginateRows(filteredPendingRecords, pageByTab["grn-pending"], pageSizeByTab["grn-pending"]),
     "moved-to-qcr": paginateRows(filteredQcrActiveRecords, pageByTab["moved-to-qcr"], pageSizeByTab["moved-to-qcr"]),
-    "next-grn": paginateRows(filteredQcrMovedRecords, pageByTab["next-grn"], pageSizeByTab["next-grn"]),
-    rejected: paginateRows(filteredQcrRejectedRecords, pageByTab.rejected, pageSizeByTab.rejected),
+    "next-grn": paginateRows(filteredCompletedGrnRows, pageByTab["next-grn"], pageSizeByTab["next-grn"]),
+    rejected: paginateRows(qcrRejectedRecords, pageByTab.rejected, pageSizeByTab.rejected),
   };
 
   useEffect(() => {
@@ -1957,8 +2048,8 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
       active: filteredActiveRecords.length,
       "grn-pending": filteredPendingRecords.length,
       "moved-to-qcr": filteredQcrActiveRecords.length,
-      "next-grn": filteredQcrMovedRecords.length,
-      rejected: filteredQcrRejectedRecords.length,
+      "next-grn": filteredCompletedGrnRows.length,
+      rejected: qcrRejectedRecords.length,
     };
     grnTabs.forEach((tab) => {
       const totalPages = getPageCount(pageSizeByTab[tab], totalsByTab[tab]);
@@ -1970,8 +2061,8 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
     filteredActiveRecords.length,
     filteredPendingRecords.length,
     filteredQcrActiveRecords.length,
-    filteredQcrMovedRecords.length,
-    filteredQcrRejectedRecords.length,
+    filteredCompletedGrnRows.length,
+    qcrRejectedRecords.length,
     pageByTab,
     pageSizeByTab,
   ]);
@@ -2090,6 +2181,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const currentDraftFilters = draftFiltersByTab[activeTab];
   const currentRows = rowsByTab[activeTab];
   const visibleTabs = module === "process" ? processTabs : statusTabs;
+  const showCompletedStatusFilter = activeTab === "next-grn";
   const isPendingMoveReady =
     pendingMoveItems.length > 0 &&
     pendingMoveItems.every((item) => item.receivedQty.trim() && item.storeInId.trim() && isValidReceivedQty(item.receivedQty, item.sentQty));
@@ -2123,24 +2215,47 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
       return;
     }
 
-    const qcrTab: Exclude<GrnTabValue, "active"> =
-      activeTab === "moved-to-qcr" || activeTab === "next-grn" || activeTab === "rejected"
-        ? activeTab
-        : "next-grn";
-    const rows = activeTab === "moved-to-qcr" ? filteredQcrActiveRecords : activeTab === "next-grn" ? filteredQcrMovedRecords : filteredQcrRejectedRecords;
-    const columns: StoreExportColumn<QcrRecord>[] = [
+    const qcrTab: Exclude<GrnTabValue, "active"> = activeTab === "moved-to-qcr" ? "moved-to-qcr" : "next-grn";
+    const rows =
+      activeTab === "moved-to-qcr"
+        ? filteredQcrActiveRecords
+        : activeTab === "next-grn"
+          ? filteredCompletedGrnRows
+          : qcrRejectedRecords;
+    const columns: StoreExportColumn<QcrRecord | CompletedGrnDisplayRow>[] = [
       { label: "S.No", value: (_row, index) => index + 1 },
-      { label: "GRN Reference", value: (row) => row.grn_reference_no },
-      { label: "Supplier", value: (row) => readText(getQcrField(row, "trade_name")) },
-      { label: "Item", value: (row) => readText(getQcrField(row, "product_description")) },
-      { label: "Quantity", value: (row) => formatDecimal(getQcrDisplayQuantity(row, qcrTab)) },
-      { label: "Status", value: (row) => getQcrDisplayStatus(row, qcrTab) },
-      { label: "Moved To QCR", value: (row) => formatDateTime(row.moved_to_qcr_at) },
-      { label: "Moved By", value: (row) => row.moved_to_qcr_by || "-" },
+      {
+        label: "GRN Reference",
+        value: (row) => ("record" in row ? row.record.grn_reference_no : row.grn_reference_no),
+      },
+      {
+        label: "Supplier",
+        value: (row) => ("record" in row ? readText(getQcrField(row.record, "trade_name")) : readText(getQcrField(row, "trade_name"))),
+      },
+      {
+        label: "Item",
+        value: (row) => ("record" in row ? readText(getQcrField(row.record, "product_description")) : readText(getQcrField(row, "product_description"))),
+      },
+      {
+        label: "Quantity",
+        value: (row) => ("record" in row ? formatDecimal(row.quantity) : formatDecimal(getQcrDisplayQuantity(row, qcrTab))),
+      },
+      {
+        label: "Status",
+        value: (row) => ("record" in row ? row.displayStatus : getQcrDisplayStatus(row, qcrTab)),
+      },
+      {
+        label: "Moved To QCR",
+        value: (row) => ("record" in row ? formatDateTime(row.record.moved_to_qcr_at) : formatDateTime(row.moved_to_qcr_at)),
+      },
+      {
+        label: "Moved By",
+        value: (row) => ("record" in row ? row.record.moved_to_qcr_by || "-" : row.moved_to_qcr_by || "-"),
+      },
     ];
     exportTableData({
-      title: "GRN QCR Records",
-      filename: `grn-${activeTab}-records`,
+      title: activeTab === "next-grn" ? "GRN Completed Records" : "GRN QCR Records",
+      filename: activeTab === "next-grn" ? "grn-completed-records" : `grn-${activeTab}-records`,
       rows,
       columns,
       format,
@@ -2365,6 +2480,14 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             <TableBody>
               {paginatedRows.map((record, index) => {
                 const displayStatus = getQcrDisplayStatus(record, tab);
+                const badgeClassName =
+                  tab === "moved-to-qcr"
+                    ? "border-warning/20 bg-warning/10 text-warning"
+                    : displayStatus === "Partial Rejected"
+                      ? "border-warning/20 bg-warning/10 text-warning"
+                      : displayStatus === "Rejected"
+                        ? "border-destructive/20 bg-destructive/10 text-destructive"
+                        : "border-success/20 bg-success/10 text-success";
 
                 return (
                   <TableRow key={record.id} className="transition-colors hover:bg-muted/50">
@@ -2376,16 +2499,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                     <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
                     <TableCell>{formatDecimal(getQcrDisplayQuantity(record, tab))}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          tab === "moved-to-qcr"
-                            ? "border-warning/20 bg-warning/10 text-warning"
-                            : tab === "rejected"
-                              ? "border-destructive/20 bg-destructive/10 text-destructive"
-                              : "border-success/20 bg-success/10 text-success"
-                        }
-                      >
+                      <Badge variant="outline" className={badgeClassName}>
                         {displayStatus}
                       </Badge>
                     </TableCell>
@@ -2411,6 +2525,74 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
           pageSize={getPageSizeNumber(pageSizeByTab[tab], records.length)}
           total={records.length}
           onPageChange={(value) => setPageByTab((current) => ({ ...current, [tab]: value }))}
+        />
+      </Card>
+    );
+  };
+
+  const renderCompletedGrnTable = (rows: CompletedGrnDisplayRow[]) => {
+    if (!rows.length) {
+      return <EmptyState title="No records found" description="This stage currently has no records." />;
+    }
+
+    const paginatedRows = paginatedRowsByTab["next-grn"] as CompletedGrnDisplayRow[];
+
+    return (
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16 text-center">S.No</TableHead>
+                <TableHead>GRN Reference</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead>Item</TableHead>
+                <TableHead>Quantity</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Moved To QCR</TableHead>
+                <TableHead>Moved By</TableHead>
+                <TableHead className="w-16 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedRows.map((row, index) => {
+                const badgeClassName =
+                  row.statusGroup === "Partial Rejected"
+                    ? "border-warning/20 bg-warning/10 text-warning"
+                    : row.displayStatus === "Rejected"
+                      ? "border-destructive/20 bg-destructive/10 text-destructive"
+                      : "border-success/20 bg-success/10 text-success";
+
+                return (
+                  <TableRow key={row.rowId} className="transition-colors hover:bg-muted/50">
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {getPageSerialNumber(pageByTab["next-grn"], pageSizeByTab["next-grn"], rows.length, index)}
+                    </TableCell>
+                    <TableCell className="font-medium">{row.record.grn_reference_no}</TableCell>
+                    <TableCell>{readText(getQcrField(row.record, "trade_name"))}</TableCell>
+                    <TableCell>{readText(getQcrField(row.record, "product_description"))}</TableCell>
+                    <TableCell>{formatDecimal(row.quantity)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={badgeClassName}>
+                        {row.displayStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{formatDateTime(row.record.moved_to_qcr_at)}</TableCell>
+                    <TableCell>{row.record.moved_to_qcr_by || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-muted-foreground">—</span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+        <StoreTablePagination
+          page={pageByTab["next-grn"]}
+          pageSize={getPageSizeNumber(pageSizeByTab["next-grn"], rows.length)}
+          total={rows.length}
+          onPageChange={(value) => setPageByTab((current) => ({ ...current, "next-grn": value }))}
         />
       </Card>
     );
@@ -2654,7 +2836,6 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             {visibleTabs.includes("grn-pending") ? <TabsTrigger value="grn-pending">GRN Pending</TabsTrigger> : null}
             {visibleTabs.includes("moved-to-qcr") ? <TabsTrigger value="moved-to-qcr">QCR</TabsTrigger> : null}
             {visibleTabs.includes("next-grn") ? <TabsTrigger value="next-grn">Completed GRN</TabsTrigger> : null}
-            {visibleTabs.includes("rejected") ? <TabsTrigger value="rejected">Rejected</TabsTrigger> : null}
           </TabsList>
           <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
             <StoreTableToolbar
@@ -2664,7 +2845,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                 setPageByTab((current) => ({ ...current, [activeTab]: 1 }));
               }}
               filterContent={
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
+                <div className={cn("grid gap-3 md:grid-cols-2", showCompletedStatusFilter ? "xl:grid-cols-[1fr_1fr_1fr_auto]" : "xl:grid-cols-[1fr_1fr_auto]")}>
                   <div className="space-y-1">
                     <label htmlFor={`grn-filter-from-${activeTab}`} className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                       From Date
@@ -2699,6 +2880,34 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                       className="h-9"
                     />
                   </div>
+                  {showCompletedStatusFilter ? (
+                    <div className="space-y-1">
+                      <label htmlFor={`grn-filter-status-${activeTab}`} className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Status
+                      </label>
+                      <Select
+                        value={currentDraftFilters.status || "__all__"}
+                        onValueChange={(value) =>
+                          setDraftFiltersByTab((current) => ({
+                            ...current,
+                            [activeTab]: { ...current[activeTab], status: value === "__all__" ? "" : value },
+                          }))
+                        }
+                      >
+                        <SelectTrigger id={`grn-filter-status-${activeTab}`} className="h-9">
+                          <SelectValue placeholder="All statuses" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All statuses</SelectItem>
+                          {completedGrnStatusOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
                   <div className="flex items-end">
                     <Button
                       type="button"
@@ -2743,10 +2952,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
               <TabsContent value="moved-to-qcr">{renderQcrTable("moved-to-qcr", filteredQcrActiveRecords)}</TabsContent>
             ) : null}
             {visibleTabs.includes("next-grn") ? (
-              <TabsContent value="next-grn">{renderQcrTable("next-grn", filteredQcrMovedRecords)}</TabsContent>
-            ) : null}
-            {visibleTabs.includes("rejected") ? (
-              <TabsContent value="rejected">{renderQcrTable("rejected", filteredQcrRejectedRecords)}</TabsContent>
+              <TabsContent value="next-grn">{renderCompletedGrnTable(filteredCompletedGrnRows)}</TabsContent>
             ) : null}
           </div>
         </Tabs>
