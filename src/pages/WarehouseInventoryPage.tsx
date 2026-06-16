@@ -85,7 +85,7 @@ const WarehouseInventoryPage = () => {
     try {
       const baseColumns: StoreExportColumn<WarehouseInventoryRow>[] = [
         { label: "S.No", value: (_, index) => index + 1 },
-        { label: "GRN No", value: (row) => row.grn_no },
+        { label: "GRN Reference", value: (row) => row.grn_reference_no || row.grn_no },
         { label: "Supplier", value: (row) => row.supplier },
         { label: "PO No", value: (row) => row.po_no },
         { label: "Items", value: (row) => row.items },
@@ -170,7 +170,7 @@ const WarehouseInventoryPage = () => {
                 <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
                   <TableRow className="hover:bg-card">
                     <TableHead>S.No</TableHead>
-                    <TableHead>GRN No</TableHead>
+                    <TableHead>GRN Reference</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>PO No</TableHead>
                     <TableHead>Items</TableHead>
@@ -191,7 +191,7 @@ const WarehouseInventoryPage = () => {
                     return (
                       <TableRow key={`${tab.key}-${row.qcr_id}-${row.grn_id}`}>
                         <TableCell>{serialNumber}</TableCell>
-                        <TableCell className="font-medium text-card-foreground">{row.grn_no || "-"}</TableCell>
+                        <TableCell className="font-medium text-card-foreground">{row.grn_reference_no || row.grn_no || "-"}</TableCell>
                         <TableCell>{row.supplier || "-"}</TableCell>
                         <TableCell>{row.po_no || "-"}</TableCell>
                         <TableCell className="max-w-[24rem] whitespace-normal">{row.items || "-"}</TableCell>

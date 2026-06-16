@@ -34,6 +34,7 @@ const TOLERANCE_PERCENT = 0.5;
 const DEFAULT_BATCH_AUTO_VALUE = "Generated on save";
 const NEXT_PRODUCTION_TYPE_AFTER_AD = "WPE Blend Production";
 const NEXT_PRODUCTION_TYPE_AFTER_BL = "WPE Granulated Blend Production";
+const NEXT_PRODUCTION_TYPE_AFTER_GL = "WPE Production Line";
 
 type DemoMaterial = {
   client_id: string;
@@ -111,7 +112,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const isAdMode = outputStage === "AD";
   const isBlMode = outputStage === "BL";
   const isGlMode = outputStage === "GL";
-  const isSingleCaptureMode = isBlMode || isGlMode;
+  const isPrMode = outputStage === "PR";
+  const isSingleCaptureMode = isBlMode || isGlMode || isPrMode;
   const requireFinalCaptureConfirmation = context?.requireFinalCaptureConfirmation === true;
   const selectedContextBatchId = context?.batchId ?? null;
 
@@ -206,26 +208,27 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   }, [activeBatch?.batch_no, activeBatch?.display_batch_no, bomVariantQuery.data?.variant_code, isSingleCaptureMode, productionId]);
   const singleCaptureOutputComponents = useMemo<OutputCaptureComponent[]>(
     () => {
-      if (!isSingleCaptureMode || !activeBatch) {
+      if (!isSingleCaptureMode) {
         return [];
       }
 
       if (isGlMode) {
-        const stageComponents = resolveOutputCaptureComponents({
-          batchEntries: activeBatch.weight_entries,
-          bomComponents: null,
-          materials: [],
-        });
-        const primaryComponent =
-          getRequiredOutputComponents(stageComponents)[0] ?? stageComponents[0] ?? null;
+        const stageComponents = activeBatch
+          ? resolveOutputCaptureComponents({
+              batchEntries: activeBatch.weight_entries,
+              bomComponents: null,
+              materials: [],
+            })
+          : [];
+        const primaryComponent = getRequiredOutputComponents(stageComponents)[0] ?? stageComponents[0] ?? null;
 
         return [
           {
-            id: `gl-batch-${outputCaptureSourceBatchId ?? activeBatch.id}`,
+            id: `gl-batch-${outputCaptureSourceBatchId ?? activeBatch?.id ?? "pending"}`,
             itemCode:
               primaryComponent?.itemCode ||
-              activeBatch.display_batch_no?.trim() ||
-              activeBatch.batch_no?.trim() ||
+              activeBatch?.display_batch_no?.trim() ||
+              activeBatch?.batch_no?.trim() ||
               productionId.trim() ||
               "GL-BAG",
             itemName: primaryComponent?.itemName || "Bag Weight",
@@ -240,13 +243,13 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
 
       return [
         {
-          id: `bl-batch-${outputCaptureSourceBatchId ?? "current"}`,
+          id: `${isPrMode ? "pr" : "bl"}-batch-${outputCaptureSourceBatchId ?? activeBatch?.id ?? "pending"}`,
           itemCode:
-            activeBatch.display_batch_no?.trim() ||
-            activeBatch.batch_no?.trim() ||
+            activeBatch?.display_batch_no?.trim() ||
+            activeBatch?.batch_no?.trim() ||
             productionId.trim() ||
-            "BL-BIN",
-          itemName: "Bin Weight",
+            (isPrMode ? "PR-LINE" : "BL-BIN"),
+          itemName: isPrMode ? "Line Weight" : "Bin Weight",
           plannedWeightKg: 0,
           sequence: 1,
         },
@@ -402,16 +405,17 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   }, [capturedWeights, outputComponents]);
 
   useEffect(() => {
-    if (!activeBatch?.batch_no) {
+    const visibleBatchNo = activeBatch?.display_batch_no?.trim() || activeBatch?.batch_no?.trim();
+    if (!visibleBatchNo) {
       return;
     }
 
-    form.setValue("details.batch_auto", activeBatch.batch_no, {
+    form.setValue("details.batch_auto", visibleBatchNo, {
       shouldDirty: false,
       shouldTouch: false,
       shouldValidate: false,
     });
-  }, [activeBatch?.batch_no, form]);
+  }, [activeBatch?.batch_no, activeBatch?.display_batch_no, form]);
   const stdWeight = activeComponent?.plannedWeightKg ?? 0;
   const displayStdWeight = Math.abs(stdWeight);
   const fallbackToleranceKg = activeComponent?.toleranceKg ?? 0;
@@ -474,6 +478,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     queryClient.invalidateQueries({ queryKey: ["production-order", persistedOrderId] });
     queryClient.invalidateQueries({ queryKey: ["production-output-captures", persistedOrderId] });
     queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
+    queryClient.invalidateQueries({ queryKey: ["production-inventory"] });
   }, [persistedOrderId, queryClient]);
 
   const ensureAdBatchForFinalCapture = useCallback(async () => {
@@ -506,6 +511,50 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
 
     return batch;
   }, [activeBatch, bomVariantId, persistedOrderId, stageBatches]);
+
+  const ensureSingleCaptureStageBatch = useCallback(async () => {
+    if (!isSingleCaptureMode || persistedOrderId === null) {
+      return null;
+    }
+
+    let batch =
+      activeBatch ??
+      (activeBatchIdRef.current !== null
+        ? stageBatches.find((candidate) => candidate.id === activeBatchIdRef.current) ?? null
+        : null);
+
+    if (batch?.status === "FAILED") {
+      throw new Error(
+        isBlMode
+          ? "The current BL batch is marked failed. Create a fresh batch before capturing the bin weight."
+          : isGlMode
+            ? "The current GL batch is marked failed. Create a fresh batch before capturing the bag weight."
+            : "The current PR batch is marked failed. Create a fresh batch before capturing the line weight.",
+      );
+    }
+
+    if (!batch) {
+      const createResponse = await coreApi.post<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
+        stage: outputStage,
+      });
+      batch = unwrapSuccessEnvelope(createResponse.data as ProductionBatch | unknown) as ProductionBatch;
+      activeBatchIdRef.current = batch.id;
+      invalidateBatchQueries();
+      await stageBatchesQuery.refetch();
+    }
+
+    return batch;
+  }, [
+    activeBatch,
+    invalidateBatchQueries,
+    isBlMode,
+    isGlMode,
+    isSingleCaptureMode,
+    outputStage,
+    persistedOrderId,
+    stageBatches,
+    stageBatchesQuery,
+  ]);
 
   const startBatchIfPending = useCallback(
     async (batch: ProductionBatch) => {
@@ -633,27 +682,48 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
         setIsSyncingCapture(true);
         try {
           if (isSingleCaptureMode) {
-            if (!activeBatch) {
-              throw new Error(isBlMode ? "Select a BL batch before final capture." : "Select a GL batch before final capture.");
+            const ensuredStageBatch = await ensureSingleCaptureStageBatch();
+            if (!ensuredStageBatch) {
+              throw new Error(
+                isBlMode
+                  ? "No BL batch is available for final capture."
+                  : isGlMode
+                    ? "No GL batch is available for final capture."
+                    : "No PR batch is available for final capture.",
+              );
             }
-            if (activeBatch.status === "COMPLETED") {
-              throw new Error(isBlMode ? "This BL batch is already moved to GL." : "This GL batch is already completed.");
+            if (ensuredStageBatch.status === "COMPLETED") {
+              throw new Error(
+                isBlMode
+                  ? "This BL batch is already moved to GL."
+                  : isGlMode
+                    ? "This GL batch is already moved to PR."
+                    : "This PR batch is already completed.",
+              );
             }
 
             const existingCaptureRecord = existingSingleCapture;
             const weightCapture = activeComponent ? capturedWeights.get(activeComponent.id) : null;
             if (!existingCaptureRecord && !weightCapture) {
-              throw new Error(isBlMode ? "Capture a stable batch weight before final capture." : "Capture a stable bag weight before final capture.");
+              throw new Error(
+                isBlMode
+                  ? "Capture a stable batch weight before final capture."
+                  : isGlMode
+                    ? "Capture a stable bag weight before final capture."
+                    : "Capture a stable line weight before final capture.",
+              );
             }
             if (existingCaptureRecord) {
               throw new Error(
                 isBlMode
                   ? "This BL batch already has a captured output row. Use OutWard to move it to GL."
-                  : "This GL batch already has a captured output row.",
+                  : isGlMode
+                    ? "This GL batch already has a captured output row. Use OutWard to move it to PR."
+                    : "This PR batch already has a captured output row.",
               );
             }
 
-            const startedBatch = await startBatchIfPending(activeBatch);
+            const startedBatch = await startBatchIfPending(ensuredStageBatch);
             const captureResponse = await coreApi.post<unknown>(
               `/api/production/orders/${persistedOrderId}/output-captures/`,
               {
@@ -665,13 +735,43 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               unwrapSuccessEnvelope(captureResponse.data as ProductionOutputCapture | unknown) as ProductionOutputCapture,
             );
             capturedAt = new Date(persistedRecord.capturedAt);
-            resolvedBatchNo = startedBatch.batch_no?.trim() || persistedRecord.binlot;
+            resolvedBatchNo =
+              startedBatch.display_batch_no?.trim() ||
+              startedBatch.batch_no?.trim() ||
+              persistedRecord.binlot;
 
             invalidateBatchQueries();
             const refreshedOutputCaptures = await outputCapturesQuery.refetch();
             persistedRecord =
               refreshedOutputCaptures.data?.find((record) => record.sourceBatchId === startedBatch.id) ??
               persistedRecord;
+            if (isBlMode) {
+              const nextBatchResponse = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
+                params: { stage: "GL" },
+              });
+              const nextGlBatch = normalizeListResponse<ProductionBatch>(nextBatchResponse.data)
+                .sort((left, right) => right.id - left.id)
+                .find((candidate) => candidate.status !== "COMPLETED");
+              const nextBatchDisplayNo = nextGlBatch?.display_batch_no?.trim() || nextGlBatch?.batch_no?.trim();
+              if (nextBatchDisplayNo) {
+                form.setValue("details.batch_auto", nextBatchDisplayNo, {
+                  shouldDirty: false,
+                  shouldTouch: false,
+                  shouldValidate: false,
+                });
+              }
+              form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_BL, {
+                shouldDirty: false,
+                shouldTouch: false,
+                shouldValidate: false,
+              });
+            } else if (isGlMode) {
+              form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_GL, {
+                shouldDirty: false,
+                shouldTouch: false,
+                shouldValidate: false,
+              });
+            }
           } else {
             const batchToConfirm = await ensureAdBatchForFinalCapture();
             if (!batchToConfirm) {
@@ -689,8 +789,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             if (confirmedBatch.completed_at) {
               capturedAt = new Date(confirmedBatch.completed_at);
             }
-            if (confirmedBatch.batch_no?.trim()) {
-              resolvedBatchNo = confirmedBatch.batch_no.trim();
+            if (confirmedBatch.display_batch_no?.trim() || confirmedBatch.batch_no?.trim()) {
+              resolvedBatchNo = confirmedBatch.display_batch_no?.trim() || confirmedBatch.batch_no.trim();
             }
 
             setAdOutputBatchId(activeBatchId);
@@ -730,7 +830,9 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                 ? "Failed to create the BL captured output list."
                 : isGlMode
                   ? "Failed to create the GL captured output list."
-                  : "Failed to complete the AD batch.",
+                  : isPrMode
+                    ? "Failed to create the PR captured output list."
+                    : "Failed to complete the AD batch.",
             ),
           );
           return;
@@ -770,9 +872,11 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       toast.success(
         persistedOrderId !== null
           ? isBlMode
-            ? "BL captured output recorded. Use OutWard to move it to GL."
+            ? "BL captured output recorded and moved to Blend Store."
             : isGlMode
-              ? "GL captured output recorded."
+              ? "GL captured output recorded and moved to Granulation Store."
+              : isPrMode
+                ? "PR captured output recorded."
               : "Captured output recorded and AD batch completed."
           : "Captured output recorded.",
       );
@@ -786,11 +890,13 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     binlotValue,
     capturedWeights,
     ensureAdBatchForFinalCapture,
+    ensureSingleCaptureStageBatch,
     existingSingleCapture,
     form,
     invalidateBatchQueries,
     isBlMode,
     isGlMode,
+    isPrMode,
     isSingleCaptureMode,
     isFinalizingCapture,
     isSyncingCapture,
@@ -857,8 +963,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
         }
         toast.success(
           isBlMode
-            ? "BL batch moved to GL and the assigned bin was released."
-            : "GL batch moved to PR and the assigned bag was released.",
+            ? "BL batch moved to Granulation Work Center and the assigned bin was released."
+            : "GL batch moved to Connection to Line and the assigned bag was released.",
         );
       } catch (error) {
         toast.error(getApiErrorMessage(error, isBlMode ? "Failed to outward the BL batch." : "Failed to outward the GL batch."));
@@ -883,8 +989,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const saveWeightDisabled =
     !canCapture || isSyncingCapture || isFinalizingCapture || outwardingRecordId !== null || isSingleCaptureLocked;
   const finalCaptureDisabled = isSingleCaptureMode
-    ? !activeBatch ||
-      activeBatch.status === "COMPLETED" ||
+    ? activeBatch?.status === "COMPLETED" ||
       existingSingleCapture !== null ||
       requiredComponents.length === 0 ||
       isFinalizingCapture ||
@@ -942,7 +1047,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
 
             <div className="flex flex-1 flex-col items-center justify-center gap-1 border-r border-slate-700 bg-[#111827] px-4">
               <span className="text-[13px] font-bold uppercase tracking-[0.2em] text-white">
-                {isBlMode ? "Bin Assign" : isGlMode ? "Bag Assign" : "Recipe No:"}&nbsp;{recipeNo}
+                {isBlMode ? "Bin Assign" : isGlMode ? "Bag Assign" : isPrMode ? "Line Assign" : "Recipe No:"}&nbsp;{recipeNo}
               </span>
               {activeComponent ? (
                 <div className="text-center">
@@ -954,6 +1059,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                       ? "Single bin weight capture for the selected BL batch."
                       : isGlMode
                         ? "Single bag weight capture for the selected GL batch."
+                        : isPrMode
+                          ? "Single line weight capture for the selected PR batch."
                         : activeComponent.itemName}
                   </div>
                 </div>
@@ -1088,13 +1195,15 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                     ? "Saving weight..."
                     : !weight?.stable
                     ? "Waiting for stable reading…"
-                    : !isSingleCaptureMode && !tolerance?.withinTolerance
-                      ? `Weight out of range (${minWeight.toFixed(3)}–${maxWeight.toFixed(3)} kg)`
+                      : !isSingleCaptureMode && !tolerance?.withinTolerance
+                        ? `Weight out of range (${minWeight.toFixed(3)}–${maxWeight.toFixed(3)} kg)`
                       : isBlMode
                         ? "Save the current BL batch weight"
                         : isGlMode
                           ? "Save the current GL batch weight"
-                        : "Save weight to the current capture session"
+                          : isPrMode
+                            ? "Save the current PR batch weight"
+                          : "Save weight to the current capture session"
                 }
                 className={`w-full rounded-xl py-2.5 font-mono text-[10px] font-bold uppercase tracking-widest transition-all ${
                   !saveWeightDisabled
@@ -1176,9 +1285,11 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               <p className="mt-1 text-[11px] text-slate-500">
                 {persistedOrderId !== null
                   ? isBlMode
-                    ? "Captured BL outputs are saved for the selected batch. Use OutWard to move the batch to GL and release the assigned bin."
+                    ? "Captured BL outputs are saved for the selected batch in Blend Store. OutWard moves the stock to Granulation Work Center and releases the assigned bin."
                     : isGlMode
-                      ? "Captured GL outputs are saved for the selected batch. Use OutWard to move the batch to PR and release the assigned bag."
+                      ? "Captured GL outputs are saved for the selected batch in Granulation Store. OutWard moves the stock to Connection to Line and releases the assigned bag."
+                      : isPrMode
+                        ? "Captured PR outputs are saved for the selected batch from Connection to Line stock."
                       : "Final-captured recipe outputs are saved for this production order and reload when you reopen it."
                   : "Final-captured recipe outputs stay listed below the weightage panel until this order is saved."}
               </p>
@@ -1200,7 +1311,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                   <th className="px-3 py-3">Scancode ID</th>
                   <th className="px-3 py-3 text-right">Qty</th>
                   <th className="px-3 py-3 text-right">Weight (kg)</th>
-                  <th className="px-4 py-3 text-right">{isAdMode ? "Batch ID" : isGlMode ? "Baglot" : "Binlot"}</th>
+                  <th className="px-4 py-3 text-right">{isAdMode ? "Batch ID" : isGlMode ? "Baglot" : isPrMode ? "Batch ID" : "Binlot"}</th>
                   {isAdMode ? <th className="px-4 py-3 text-right">Production Status</th> : null}
                   {isBlMode || isGlMode ? <th className="px-4 py-3 text-right">OutWard</th> : null}
                 </tr>
@@ -1210,9 +1321,11 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                   <tr>
                     <td colSpan={9} className="px-4 py-8 text-center text-[12px] text-slate-500">
                       {isBlMode
-                        ? "Save the stable BL batch weight, use Final Capture to create the output list, then click OutWard to move the batch to GL."
+                        ? "Save the stable BL batch weight, then use Final Capture to create the output list in Blend Store."
                         : isGlMode
-                          ? "Save the stable GL batch weight, use Final Capture to create the output list, then click OutWard to move the batch to PR."
+                          ? "Save the stable GL batch weight, then use Final Capture to create the output list in Granulation Store."
+                          : isPrMode
+                            ? "Save the stable PR batch weight, then use Final Capture to create the output list from Connection to Line."
                           : "Capture each recipe component, then use Final Capture to create the output list."}
                     </td>
                   </tr>

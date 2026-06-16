@@ -71,8 +71,18 @@ async function updateResource<TResponse, TPayload>(path: string, payload: TPaylo
 }
 
 async function lookupMaster(path: string, params?: Record<string, string | number | boolean | null | undefined>): Promise<LookupItem[]> {
-  const res = await coreApi.get<LookupItem[]>(path, { params });
-  return res.data;
+  const res = await coreApi.get<LookupItem[] | PaginatedResponse<LookupItem> | { data?: LookupItem[] }>(path, { params });
+  const data = res.data;
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data.results)) {
+    return data.results;
+  }
+  if (Array.isArray(data.data)) {
+    return data.data;
+  }
+  return [];
 }
 
 async function fetchNextCode(path: string) {

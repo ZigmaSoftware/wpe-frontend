@@ -100,10 +100,20 @@ export const blendingApi = {
     return normalizePaginatedEnvelope(response.data).items;
   },
 
-  approveBlendingHeadRequest: async (requestId: number, remarks: string) => {
+  approveBlendingHeadRequest: async (
+    requestId: number,
+    payload: {
+      remarks?: string;
+      items?: Array<{
+        item: number;
+        accepted_qty: string;
+        remarks: string;
+      }>;
+    },
+  ) => {
     const response = await coreApi.post<ApiSuccessEnvelope<StoreStockRequest>>(
       `/api/blending/head-approvals/${requestId}/approve/`,
-      { remarks },
+      payload,
     );
     return unwrapSuccessEnvelope(response.data);
   },
