@@ -36,8 +36,10 @@ const TABS: TabDef[] = [
   { key: "ADDITIVE_WORK_CENTER", label: "Additive Work Center", stage: "ADDITIVE_WORK_CENTER" },
   { key: "BLEND_WIP", label: "Blend WIP", stage: "BLEND_WIP" },
   { key: "BLENDING_WORK_CENTER", label: "Blending Work Center", stage: "BLENDING_WORK_CENTER" },
-{ key: "GRANULATION_WIP", label: "Granulation WIP", stage: "GRANULATION_WIP" },
+  { key: "BLEND_STORE", label: "Blend Store", stage: "BLEND_STORE" },
+  { key: "GRANULATION_WIP", label: "Granulation WIP", stage: "GRANULATION_WIP" },
   { key: "GRANULATION_WORK_CENTER", label: "Granulation Work Center", stage: "GRANULATION_WORK_CENTER" },
+  { key: "GRANULATION_STORE", label: "Granulation Store", stage: "GRANULATION_STORE" },
   { key: "CONNECTION_TO_LINE", label: "Connection to Line", stage: "CONNECTION_TO_LINE" },
   { key: "LINE_WORK_CENTER", label: "Line Work Center", stage: "LINE_WORK_CENTER" },
   { key: "DISCONNECTION_FROM_LINE", label: "Disconnection from Line", stage: "DISCONNECTION_FROM_LINE" },
@@ -187,16 +189,19 @@ const ProductionInventoryPage = () => {
     try {
       const columns: StoreExportColumn<ProductionInventoryRow>[] = [
         { label: "S.No", value: (_, i) => i + 1 },
-        { label: "Batch Code", value: (row) => row.batch_code },
+        { label: "Prd ID", value: (row) => row.production_id },
+        { label: "Production", value: (row) => row.production },
+        { label: "Batch No", value: (row) => row.batch_no || row.batch_code },
         { label: "Item Code", value: (row) => row.item_code },
         { label: "Item Name", value: (row) => row.item_name },
+        { label: "Weight", value: (row) => row.balance_qty },
         { label: "Inward Qty", value: (row) => row.inward_qty },
         { label: "Outward Qty", value: (row) => row.outward_qty },
-        { label: "Balance Qty", value: (row) => row.balance_qty },
         { label: "UOM", value: (row) => row.uom },
-        { label: "From Stage", value: (row) => row.from_stage },
-        { label: "To Stage", value: (row) => row.to_stage },
+        { label: "Source Stage", value: (row) => row.source_stage || row.from_stage },
+        { label: "Destination Stage", value: (row) => row.destination_stage || row.to_stage },
         { label: "Reference No", value: (row) => row.reference_no ?? "" },
+        { label: "GL Batch Count", value: (row) => row.gl_batch_count },
         { label: "Scan Code / Sticker Code", value: (row) => row.scan_code ?? "" },
         { label: "Work Center", value: (row) => row.work_center ?? "" },
         { label: "Line", value: (row) => row.line ?? "" },
@@ -420,20 +425,18 @@ const ProductionInventoryPage = () => {
         {rows.length ? (
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
             <div className="max-h-[calc(100vh-26rem)] overflow-auto">
-              <Table>
+                <Table>
                 <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
                   <TableRow className="hover:bg-card">
                     <TableHead className="w-12 text-right">S.No</TableHead>
-                    <TableHead>Batch Code</TableHead>
-                    <TableHead className="text-right">Inward Qty</TableHead>
-                    <TableHead className="text-right">Outward Qty</TableHead>
-                    <TableHead className="hidden md:table-cell">Item Code</TableHead>
-                    <TableHead className="hidden md:table-cell">Item Name</TableHead>
-                    <TableHead className="hidden lg:table-cell text-right">Balance Qty</TableHead>
-                    <TableHead className="hidden lg:table-cell">UOM</TableHead>
-                    <TableHead className="hidden xl:table-cell">From Stage</TableHead>
-                    <TableHead className="hidden xl:table-cell">To Stage</TableHead>
-                    <TableHead className="hidden xl:table-cell">Reference No</TableHead>
+                    <TableHead>Prd ID / Batch</TableHead>
+                    <TableHead className="hidden md:table-cell">Production</TableHead>
+                    <TableHead className="hidden md:table-cell">Product</TableHead>
+                    <TableHead className="text-right">Weight</TableHead>
+                    {tab.key === "GRANULATION_WIP" ? <TableHead className="text-right">GL Batches</TableHead> : null}
+                    <TableHead className="hidden lg:table-cell">Source</TableHead>
+                    <TableHead className="hidden lg:table-cell">Destination</TableHead>
+                    <TableHead className="hidden lg:table-cell">Reference No</TableHead>
                     <TableHead className="hidden xl:table-cell">Work Center</TableHead>
                     {showLine && <TableHead className="hidden xl:table-cell">Line</TableHead>}
                     <TableHead className="hidden xl:table-cell">Status</TableHead>
@@ -448,22 +451,27 @@ const ProductionInventoryPage = () => {
                         {(tabState.page - 1) * tabState.pageSize + index + 1}
                       </TableCell>
                       <TableCell>
-                        <div className="font-mono text-sm font-medium">{row.batch_code}</div>
+                        <div className="font-mono text-sm font-medium">{row.production_id || "—"}</div>
+                        <div className="text-xs text-muted-foreground">{row.batch_no || row.batch_code || "—"}</div>
                         <div className="mt-1 space-y-0.5 text-xs text-muted-foreground md:hidden">
+                          <div>{row.production || row.production_type || "—"}</div>
                           <div>{row.item_code} — {row.item_name}</div>
-                          <div>Balance: {formatDecimal(row.balance_qty)} {row.uom}</div>
+                          <div>Weight: {formatDecimal(row.balance_qty)} {row.uom}</div>
                           <div>Status: {row.status}</div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-semibold">{formatDecimal(row.inward_qty)}</TableCell>
-                      <TableCell className="text-right font-semibold">{formatDecimal(row.outward_qty)}</TableCell>
-                      <TableCell className="hidden font-mono text-xs md:table-cell">{row.item_code}</TableCell>
-                      <TableCell className="hidden md:table-cell">{row.item_name}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-right">{formatDecimal(row.balance_qty)}</TableCell>
-                      <TableCell className="hidden lg:table-cell">{row.uom}</TableCell>
-                      <TableCell className="hidden xl:table-cell text-xs">{row.from_stage}</TableCell>
-                      <TableCell className="hidden xl:table-cell text-xs">{row.to_stage}</TableCell>
-                      <TableCell className="hidden xl:table-cell font-mono text-xs">{row.reference_no ?? "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell">{row.production || row.production_type || "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <div className="font-medium">{row.item_name}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{row.item_code}</div>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">{formatDecimal(row.balance_qty)} {row.uom}</TableCell>
+                      {tab.key === "GRANULATION_WIP" ? (
+                        <TableCell className="text-right font-semibold">{row.gl_batch_count}</TableCell>
+                      ) : null}
+                      <TableCell className="hidden lg:table-cell text-xs">{row.source_stage || row.from_stage || "—"}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs">{row.destination_stage || row.to_stage || "—"}</TableCell>
+                      <TableCell className="hidden lg:table-cell font-mono text-xs">{row.reference_no ?? "—"}</TableCell>
                       <TableCell className="hidden xl:table-cell text-xs">{row.work_center ?? "—"}</TableCell>
                       {showLine && (
                         <TableCell className="hidden xl:table-cell text-xs">{row.line ?? "—"}</TableCell>

@@ -43,7 +43,7 @@ const ProductionEditOrderPage = () => {
   const searchVisibleTabs = searchOutputMode === "output" ? (["output"] as ProductionDialogTab[]) : undefined;
   const searchInitialTab = searchOutputMode === "output" ? ("output" as ProductionDialogTab) : undefined;
   const normalizedSearchOutputStage =
-    searchOutputStage === "AD" || searchOutputStage === "BL" || searchOutputStage === "GL"
+    searchOutputStage === "AD" || searchOutputStage === "BL" || searchOutputStage === "GL" || searchOutputStage === "PR"
       ? searchOutputStage
       : null;
   const effectiveInitialTab = locationState?.initialTab ?? searchInitialTab;
@@ -73,6 +73,8 @@ const ProductionEditOrderPage = () => {
         ? "Back to BL - Manage Batch"
         : outputOnlyStage === "GL"
           ? "Back to GL - Manage Batch"
+          : outputOnlyStage === "PR"
+            ? "Back to PR - Manage Batch"
         : undefined;
 
   const machinesQ = useQuery({
@@ -133,6 +135,8 @@ const ProductionEditOrderPage = () => {
         ? `Bin Assign — ${order.production_id}`
         : outputOnlyStage === "GL"
           ? `Bag Assign — ${order.production_id}`
+          : outputOnlyStage === "PR"
+            ? `Line Assign — ${order.production_id}`
         : `Edit Order — ${order.production_id}`;
 
   return (
@@ -146,14 +150,14 @@ const ProductionEditOrderPage = () => {
         initialValues={initialValues}
         formTitle={formTitle}
         submitLabel="Save Changes"
-        showFooterActions={!(outputOnlyStage === "AD" || outputOnlyStage === "BL" || outputOnlyStage === "GL")}
+        showFooterActions={!(outputOnlyStage === "AD" || outputOnlyStage === "BL" || outputOnlyStage === "GL" || outputOnlyStage === "PR")}
         initialTab={effectiveInitialTab}
         visibleTabs={effectiveVisibleTabs}
         outputContext={{
           stage: effectiveOutputStage,
           batchId: effectiveOutputBatchId,
           requireFinalCaptureConfirmation:
-            outputOnlyStage === "AD" || outputOnlyStage === "BL" || outputOnlyStage === "GL",
+            outputOnlyStage === "AD" || outputOnlyStage === "BL" || outputOnlyStage === "GL" || outputOnlyStage === "PR",
         }}
         defaultWorkCenterName={
           order.production_type?.trim().toLowerCase() === "wpe additive production".toLowerCase()

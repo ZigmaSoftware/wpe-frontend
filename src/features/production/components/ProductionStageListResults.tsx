@@ -59,7 +59,7 @@ const ProductionStageListResults = ({
             <TableRow
               key={`${stage}-${row.id}`}
               className="cursor-pointer hover:bg-slate-50/80"
-              onClick={() => onNavigate(getProductionManageBatchRoute(row.order_id, stage === "PR" ? undefined : stage))}
+              onClick={() => onNavigate(getProductionManageBatchRoute(row.order_id, stage))}
             >
               <TableCell className="font-mono text-xs font-medium">{row.production_id || "-"}</TableCell>
               <TableCell className="font-medium">{getProductionName(row)}</TableCell>

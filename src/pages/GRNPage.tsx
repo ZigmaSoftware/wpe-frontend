@@ -2192,7 +2192,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
       const rows = isPendingTab ? filteredPendingRecords : filteredActiveRecords;
       const columns: StoreExportColumn<GrnRecord>[] = [
         { label: "S.No", value: (_row, index) => index + 1 },
-        { label: "GRN No", value: (row) => row.grn_no },
+        { label: "GRN Reference", value: (row) => row.grn_no },
         { label: "Supplier", value: (row) => row.supplier_details.trade_name || row.trade_name || "-" },
         {
           label: "Item",
@@ -2224,6 +2224,15 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
           : qcrRejectedRecords;
     const columns: StoreExportColumn<QcrRecord | CompletedGrnDisplayRow>[] = [
       { label: "S.No", value: (_row, index) => index + 1 },
+      ...(activeTab === "next-grn"
+        ? [
+            {
+              label: "GRN No",
+              value: (row: QcrRecord | CompletedGrnDisplayRow) =>
+                "record" in row && row.statusGroup === "Approved" ? row.record.generated_grn_no || "-" : "-",
+            },
+          ]
+        : []),
       {
         label: "GRN Reference",
         value: (row) => ("record" in row ? row.record.grn_reference_no : row.grn_reference_no),
@@ -2544,6 +2553,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16 text-center">S.No</TableHead>
+                <TableHead>GRN No</TableHead>
                 <TableHead>GRN Reference</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>Item</TableHead>
@@ -2568,6 +2578,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                     <TableCell className="text-center font-medium text-muted-foreground">
                       {getPageSerialNumber(pageByTab["next-grn"], pageSizeByTab["next-grn"], rows.length, index)}
                     </TableCell>
+                    <TableCell className="font-medium">{row.statusGroup === "Approved" ? row.record.generated_grn_no || "-" : "-"}</TableCell>
                     <TableCell className="font-medium">{row.record.grn_reference_no}</TableCell>
                     <TableCell>{readText(getQcrField(row.record, "trade_name"))}</TableCell>
                     <TableCell>{readText(getQcrField(row.record, "product_description"))}</TableCell>
@@ -2612,7 +2623,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>GRN No</TableHead>
+                <TableHead>GRN Reference</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>PO No</TableHead>
                 <TableHead>Items</TableHead>
@@ -2696,7 +2707,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>GRN No</TableHead>
+                <TableHead>GRN Reference</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>PO No</TableHead>
                 <TableHead>Items</TableHead>
@@ -3405,7 +3416,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
           <div className="max-h-[70vh] space-y-4 overflow-y-auto">
             <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:grid-cols-3">
               <div>
-                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">GRN No</div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">GRN Reference</div>
                 <div className="mt-1 text-sm font-semibold text-foreground">{pendingMoveTarget?.grn_no ?? "-"}</div>
               </div>
               <div>
@@ -3418,95 +3429,111 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
               </div>
             </div>
 
-            {pendingMoveItems.map((item, index) => (
-              <div key={`${item.lineIndex}-${index}`} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-                <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)]">
-                  <div>
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Item Name</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">{item.itemName}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Sent Qty</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">
-                      {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor={`pending-received-${index}`}>
+            <div className="overflow-x-auto rounded-xl border border-border/70 bg-card">
+              <Table className="min-w-[860px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16 text-center">S.no</TableHead>
+                    <TableHead>Item Name</TableHead>
+                    <TableHead className="w-40">Sent Qty</TableHead>
+                    <TableHead className="w-64">
                       Received Qty <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id={`pending-received-${index}`}
-                      inputMode="decimal"
-                      value={item.receivedQty}
-                      onKeyDown={(event) => {
-                        if (shouldBlockQuantityKey(event.key)) {
-                          event.preventDefault();
-                        }
-                      }}
-                      onPaste={(event) => {
-                        const pastedValue = event.clipboardData.getData("text");
-                        const pastedError = getReceivedQtyError(pastedValue, item.sentQty);
-                        if (pastedError) {
-                          event.preventDefault();
-                          setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: pastedError } }));
-                        }
-                      }}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        const nextError = nextValue.trim() ? getReceivedQtyError(nextValue, item.sentQty) : undefined;
-                        if (nextError) {
-                          setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: nextError } }));
-                          return;
-                        }
-                        setPendingMoveItems((current) => current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, receivedQty: nextValue } : entry)));
-                        setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: undefined } }));
-                      }}
-                      placeholder="Enter received quantity"
-                      className={pendingMoveErrors[index]?.receivedQty ? "border-destructive" : ""}
-                    />
-                    {pendingMoveErrors[index]?.receivedQty ? <p className="text-xs text-destructive">{pendingMoveErrors[index]?.receivedQty}</p> : null}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>
+                    </TableHead>
+                    <TableHead className="w-72">
                       Store In <span className="text-destructive">*</span>
-                    </Label>
-                    <Select
-                      value={item.storeInId}
-                      onValueChange={(value) => {
-                        const selectedOption = locationOptions.find((option) => String(option.id) === value);
-                        setPendingMoveItems((current) =>
-                          current.map((entry, entryIndex) =>
-                            entryIndex === index
-                              ? {
-                                  ...entry,
-                                  storeInId: value,
-                                  storeInName: selectedOption?.name ?? "",
-                                }
-                              : entry,
-                          ),
-                        );
-                        setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], storeIn: undefined } }));
-                      }}
-                    >
-                      <SelectTrigger className={pendingMoveErrors[index]?.storeIn ? "border-destructive" : ""}>
-                        <SelectValue placeholder="Select location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {locationOptions.map((option) => (
-                          <SelectItem key={option.id} value={String(option.id)}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {pendingMoveErrors[index]?.storeIn ? <p className="text-xs text-destructive">{pendingMoveErrors[index]?.storeIn}</p> : null}
-                  </div>
-                </div>
-              </div>
-            ))}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingMoveItems.map((item, index) => (
+                    <TableRow key={`${item.lineIndex}-${index}`} className="align-top">
+                      <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell>
+                        <div className="font-semibold text-foreground">{item.itemName}</div>
+                      </TableCell>
+                      <TableCell className="font-semibold text-foreground">
+                        {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Label htmlFor={`pending-received-${index}`} className="sr-only">
+                            Received Qty
+                          </Label>
+                          <Input
+                            id={`pending-received-${index}`}
+                            inputMode="decimal"
+                            value={item.receivedQty}
+                            onKeyDown={(event) => {
+                              if (shouldBlockQuantityKey(event.key)) {
+                                event.preventDefault();
+                              }
+                            }}
+                            onPaste={(event) => {
+                              const pastedValue = event.clipboardData.getData("text");
+                              const pastedError = getReceivedQtyError(pastedValue, item.sentQty);
+                              if (pastedError) {
+                                event.preventDefault();
+                                setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: pastedError } }));
+                              }
+                            }}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              const nextError = nextValue.trim() ? getReceivedQtyError(nextValue, item.sentQty) : undefined;
+                              if (nextError) {
+                                setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: nextError } }));
+                                return;
+                              }
+                              setPendingMoveItems((current) => current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, receivedQty: nextValue } : entry)));
+                              setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], receivedQty: undefined } }));
+                            }}
+                            placeholder="Enter received quantity"
+                            className={pendingMoveErrors[index]?.receivedQty ? "border-destructive" : ""}
+                          />
+                          {pendingMoveErrors[index]?.receivedQty ? <p className="text-xs text-destructive">{pendingMoveErrors[index]?.receivedQty}</p> : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Label htmlFor={`pending-store-${index}`} className="sr-only">
+                            Store In
+                          </Label>
+                          <Select
+                            value={item.storeInId}
+                            onValueChange={(value) => {
+                              const selectedOption = locationOptions.find((option) => String(option.id) === value);
+                              setPendingMoveItems((current) =>
+                                current.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        storeInId: value,
+                                        storeInName: selectedOption?.name ?? "",
+                                      }
+                                    : entry,
+                                ),
+                              );
+                              setPendingMoveErrors((current) => ({ ...current, [index]: { ...current[index], storeIn: undefined } }));
+                            }}
+                          >
+                            <SelectTrigger id={`pending-store-${index}`} className={pendingMoveErrors[index]?.storeIn ? "border-destructive" : ""}>
+                              <SelectValue placeholder="Select location" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {locationOptions.map((option) => (
+                                <SelectItem key={option.id} value={String(option.id)}>
+                                  {option.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {pendingMoveErrors[index]?.storeIn ? <p className="text-xs text-destructive">{pendingMoveErrors[index]?.storeIn}</p> : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closePendingMoveDialog} disabled={pendingToQcrMutation.isPending}>
@@ -3547,7 +3574,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
           <div className="max-h-[70vh] space-y-4 overflow-y-auto">
             <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:grid-cols-3">
               <div>
-                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">GRN No</div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">GRN Reference</div>
                 <div className="mt-1 text-sm font-semibold text-foreground">{qcrEntryTarget?.grn_reference_no ?? "-"}</div>
               </div>
               <div>
@@ -3562,109 +3589,120 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
               </div>
             </div>
 
-            {qcrEntryItems.map((item, index) => (
-              <div key={`${item.lineIndex}-${index}`} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-                <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)]">
-                  <div>
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Item Name</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">{item.itemName}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {item.itemId || "-"}{item.unit ? ` | ${item.unit}` : ""}{item.storeInName ? ` | Store In: ${item.storeInName}` : ""}
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Sent Qty</div>
-                      <div className="mt-1 text-sm font-semibold text-foreground">
+            <div className="overflow-x-auto rounded-xl border border-border/70 bg-card">
+              <Table className="min-w-[980px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16 text-center">S.no</TableHead>
+                    <TableHead>Item Name</TableHead>
+                    <TableHead className="w-40">Sent Qty</TableHead>
+                    <TableHead className="w-48">Accepted Qty</TableHead>
+                    <TableHead className="w-56">
+                      Rejected Qty <span className="text-destructive">*</span>
+                    </TableHead>
+                    <TableHead className="w-80">Reason</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {qcrEntryItems.map((item, index) => (
+                    <TableRow key={`${item.lineIndex}-${index}`} className="align-top">
+                      <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell>
+                        <div className="font-semibold text-foreground">{item.itemName}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {item.itemId || "-"}{item.unit ? ` | ${item.unit}` : ""}{item.storeInName ? ` | Store In: ${item.storeInName}` : ""}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold text-foreground">
                         {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Received Qty</div>
-                      <div className="mt-1 text-sm font-semibold text-foreground">
-                        {item.receivedQty || "-"}{item.unit ? ` ${item.unit}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1.4fr)]">
-                  <div className="space-y-2">
-                    <Label htmlFor={`qcr-rejected-${index}`}>Rejected Qty</Label>
-                    <Input
-                      id={`qcr-rejected-${index}`}
-                      inputMode="decimal"
-                      value={item.rejectedQty}
-                      onKeyDown={(event) => {
-                        if (shouldBlockQuantityKey(event.key)) {
-                          event.preventDefault();
-                        }
-                      }}
-                      onPaste={(event) => {
-                        const pastedValue = event.clipboardData.getData("text");
-                        const pastedError = getRejectedQtyError(pastedValue, item.receivedQty);
-                        if (pastedError) {
-                          event.preventDefault();
-                          setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: pastedError } }));
-                        }
-                      }}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        const nextError = getRejectedQtyError(nextValue, item.receivedQty);
-                        if (nextError) {
-                          setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: nextError } }));
-                          return;
-                        }
-                        setQcrEntryItems((current) =>
-                          current.map((entry, entryIndex) =>
-                            entryIndex === index
-                              ? {
-                                  ...entry,
-                                  rejectedQty: nextValue,
-                                  acceptedQty: calculateAcceptedQty(entry.receivedQty, nextValue) || "",
-                                }
-                              : entry,
-                          ),
-                        );
-                        setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: undefined } }));
-                      }}
-                      placeholder="Enter rejected quantity"
-                      className={qcrEntryErrors[index]?.rejectedQty ? "border-destructive" : ""}
-                    />
-                    {qcrEntryErrors[index]?.rejectedQty ? <p className="text-xs text-destructive">{qcrEntryErrors[index]?.rejectedQty}</p> : null}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`qcr-accepted-${index}`}>Accepted Qty</Label>
-                    <Input
-                      id={`qcr-accepted-${index}`}
-                      value={item.acceptedQty}
-                      readOnly
-                      tabIndex={-1}
-                      className="bg-muted/40 text-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`qcr-reason-${index}`}>
-                      Reason{item.rejectedQty.trim() && Number(item.rejectedQty) > 0 ? <span className="text-destructive"> *</span> : null}
-                    </Label>
-                    <Textarea
-                      id={`qcr-reason-${index}`}
-                      rows={3}
-                      value={item.reason}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setQcrEntryItems((current) =>
-                          current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reason: nextValue } : entry)),
-                        );
-                        setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], reason: undefined } }));
-                      }}
-                      placeholder="Enter rejection reason when rejected quantity is greater than zero"
-                      className={qcrEntryErrors[index]?.reason ? "border-destructive" : ""}
-                    />
-                    {qcrEntryErrors[index]?.reason ? <p className="text-xs text-destructive">{qcrEntryErrors[index]?.reason}</p> : null}
-                  </div>
-                </div>
-              </div>
-            ))}
+                      </TableCell>
+                      <TableCell>
+                        <Label htmlFor={`qcr-accepted-${index}`} className="sr-only">
+                          Accepted Qty
+                        </Label>
+                        <Input
+                          id={`qcr-accepted-${index}`}
+                          value={item.acceptedQty}
+                          readOnly
+                          tabIndex={-1}
+                          className="bg-muted/40 text-foreground"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Label htmlFor={`qcr-rejected-${index}`} className="sr-only">
+                            Rejected Qty
+                          </Label>
+                          <Input
+                            id={`qcr-rejected-${index}`}
+                            inputMode="decimal"
+                            value={item.rejectedQty}
+                            onKeyDown={(event) => {
+                              if (shouldBlockQuantityKey(event.key)) {
+                                event.preventDefault();
+                              }
+                            }}
+                            onPaste={(event) => {
+                              const pastedValue = event.clipboardData.getData("text");
+                              const pastedError = getRejectedQtyError(pastedValue, item.receivedQty);
+                              if (pastedError) {
+                                event.preventDefault();
+                                setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: pastedError } }));
+                              }
+                            }}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              const nextError = getRejectedQtyError(nextValue, item.receivedQty);
+                              if (nextError) {
+                                setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: nextError } }));
+                                return;
+                              }
+                              setQcrEntryItems((current) =>
+                                current.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        rejectedQty: nextValue,
+                                        acceptedQty: calculateAcceptedQty(entry.receivedQty, nextValue) || "",
+                                      }
+                                    : entry,
+                                ),
+                              );
+                              setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], rejectedQty: undefined } }));
+                            }}
+                            placeholder="Enter rejected quantity"
+                            className={qcrEntryErrors[index]?.rejectedQty ? "border-destructive" : ""}
+                          />
+                          {qcrEntryErrors[index]?.rejectedQty ? <p className="text-xs text-destructive">{qcrEntryErrors[index]?.rejectedQty}</p> : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Label htmlFor={`qcr-reason-${index}`} className="sr-only">
+                            Reason{item.rejectedQty.trim() && Number(item.rejectedQty) > 0 ? " required" : ""}
+                          </Label>
+                          <Textarea
+                            id={`qcr-reason-${index}`}
+                            rows={2}
+                            value={item.reason}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              setQcrEntryItems((current) =>
+                                current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reason: nextValue } : entry)),
+                              );
+                              setQcrEntryErrors((current) => ({ ...current, [index]: { ...current[index], reason: undefined } }));
+                            }}
+                            placeholder="Enter rejection reason"
+                            className={qcrEntryErrors[index]?.reason ? "border-destructive" : ""}
+                          />
+                          {qcrEntryErrors[index]?.reason ? <p className="text-xs text-destructive">{qcrEntryErrors[index]?.reason}</p> : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeQcrEntryDialog} disabled={qcrCompletionMutation.isPending}>
