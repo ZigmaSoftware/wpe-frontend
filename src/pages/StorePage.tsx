@@ -509,7 +509,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         { label: "Request No", value: (row) => readText(row.request_no) },
         { label: "Requested Date", value: (row) => formatDateTime(row.requested_at) },
         { label: "Department", value: (row) => row.department },
-        { label: "Requested By", value: (row) => row.requested_by_username },
+        { label: "Approved By", value: (row) => row.requested_by_username },
         { label: "Requested For", value: (row) => row.requested_for_name || "-" },
         { label: "Status", value: (row) => getStoreRequestStatusLabel(row.status) },
         { label: "Item Codes", value: (row) => getRequestItemCodes(row) },
@@ -625,7 +625,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                       <TableHead>Department</TableHead>
                       <TableHead>Items</TableHead>
                       <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="hidden lg:table-cell">Requested By</TableHead>
+                      <TableHead className="hidden lg:table-cell">Approved By</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -717,7 +717,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                       <TableHead>Department</TableHead>
                       <TableHead>Items</TableHead>
                       <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="hidden lg:table-cell">Requested By</TableHead>
+                      <TableHead className="hidden lg:table-cell">Approved By</TableHead>
                       <TableHead className="hidden xl:table-cell">Responded By and Date</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
@@ -1139,126 +1139,143 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                 <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.department ?? "-"}</div>
               </div>
               <div>
-                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Requested By</div>
-                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.requested_by_username ?? "-"}</div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Approved By</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">
+                  {requestReviewTarget?.approved_by_username || requestReviewTarget?.requested_by_username || "-"}
+                </div>
               </div>
             </div>
 
-            {requestReviewItems.map((item, index) => {
-              const requestedQtyNumber = Number(item.requestedQty);
-              const providedQtyNumber = Number(item.providedQty);
-              const reasonRequired =
-                item.providedQty.trim() &&
-                Number.isFinite(providedQtyNumber) &&
-                Number.isFinite(requestedQtyNumber) &&
-                providedQtyNumber !== requestedQtyNumber;
+            <div className="overflow-x-auto rounded-xl border border-border/70 bg-card">
+              <Table className="min-w-[920px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16 text-center">S.no</TableHead>
+                    <TableHead>Item Name</TableHead>
+                    <TableHead className="w-44">Requested Qty</TableHead>
+                    <TableHead className="w-56">
+                      Provide Qty <span className="text-destructive">*</span>
+                    </TableHead>
+                    <TableHead className="w-80">Reason</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {requestReviewItems.map((item, index) => {
+                    const requestedQtyNumber = Number(item.requestedQty);
+                    const providedQtyNumber = Number(item.providedQty);
+                    const reasonRequired =
+                      item.providedQty.trim() &&
+                      Number.isFinite(providedQtyNumber) &&
+                      Number.isFinite(requestedQtyNumber) &&
+                      providedQtyNumber !== requestedQtyNumber;
 
-              return (
-                <div key={`${item.itemId}-${index}`} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-                  <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)]">
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Item Name</div>
-                      <div className="mt-1 text-sm font-semibold text-foreground">{item.itemName}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {item.itemCode}
-                        {item.unit ? ` | ${item.unit}` : ""}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Requested Qty</div>
-                      <div className="mt-1 text-sm font-semibold text-foreground">
-                        {formatDecimal(item.requestedQty)}{item.unit ? ` ${item.unit}` : ""}
-                      </div>
-                    </div>
-                  </div>
+                    return (
+                      <TableRow key={`${item.itemId}-${index}`} className="align-top">
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell>
+                          <div className="font-semibold text-foreground">{item.itemName}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {item.itemCode}
+                            {item.unit ? ` | ${item.unit}` : ""}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-semibold text-foreground">
+                          {formatDecimal(item.requestedQty)}{item.unit ? ` ${item.unit}` : ""}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <Label htmlFor={`request-provided-${index}`} className="sr-only">
+                              Provide Qty
+                            </Label>
+                            <Input
+                              id={`request-provided-${index}`}
+                              inputMode="decimal"
+                              value={item.providedQty}
+                              onKeyDown={(event) => {
+                                if (shouldBlockQuantityKey(event.key)) {
+                                  event.preventDefault();
+                                }
+                              }}
+                              onPaste={(event) => {
+                                const pastedValue = event.clipboardData.getData("text");
+                                const pastedError = getProvideQtyError(pastedValue, item.requestedQty);
+                                if (pastedError) {
+                                  event.preventDefault();
+                                  setRequestReviewErrors((current) => ({
+                                    ...current,
+                                    [index]: {
+                                      ...current[index],
+                                      providedQty: pastedError,
+                                    },
+                                  }));
+                                }
+                              }}
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                const nextError = getProvideQtyError(nextValue, item.requestedQty);
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor={`request-provided-${index}`}>
-                        Provide Qty <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id={`request-provided-${index}`}
-                        inputMode="decimal"
-                        value={item.providedQty}
-                        onKeyDown={(event) => {
-                          if (shouldBlockQuantityKey(event.key)) {
-                            event.preventDefault();
-                          }
-                        }}
-                        onPaste={(event) => {
-                          const pastedValue = event.clipboardData.getData("text");
-                          const pastedError = getProvideQtyError(pastedValue, item.requestedQty);
-                          if (pastedError) {
-                            event.preventDefault();
-                            setRequestReviewErrors((current) => ({
-                              ...current,
-                              [index]: {
-                                ...current[index],
-                                providedQty: pastedError,
-                              },
-                            }));
-                          }
-                        }}
-                        onChange={(event) => {
-                          const nextValue = event.target.value;
-                          const nextError = getProvideQtyError(nextValue, item.requestedQty);
-
-                          setRequestReviewItems((current) =>
-                            current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, providedQty: nextValue } : entry)),
-                          );
-                          setRequestReviewErrors((current) => {
-                            const nextErrors = { ...current, [index]: { ...current[index], providedQty: nextError } };
-                            if (
-                              nextValue.trim() &&
-                              Number.isFinite(Number(nextValue)) &&
-                              Number.isFinite(Number(item.requestedQty)) &&
-                              Number(nextValue) === Number(item.requestedQty)
-                            ) {
-                              nextErrors[index] = { providedQty: nextError };
-                            } else if (nextValue.trim() && !nextError && !current[index]?.reason?.trim()) {
-                              nextErrors[index] = {
-                                providedQty: nextError,
-                                reason: "Reason is required when Provide Qty is different from Requested Qty.",
-                              };
-                            } else if (!nextValue.trim()) {
-                              nextErrors[index] = { providedQty: nextError };
-                            }
-                            return nextErrors;
-                          });
-                        }}
-                        placeholder="Enter provide quantity"
-                        className={requestReviewErrors[index]?.providedQty ? "border-destructive" : ""}
-                      />
-                      {requestReviewErrors[index]?.providedQty ? (
-                        <p className="text-xs text-destructive">{requestReviewErrors[index]?.providedQty}</p>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor={`request-reason-${index}`}>
-                        Reason{reasonRequired ? <span className="text-destructive"> *</span> : null}
-                      </Label>
-                      <Textarea
-                        id={`request-reason-${index}`}
-                        rows={3}
-                        value={item.reason}
-                        onChange={(event) => {
-                          const nextValue = event.target.value;
-                          setRequestReviewItems((current) =>
-                            current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reason: nextValue } : entry)),
-                          );
-                          setRequestReviewErrors((current) => ({ ...current, [index]: { ...current[index], reason: undefined } }));
-                        }}
-                        placeholder="Enter reason when provide qty is different from requested qty"
-                        className={requestReviewErrors[index]?.reason ? "border-destructive" : ""}
-                      />
-                      {requestReviewErrors[index]?.reason ? <p className="text-xs text-destructive">{requestReviewErrors[index]?.reason}</p> : null}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                                setRequestReviewItems((current) =>
+                                  current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, providedQty: nextValue } : entry)),
+                                );
+                                setRequestReviewErrors((current) => {
+                                  const nextErrors = { ...current, [index]: { ...current[index], providedQty: nextError } };
+                                  if (
+                                    nextValue.trim() &&
+                                    Number.isFinite(Number(nextValue)) &&
+                                    Number.isFinite(Number(item.requestedQty)) &&
+                                    Number(nextValue) === Number(item.requestedQty)
+                                  ) {
+                                    nextErrors[index] = { providedQty: nextError };
+                                  } else if (nextValue.trim() && !nextError && !current[index]?.reason?.trim()) {
+                                    nextErrors[index] = {
+                                      providedQty: nextError,
+                                      reason: "Reason is required when Provide Qty is different from Requested Qty.",
+                                    };
+                                  } else if (!nextValue.trim()) {
+                                    nextErrors[index] = { providedQty: nextError };
+                                  }
+                                  return nextErrors;
+                                });
+                              }}
+                              placeholder="Enter provide quantity"
+                              className={requestReviewErrors[index]?.providedQty ? "border-destructive" : ""}
+                            />
+                            {requestReviewErrors[index]?.providedQty ? (
+                              <p className="text-xs text-destructive">{requestReviewErrors[index]?.providedQty}</p>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <Label htmlFor={`request-reason-${index}`} className="sr-only">
+                              Reason{reasonRequired ? " required" : ""}
+                            </Label>
+                            <Textarea
+                              id={`request-reason-${index}`}
+                              rows={2}
+                              value={item.reason}
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                setRequestReviewItems((current) =>
+                                  current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reason: nextValue } : entry)),
+                                );
+                                setRequestReviewErrors((current) => ({ ...current, [index]: { ...current[index], reason: undefined } }));
+                              }}
+                              placeholder="Enter reason"
+                              className={requestReviewErrors[index]?.reason ? "border-destructive" : ""}
+                            />
+                            {reasonRequired && !requestReviewErrors[index]?.reason ? (
+                              <p className="text-xs text-muted-foreground">Required when provide qty is different.</p>
+                            ) : null}
+                            {requestReviewErrors[index]?.reason ? <p className="text-xs text-destructive">{requestReviewErrors[index]?.reason}</p> : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeRequestReviewDialog} disabled={requestReviewMutation.isPending}>

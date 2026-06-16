@@ -371,6 +371,7 @@ export type QcrRecord = {
   source_grn: number;
   source_grn_data: Record<string, unknown>;
   grn_reference_no: string;
+  generated_grn_no?: string | null;
   snapshot: Record<string, unknown>;
   status: string;
   remarks: string | null;
@@ -485,7 +486,7 @@ export type ProductionBatch = {
   production_order: number;
   bom_variant: number | null;
   bom_variant_name: string | null;
-  stage: "AD" | "BL" | "GL";
+  stage: "AD" | "BL" | "GL" | "PR";
   machine: number | null;
   machine_name: string | null;
   status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";

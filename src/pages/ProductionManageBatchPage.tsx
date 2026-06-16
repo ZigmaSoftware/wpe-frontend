@@ -50,7 +50,7 @@ import type {
 import { toast } from "@/components/ui/sonner";
 import { BATCH_STATUS_CLASSES, ORDER_STATUS_CLASSES, StatusBadge, type ProductionBatchExt } from "./productionShared";
 
-const STAGES = ["AD", "BL", "GL"] as const satisfies ReadonlyArray<ProductionBatch["stage"]>;
+const STAGES = ["AD", "BL", "GL", "PR"] as const satisfies ReadonlyArray<ProductionBatch["stage"]>;
 
 const STAGE_META: Record<
   ProductionBatch["stage"],
@@ -79,12 +79,19 @@ const STAGE_META: Record<
     accentClassName: "border-[#c6f1d9] bg-[#ecfdf5] text-[#059669]",
     mutedClassName: "border-[#d8f7e6] bg-[#f4fdf8] text-[#2b8a63]",
   },
+  PR: {
+    label: "Production",
+    description: "Run final production batches from Connection to Line stock.",
+    accentClassName: "border-[#e5d5ff] bg-[#f5f0ff] text-[#7c3aed]",
+    mutedClassName: "border-[#eee4ff] bg-[#faf7ff] text-[#6d4ccf]",
+  },
 };
 
 const STAGE_PRODUCTION_TYPE_LABELS: Record<ProductionBatch["stage"], string> = {
   AD: "WPE Additive Production",
   BL: "WPE Blend Production",
   GL: "WPE Granulated Blend Production",
+  PR: "WPE Production Line",
 };
 
 const dialogContentClassName =
@@ -114,6 +121,7 @@ const STAGE_WORKFLOW_PRIORITY: Record<ProductionBatch["stage"], number> = {
   AD: 0,
   BL: 1,
   GL: 2,
+  PR: 3,
 };
 
 const dedupeWorkflowBatches = (batches: ProductionBatchExt[]) => {
@@ -315,6 +323,8 @@ const ProductionManageBatchPage = () => {
         navigate(getProductionManageBatchRoute(orderId, "BL"));
       } else if (batch.stage === "BL") {
         navigate(getProductionManageBatchRoute(orderId, "GL"));
+      } else if (batch.stage === "GL") {
+        navigate(getProductionManageBatchRoute(orderId, "PR"));
       }
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to confirm batch.")),
@@ -427,19 +437,29 @@ const ProductionManageBatchPage = () => {
         ? "xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
         : "xl:grid-cols-2";
   const headerActionLabel =
-    currentManageStage === "AD" ? "Batch" : currentManageStage === "BL" ? "Bin Assign" : "Bag Assign";
+    currentManageStage === "AD"
+      ? "Batch"
+      : currentManageStage === "BL"
+        ? "Bin Assign"
+        : currentManageStage === "GL"
+          ? "Bag Assign"
+          : "Line Assign";
   const backButtonLabel =
     currentManageStage === "AD"
     ? "Back to AD list"
     : currentManageStage === "BL"
       ? "Back to BL list"
-      : "Back to Production";
+      : currentManageStage === "GL"
+        ? "Back to GL list"
+        : "Back to PR list";
   const pageTitle =
     currentManageStage === "AD"
     ? "AD - Manage Batch"
     : currentManageStage === "BL"
       ? "BL - Manage Batch"
-      : "Manage Batches";
+      : currentManageStage === "GL"
+        ? "GL - Manage Batch"
+        : "PR - Manage Batch";
   const batchListTitle =
     currentManageStage === "AD"
     ? "AD - Batch List"
@@ -447,19 +467,23 @@ const ProductionManageBatchPage = () => {
       ? "BL - Batch List"
       : currentManageStage === "GL"
         ? "GL Batch List"
-        : "Production / Batch List";
-  const canRunHeaderAction = currentManageStage === "AD" || displayedBatch !== null;
+        : "PR Batch List";
+  const canRunHeaderAction = hasValidOrderId && !!order;
   const handleHeaderAction = () =>
     navigate({
       pathname: getProductionEditRoute(orderId),
       search:
-        currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL"
-          ? `?mode=output&stage=${currentManageStage}${currentManageStage === "AD" ? "" : `&batchId=${displayedBatch?.id ?? selectedBatchId ?? ""}`}`
+        currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL" || currentManageStage === "PR"
+          ? `?mode=output&stage=${currentManageStage}${
+              currentManageStage === "AD" || !(displayedBatch?.id ?? selectedBatchId)
+                ? ""
+                : `&batchId=${displayedBatch?.id ?? selectedBatchId}`
+            }`
           : "",
     }, {
       state: {
         backTo: getProductionManageBatchRoute(orderId, currentManageStage),
-        ...(currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL"
+        ...(currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL" || currentManageStage === "PR"
           ? {
               initialTab: "output",
               visibleTabs: ["output"],
@@ -636,7 +660,18 @@ const ProductionManageBatchPage = () => {
 
                       {allBatches.length === 0 ? (
                         <div className="p-4">
-                          <EmptyState title="No batches created" description="Create a new batch to start the production workflow." />
+                          <EmptyState
+                            title="No batches created"
+                            description={
+                              currentManageStage === "AD"
+                                ? "Create a new batch to start the production workflow."
+                                : currentManageStage === "BL"
+                                  ? "Blend WIP stock is ready. Use Bin Assign to create the BL stage batch and capture the final weight."
+                                  : currentManageStage === "GL"
+                                    ? "Granulation Work Center stock is ready. Use Bag Assign to create the GL stage batch and capture the final weight."
+                                    : "Connection to Line stock is ready. Use Line Assign to create the PR stage batch and capture the final weight."
+                            }
+                          />
                         </div>
                       ) : (
                         <div className="max-h-[720px] overflow-auto">

@@ -7,8 +7,10 @@ export type ProductionStage =
   | "ADDITIVE_WORK_CENTER"
   | "BLEND_WIP"
   | "BLENDING_WORK_CENTER"
-| "GRANULATION_WIP"
+  | "BLEND_STORE"
+  | "GRANULATION_WIP"
   | "GRANULATION_WORK_CENTER"
+  | "GRANULATION_STORE"
   | "CONNECTION_TO_LINE"
   | "LINE_WORK_CENTER"
   | "DISCONNECTION_FROM_LINE";
@@ -21,6 +23,11 @@ export type WorkCenterLookupItem = {
 
 export type ProductionInventoryRow = {
   id: number;
+  stage: ProductionStage;
+  production_id: string;
+  production_type: string;
+  production: string;
+  batch_no: string;
   batch_code: string;
   inward_qty: string;
   outward_qty: string;
@@ -28,6 +35,8 @@ export type ProductionInventoryRow = {
   item_name: string;
   balance_qty: string;
   uom: string;
+  source_stage: string;
+  destination_stage: string;
   from_stage: string;
   to_stage: string;
   reference_no: string | null;
@@ -35,6 +44,7 @@ export type ProductionInventoryRow = {
   work_center: string | null;
   line: string | null;
   status: string;
+  gl_batch_count: number;
   created_by: string;
   created_at: string;
 };
