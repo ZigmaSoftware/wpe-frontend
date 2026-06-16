@@ -15,6 +15,8 @@ export type WarehouseInventoryRow = {
   grn_id: number;
   qcr_id: number;
   grn_no: string;
+  grn_reference_no?: string;
+  generated_grn_no?: string;
   supplier: string;
   po_no: string;
   items: string;

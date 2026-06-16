@@ -1,16 +1,18 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   productionWorkspaceApi,
   type ProductionStageValue,
 } from "@/features/production/api/productionWorkspaceApi";
+import StoreTablePagination from "@/features/store/components/StoreTablePagination";
 import StoreTableToolbar, {
   type StoreExportFormat,
   type StorePageSizeValue,
@@ -18,18 +20,15 @@ import StoreTableToolbar, {
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import {
   getProductionStageRoute,
+  getProductionManageBatchRoute,
   getProductionNewOrderRoute,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
 import {
   formatProductionListLabel,
 } from "@/features/production/components/productionListShared";
-import { toast } from "@/components/ui/sonner";
-import { coreApi } from "@/lib/api";
-import { formatDate, getApiErrorMessage } from "@/lib/api-helpers";
+import { formatDate } from "@/lib/api-helpers";
 import type { ProductionOrder, ProductionStageRecord } from "@/lib/types";
-
-const ProductionStageListResults = lazy(() => import("./ProductionStageListResults"));
 
 type ProductionStageListProps = {
   stage: ProductionStageValue;
@@ -101,7 +100,10 @@ const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; 
   ],
   PR: [
     { value: "all", label: "All Statuses" },
+    { value: "PLANNED", label: "Planned" },
     { value: "IN_PROGRESS", label: "In Progress" },
+    { value: "PLAN_COMPLETED", label: "Completed" },
+    { value: "CLOSED", label: "Closed" },
   ],
 };
 
@@ -134,12 +136,8 @@ const getExportColumns = (
 
 const ProductionStageList = ({ stage, headerTitle, headerDescription }: ProductionStageListProps) => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const meta = STAGE_PAGE_META[stage];
   const showsBatchCount = stage !== "PR";
-  const showRowActions = stage === "AD";
-  const createActionLabel =
-    stage === "AD" ? "New AD" : stage === "BL" ? "New BL" : stage === "GL" ? "New GL" : "New Order";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -175,39 +173,20 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
         pageSize: resolvedPageSize,
       }),
     placeholderData: (previousData) => previousData,
-    staleTime: 30 * 1000,
   });
-  const rows = stageQuery.data?.results ?? [];
-  const total = stageQuery.data?.count ?? 0;
   const ordersLookupQuery = useQuery({
     queryKey: ["production-orders-stage-lookup"],
     queryFn: productionWorkspaceApi.listOrders,
-    enabled: stageQuery.isSuccess && rows.length > 0,
-    staleTime: 5 * 60 * 1000,
   });
+
+  const rows = stageQuery.data?.results ?? [];
+  const total = stageQuery.data?.count ?? 0;
   const statusOptions = STAGE_STATUS_OPTIONS[stage];
   const ordersById = useMemo(
     () =>
       new Map((ordersLookupQuery.data ?? []).map((order) => [order.id, order])),
     [ordersLookupQuery.data],
   );
-
-  const deleteOrderMutation = useMutation({
-    mutationFn: async (orderId: number) => {
-      await coreApi.delete(`/api/production/production/${orderId}/`);
-      return orderId;
-    },
-    onSuccess: () => {
-      toast.success("Production order deleted.");
-      queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
-      queryClient.invalidateQueries({ queryKey: ["production-orders-stage-lookup"] });
-      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
-    },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, "Failed to delete production order."));
-    },
-  });
 
   const getProductionName = (row: ProductionStageRecord) => {
     const matchedOrder = ordersById.get(row.order_id);
@@ -218,50 +197,12 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
     return formatProductionListLabel(row.production_type);
   };
 
-  const filterContent = useMemo(
-    () => (
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Status</div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Date From</div>
-          <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-9" />
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Date To</div>
-          <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-9" />
-        </div>
-      </div>
-    ),
-    [dateFrom, dateTo, statusFilter, statusOptions],
-  );
-
-  const exportColumns = useMemo(
-    () => getExportColumns(stage, ordersById),
-    [ordersById, stage],
-  );
-
   const handleExport = (format: StoreExportFormat) => {
     exportTableData({
       title: headerTitle || meta.label,
       filename: meta.filename,
       rows,
-      columns: exportColumns,
+      columns: getExportColumns(stage, ordersById),
       format,
     });
   };
@@ -284,7 +225,7 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
             }
           >
             <Plus className="mr-2 h-4 w-4" />
-            {createActionLabel}
+              New Order
           </Button>
         }
       />
@@ -294,7 +235,35 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
           <StoreTableToolbar
             searchValue={search}
             onSearchChange={setSearch}
-            filterContent={filterContent}
+            filterContent={
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Status</div>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Date From</div>
+                  <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-9" />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Date To</div>
+                  <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-9" />
+                </div>
+              </div>
+            }
             pageSize={pageSize}
             onPageSizeChange={setPageSize}
             onExport={handleExport}
@@ -308,27 +277,45 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
 
         {!stageQuery.isLoading && !stageQuery.isError ? (
           rows.length > 0 ? (
-            <Suspense fallback={<LoadingState label={`Preparing ${meta.label} records...`} />}>
-              <ProductionStageListResults
-                rows={rows}
-                stage={stage}
-                showsBatchCount={showsBatchCount}
-                showRowActions={showRowActions}
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Prd ID</TableHead>
+                      <TableHead>Production Name</TableHead>
+                      <TableHead>No.of Batch</TableHead>
+                      <TableHead>BOM Varient</TableHead>
+                      <TableHead>Started Date</TableHead>
+                      <TableHead>Ended Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((row) => (
+                      <TableRow
+                        key={`${stage}-${row.id}`}
+                        className="cursor-pointer hover:bg-slate-50/80"
+                        onClick={() => navigate(getProductionManageBatchRoute(row.order_id, stage))}
+                      >
+                        <TableCell className="font-mono text-xs font-medium">{row.production_id || "-"}</TableCell>
+                        <TableCell className="font-medium">{getProductionName(row)}</TableCell>
+                        <TableCell>{showsBatchCount ? row.batch_count ?? 0 : row.display_batch_no || row.batch_no || "-"}</TableCell>
+                        <TableCell className="text-muted-foreground">-</TableCell>
+                        <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
+                        <TableCell>{formatDate(row.end_date_time)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <StoreTablePagination
                 page={page}
                 pageSize={resolvedPageSize}
                 total={total}
                 onPageChange={setPage}
-                onNavigate={navigate}
-                onDeleteOrder={(orderId, productionId) => {
-                  if (!window.confirm(`Delete production order ${productionId}?`)) {
-                    return;
-                  }
-                  deleteOrderMutation.mutate(orderId);
-                }}
-                isDeleting={deleteOrderMutation.isPending}
-                getProductionName={getProductionName}
               />
-            </Suspense>
+            </>
           ) : (
             <EmptyState title={meta.label} description={meta.emptyDescription} />
           )
