@@ -28,7 +28,7 @@ const defaultValues: CountryFormValues = {
   code: "",
   continent: 0,
   name: "",
-  currency: 0,
+  currency: null,
   status: true,
 };
 
@@ -87,7 +87,7 @@ const CountriesPage = () => {
       continent: detail.continent,
       name: detail.name,
       code: detail.code,
-      currency: detail.currency ?? 0,
+      currency: detail.currency ?? null,
       status: record.status === "Active",
     });
     setDialogOpen(true);
@@ -186,10 +186,11 @@ const CountriesPage = () => {
               )} />
               <FormField control={form.control} name="currency" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Currency*</FormLabel>
-                  <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
+                  <FormLabel>Currency</FormLabel>
+                  <Select value={field.value ? String(field.value) : "none"} onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select Currency" /></SelectTrigger></FormControl>
                     <SelectContent>
+                      <SelectItem value="none">No currency</SelectItem>
                       {(currenciesQuery.data ?? []).map((currency) => (
                         <SelectItem key={currency.id} value={String(currency.id)}>
                           {currency.code ? `${currency.name} (${currency.code})` : currency.name}
