@@ -56,6 +56,90 @@ const getToolbarPageSizeValue = (pageSize: number): StorePageSizeValue =>
     ? (String(pageSize) as StorePageSizeValue)
     : "20";
 
+const parseStageQuantity = (value?: string | null) => {
+  const numeric = Number(value ?? "");
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const getInventoryLineageSuffix = (row: ProductionInventoryRow) => {
+  const source = `${row.batch_no || row.batch_code || row.reference_no || ""}`.trim().toUpperCase();
+  const match = source.match(/(-\d+)$/);
+  if (match) {
+    return match[1];
+  }
+  return source || "—";
+};
+
+const getInventoryRowKey = (row: ProductionInventoryRow) =>
+  `${row.production_id?.trim() || "—"}::${getInventoryLineageSuffix(row)}`;
+
+const getTransitionStage = (row: ProductionInventoryRow) =>
+  row.to_stage?.trim() || row.destination_stage?.trim() || "";
+
+const getDisplayedInventoryBatch = (row: ProductionInventoryRow) =>
+  row.batch_no?.trim() || row.batch_code?.trim() || row.reference_no?.trim() || "—";
+
+const isMovedFromBlendStoreToGranulationWip = (row: ProductionInventoryRow) =>
+  getTransitionStage(row) === "GRANULATION_WIP" &&
+  parseStageQuantity(row.outward_qty) > 0 &&
+  parseStageQuantity(row.balance_qty) <= 0;
+
+const isMovedFromGranulationWorkCenterToGranulationStore = (
+  row: ProductionInventoryRow,
+  granulationStoreRowKeys?: Set<string>,
+) =>
+  getTransitionStage(row) === "GRANULATION_STORE" &&
+  (
+    (parseStageQuantity(row.outward_qty) > 0 && parseStageQuantity(row.balance_qty) <= 0) ||
+    granulationStoreRowKeys?.has(getInventoryRowKey(row)) === true
+  );
+
+const getDisplayedInventoryStatus = (stage: ProductionStage, row: ProductionInventoryRow) => {
+  const rawStatus = row.status?.trim() || "IN_PROGRESS";
+  const nextStage = getTransitionStage(row);
+  const outwardQty = parseStageQuantity(row.outward_qty);
+
+  if (stage === "BLEND_WIP" && nextStage === "BLEND_STORE" && outwardQty > 0) {
+    return "COMPLETED";
+  }
+
+  if (stage === "BLEND_STORE" && isMovedFromBlendStoreToGranulationWip(row)) {
+    return "COMPLETED";
+  }
+
+  if (stage === "GRANULATION_WORK_CENTER" && nextStage === "GRANULATION_STORE" && outwardQty > 0) {
+    return "COMPLETED";
+  }
+
+  return rawStatus;
+};
+
+const mapBlendStoreRowToGranulationWipRow = (row: ProductionInventoryRow): ProductionInventoryRow => ({
+  ...row,
+  stage: "GRANULATION_WIP",
+  source_stage: row.source_stage || "BLEND_STORE",
+  destination_stage: "GRANULATION_WIP",
+  from_stage: row.from_stage || "BLEND_STORE",
+  to_stage: "GRANULATION_WIP",
+  inward_qty: row.outward_qty || row.inward_qty,
+  outward_qty: "0",
+  balance_qty: row.outward_qty || row.balance_qty,
+  status: "IN_PROGRESS",
+});
+
+const mapGranulationWorkCenterRowToGranulationStoreRow = (row: ProductionInventoryRow): ProductionInventoryRow => ({
+  ...row,
+  stage: "GRANULATION_STORE",
+  source_stage: row.source_stage || "GRANULATION_WORK_CENTER",
+  destination_stage: "GRANULATION_STORE",
+  from_stage: row.from_stage || "GRANULATION_WORK_CENTER",
+  to_stage: "GRANULATION_STORE",
+  inward_qty: row.outward_qty || row.balance_qty || row.inward_qty,
+  outward_qty: "0",
+  balance_qty: row.outward_qty || row.balance_qty || row.inward_qty,
+  status: "IN_PROGRESS",
+});
+
 const ProductionInventoryPage = () => {
   const [activeTab, setActiveTab] = useState<TabKey>("BLENDING_INVENTORY");
 
@@ -77,6 +161,22 @@ const ProductionInventoryPage = () => {
 
   const activeStage = TABS.find((t) => t.key === activeTab)?.stage ?? null;
   const deferredStageSearch = useDeferredValue((stageStates[activeTab]?.search ?? "").trim());
+
+  const getDisplayedStageQuantity = (stage: ProductionStage | null, row: ProductionInventoryRow) => {
+    if (stage === "ADDITIVE_WORK_CENTER") {
+      return row.inward_qty;
+    }
+
+    if (parseStageQuantity(row.balance_qty) > 0) {
+      return row.balance_qty;
+    }
+
+    if (parseStageQuantity(row.outward_qty) > 0) {
+      return row.outward_qty;
+    }
+
+    return row.inward_qty || row.balance_qty;
+  };
 
   // Blending inventory query
   const blendingQuery = useQuery({
@@ -147,6 +247,33 @@ const ProductionInventoryPage = () => {
     placeholderData: (prev) => prev,
   });
 
+  const blendStoreRowsForGranulationWipQuery = useQuery({
+    queryKey: ["production-inventory", "BLEND_STORE", "granulation-wip-bridge"],
+    queryFn: () =>
+      productionInventoryApi.listAllByStage("BLEND_STORE", {}),
+    enabled: activeStage === "GRANULATION_WIP",
+    retry: false,
+    staleTime: 30 * 1000,
+  });
+
+  const granulationWorkCenterRowsForGranulationStoreQuery = useQuery({
+    queryKey: ["production-inventory", "GRANULATION_WORK_CENTER", "granulation-store-bridge"],
+    queryFn: () =>
+      productionInventoryApi.listAllByStage("GRANULATION_WORK_CENTER", {}),
+    enabled: activeStage === "GRANULATION_STORE" || activeStage === "GRANULATION_WORK_CENTER",
+    retry: false,
+    staleTime: 30 * 1000,
+  });
+
+  const granulationStoreRowsQuery = useQuery({
+    queryKey: ["production-inventory", "GRANULATION_STORE", "granulation-store-status-bridge"],
+    queryFn: () =>
+      productionInventoryApi.listAllByStage("GRANULATION_STORE", {}),
+    enabled: activeStage === "GRANULATION_STORE" || activeStage === "GRANULATION_WORK_CENTER",
+    retry: false,
+    staleTime: 30 * 1000,
+  });
+
   const updateBlendingState = (updater: (s: InventorySummaryState) => InventorySummaryState) =>
     setBlendingState((s) => updater(s));
 
@@ -191,28 +318,45 @@ const ProductionInventoryPage = () => {
         { label: "S.No", value: (_, i) => i + 1 },
         { label: "Prd ID", value: (row) => row.production_id },
         { label: "Production", value: (row) => row.production },
-        { label: "Batch No", value: (row) => row.batch_no || row.batch_code },
+        { label: "Batch No", value: (row) => getDisplayedInventoryBatch(row) },
         { label: "Item Code", value: (row) => row.item_code },
         { label: "Item Name", value: (row) => row.item_name },
-        { label: "Weight", value: (row) => row.balance_qty },
+        { label: "Weight", value: (row) => getDisplayedStageQuantity(stage, row) },
         { label: "Inward Qty", value: (row) => row.inward_qty },
         { label: "Outward Qty", value: (row) => row.outward_qty },
         { label: "UOM", value: (row) => row.uom },
-        { label: "Source Stage", value: (row) => row.source_stage || row.from_stage },
-        { label: "Destination Stage", value: (row) => row.destination_stage || row.to_stage },
-        { label: "Reference No", value: (row) => row.reference_no ?? "" },
         { label: "GL Batch Count", value: (row) => row.gl_batch_count },
         { label: "Scan Code / Sticker Code", value: (row) => row.scan_code ?? "" },
-        { label: "Work Center", value: (row) => row.work_center ?? "" },
         { label: "Line", value: (row) => row.line ?? "" },
-        { label: "Status", value: (row) => row.status },
+        { label: "Status", value: (row) => getDisplayedInventoryStatus(stage, row) },
         { label: "Created By", value: (row) => row.created_by },
         { label: "Created Date & Time", value: (row) => formatDateTime(row.created_at) },
       ];
-      const rows = await productionInventoryApi.listAllByStage(stage, {
+      const apiRows = await productionInventoryApi.listAllByStage(stage, {
         search: stageStates[activeTab]?.search,
         workCenter: stageStates[activeTab]?.workCenter || undefined,
       });
+      const rows =
+        stage === "GRANULATION_WIP"
+          ? [
+              ...((blendStoreRowsForGranulationWipQuery.data ?? [])
+                .filter(isMovedFromBlendStoreToGranulationWip)
+                .map(mapBlendStoreRowToGranulationWipRow)),
+              ...apiRows,
+            ]
+          : stage === "GRANULATION_STORE"
+            ? [
+                ...((granulationWorkCenterRowsForGranulationStoreQuery.data ?? [])
+                  .filter((row) =>
+                    isMovedFromGranulationWorkCenterToGranulationStore(
+                      row,
+                      new Set((granulationStoreRowsQuery.data ?? []).map(getInventoryRowKey)),
+                    ),
+                  )
+                  .map(mapGranulationWorkCenterRowToGranulationStoreRow)),
+                ...apiRows,
+              ]
+          : apiRows;
       exportTableData({ title: label, filename: `production-inventory-${stage.toLowerCase()}`, rows, columns, format });
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Unable to export production inventory."));
@@ -336,8 +480,48 @@ const ProductionInventoryPage = () => {
     const stage = tab.stage as ProductionStage;
     const tabState = stageStates[tab.key] ?? createTabState();
     const query = stageQuery;
-    const rows = query.data?.items ?? [];
-    const total = query.data?.total ?? 0;
+    const apiRows = query.data?.items ?? [];
+    const movedBlendStoreRows =
+      stage === "GRANULATION_WIP"
+        ? (blendStoreRowsForGranulationWipQuery.data ?? [])
+            .filter(isMovedFromBlendStoreToGranulationWip)
+            .map(mapBlendStoreRowToGranulationWipRow)
+        : [];
+    const granulationStoreRowKeys = new Set((granulationStoreRowsQuery.data ?? []).map(getInventoryRowKey));
+    const movedGranulationWorkCenterRows =
+      stage === "GRANULATION_STORE"
+        ? (granulationWorkCenterRowsForGranulationStoreQuery.data ?? [])
+            .filter((row) => isMovedFromGranulationWorkCenterToGranulationStore(row, granulationStoreRowKeys))
+            .map(mapGranulationWorkCenterRowToGranulationStoreRow)
+        : [];
+    const movedGranulationWipKeys = new Set(
+      movedBlendStoreRows.map((movedRow) => getInventoryRowKey(movedRow)),
+    );
+    const apiGranulationStoreKeys = new Set(
+      apiRows.map((row) => getInventoryRowKey(row)),
+    );
+    const movedGranulationStoreKeys = new Set(
+      movedGranulationWorkCenterRows.map((movedRow) => getInventoryRowKey(movedRow)),
+    );
+    const rows =
+      stage === "GRANULATION_WIP"
+        ? [
+            ...movedBlendStoreRows,
+            ...apiRows.filter((row) => {
+              const rowKey = getInventoryRowKey(row);
+              return !movedGranulationWipKeys.has(rowKey);
+            }),
+          ]
+        : stage === "GRANULATION_STORE"
+          ? [
+              ...movedGranulationWorkCenterRows.filter((row) => !apiGranulationStoreKeys.has(getInventoryRowKey(row))),
+              ...apiRows,
+            ]
+        : apiRows;
+    const total =
+      stage === "GRANULATION_WIP" || stage === "GRANULATION_STORE"
+        ? rows.length
+        : query.data?.total ?? 0;
 
     const showLine =tab.key === "CONNECTION_TO_LINE" || tab.key === "LINE_WORK_CENTER" || tab.key === "DISCONNECTION_FROM_LINE";
 
@@ -380,7 +564,15 @@ const ProductionInventoryPage = () => {
       </div>
     );
 
-    if (query.isLoading && activeTab === tab.key) {
+    if (
+      (
+        query.isLoading ||
+        (stage === "GRANULATION_WIP" && blendStoreRowsForGranulationWipQuery.isLoading) ||
+        ((stage === "GRANULATION_STORE" || stage === "GRANULATION_WORK_CENTER") &&
+          (granulationWorkCenterRowsForGranulationStoreQuery.isLoading || granulationStoreRowsQuery.isLoading))
+      ) &&
+      activeTab === tab.key
+    ) {
       return (
         <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
           <StoreTableToolbar
@@ -401,9 +593,25 @@ const ProductionInventoryPage = () => {
       );
     }
 
-    if (query.isError && activeTab === tab.key) {
+    if (
+      (
+        query.isError ||
+        (stage === "GRANULATION_WIP" && blendStoreRowsForGranulationWipQuery.isError) ||
+        ((stage === "GRANULATION_STORE" || stage === "GRANULATION_WORK_CENTER") &&
+          (granulationWorkCenterRowsForGranulationStoreQuery.isError || granulationStoreRowsQuery.isError))
+      ) &&
+      activeTab === tab.key
+    ) {
       return (
-        <ErrorState description={getApiErrorMessage(query.error, `Unable to load ${tab.label} data.`)} />
+        <ErrorState
+          description={getApiErrorMessage(
+            query.error ??
+              blendStoreRowsForGranulationWipQuery.error ??
+              granulationWorkCenterRowsForGranulationStoreQuery.error ??
+              granulationStoreRowsQuery.error,
+            `Unable to load ${tab.label} data.`,
+          )}
+        />
       );
     }
 
@@ -434,10 +642,6 @@ const ProductionInventoryPage = () => {
                     <TableHead className="hidden md:table-cell">Product</TableHead>
                     <TableHead className="text-right">Weight</TableHead>
                     {tab.key === "GRANULATION_WIP" ? <TableHead className="text-right">GL Batches</TableHead> : null}
-                    <TableHead className="hidden lg:table-cell">Source</TableHead>
-                    <TableHead className="hidden lg:table-cell">Destination</TableHead>
-                    <TableHead className="hidden lg:table-cell">Reference No</TableHead>
-                    <TableHead className="hidden xl:table-cell">Work Center</TableHead>
                     {showLine && <TableHead className="hidden xl:table-cell">Line</TableHead>}
                     <TableHead className="hidden xl:table-cell">Status</TableHead>
                     <TableHead className="hidden xl:table-cell">Created By</TableHead>
@@ -452,12 +656,12 @@ const ProductionInventoryPage = () => {
                       </TableCell>
                       <TableCell>
                         <div className="font-mono text-sm font-medium">{row.production_id || "—"}</div>
-                        <div className="text-xs text-muted-foreground">{row.batch_no || row.batch_code || "—"}</div>
+                        <div className="text-xs text-muted-foreground">{getDisplayedInventoryBatch(row)}</div>
                         <div className="mt-1 space-y-0.5 text-xs text-muted-foreground md:hidden">
                           <div>{row.production || row.production_type || "—"}</div>
                           <div>{row.item_code} — {row.item_name}</div>
-                          <div>Weight: {formatDecimal(row.balance_qty)} {row.uom}</div>
-                          <div>Status: {row.status}</div>
+                          <div>Weight: {formatDecimal(getDisplayedStageQuantity(tab.stage, row))} {row.uom}</div>
+                          <div>Status: {getDisplayedInventoryStatus(stage, row)}</div>
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">{row.production || row.production_type || "—"}</TableCell>
@@ -465,19 +669,19 @@ const ProductionInventoryPage = () => {
                         <div className="font-medium">{row.item_name}</div>
                         <div className="font-mono text-xs text-muted-foreground">{row.item_code}</div>
                       </TableCell>
-                      <TableCell className="text-right font-semibold">{formatDecimal(row.balance_qty)} {row.uom}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {formatDecimal(getDisplayedStageQuantity(tab.stage, row))} {row.uom}
+                      </TableCell>
                       {tab.key === "GRANULATION_WIP" ? (
                         <TableCell className="text-right font-semibold">{row.gl_batch_count}</TableCell>
                       ) : null}
-                      <TableCell className="hidden lg:table-cell text-xs">{row.source_stage || row.from_stage || "—"}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-xs">{row.destination_stage || row.to_stage || "—"}</TableCell>
-                      <TableCell className="hidden lg:table-cell font-mono text-xs">{row.reference_no ?? "—"}</TableCell>
-                      <TableCell className="hidden xl:table-cell text-xs">{row.work_center ?? "—"}</TableCell>
                       {showLine && (
                         <TableCell className="hidden xl:table-cell text-xs">{row.line ?? "—"}</TableCell>
                       )}
                       <TableCell className="hidden xl:table-cell">
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{row.status}</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                          {getDisplayedInventoryStatus(stage, row)}
+                        </span>
                       </TableCell>
                       <TableCell className="hidden xl:table-cell text-xs">{row.created_by}</TableCell>
                       <TableCell className="hidden xl:table-cell text-xs">{formatDateTime(row.created_at)}</TableCell>

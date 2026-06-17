@@ -19,7 +19,7 @@ import RowActions from "@/features/common-master/components/RowActions";
 import { countrySchema, type CountryFormValues } from "@/features/common-master/schemas";
 import type { CountryListRow } from "@/features/common-master/types";
 import { useCommonMasterMutations } from "@/features/common-master/hooks/useCommonMasterMutations";
-import { useContinentOptions, useCurrencyOptions } from "@/features/common-master/hooks/useLookupOptions";
+import { useContinentOptions } from "@/features/common-master/hooks/useLookupOptions";
 import { useDebouncedValue } from "@/features/common-master/hooks/useDebouncedValue";
 import { useTableSearchParams } from "@/features/common-master/hooks/useTableSearchParams";
 import { applyBackendErrors } from "@/features/common-master/hooks/useFormErrorMapper";
@@ -28,7 +28,6 @@ const defaultValues: CountryFormValues = {
   code: "",
   continent: 0,
   name: "",
-  currency: 0,
   status: true,
 };
 
@@ -41,7 +40,6 @@ const CountriesPage = () => {
   const form = useForm<CountryFormValues>({ resolver: zodResolver(countrySchema), defaultValues });
 
   const continentsQuery = useContinentOptions();
-  const currenciesQuery = useCurrencyOptions();
   const countriesQuery = useQuery({
     queryKey: commonMasterKeys.countries(table.page, table.pageSize, debouncedSearch),
     queryFn: () => commonMasterApi.listCountries({ page: table.page, pageSize: table.pageSize, search: debouncedSearch }),
@@ -87,7 +85,6 @@ const CountriesPage = () => {
       continent: detail.continent,
       name: detail.name,
       code: detail.code,
-      currency: detail.currency ?? 0,
       status: record.status === "Active",
     });
     setDialogOpen(true);
@@ -184,22 +181,7 @@ const CountriesPage = () => {
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem><FormLabel>Country Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={form.control} name="currency" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency*</FormLabel>
-                  <Select value={field.value ? String(field.value) : undefined} onValueChange={(value) => field.onChange(Number(value))}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select Currency" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      {(currenciesQuery.data ?? []).map((currency) => (
-                        <SelectItem key={currency.id} value={String(currency.id)}>
-                          {currency.code ? `${currency.name} (${currency.code})` : currency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
+
             </div>
             <FormField
               control={form.control}

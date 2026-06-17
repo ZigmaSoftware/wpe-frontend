@@ -71,7 +71,6 @@ export const countrySchema = z.object({
   code: z.string().trim().optional().or(z.literal("")),
   continent: z.coerce.number().min(1, "Continent is required."),
   name: z.string().trim().min(1, "Country name is required."),
-  currency: z.coerce.number().min(1, "Currency is required."),
   status: z.boolean(),
 });
 

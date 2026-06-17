@@ -116,6 +116,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const isSingleCaptureMode = isBlMode || isGlMode || isPrMode;
   const requireFinalCaptureConfirmation = context?.requireFinalCaptureConfirmation === true;
   const selectedContextBatchId = context?.batchId ?? null;
+  const deferAdBatchCreationUntilFinalCapture =
+    isAdMode && requireFinalCaptureConfirmation && selectedContextBatchId === null;
 
   const materials: OutputMaterialRow[] = formMaterials.length > 0 ? formMaterials : DEMO_MATERIALS;
   const bomVariantId = useMemo(() => {
@@ -163,41 +165,49 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     () => [...(stageBatchesQuery.data ?? [])].sort((left, right) => right.id - left.id),
     [stageBatchesQuery.data],
   );
-  const activeBatch = useMemo(() => {
-    if (selectedContextBatchId !== null) {
-      return stageBatches.find((batch) => batch.id === selectedContextBatchId) ?? null;
-    }
-
-    if (isSingleCaptureMode) {
-      return stageBatches.find((batch) => batch.status !== "COMPLETED") ?? stageBatches[0] ?? null;
-    }
-
-    return stageBatches.find((batch) => batch.status !== "COMPLETED") ?? null;
-  }, [isSingleCaptureMode, selectedContextBatchId, stageBatches]);
-  const outputCaptureSourceBatchId = isSingleCaptureMode
-    ? activeBatch?.id ?? selectedContextBatchId
-    : adOutputBatchId;
   const stageBatchIds = useMemo(() => new Set(stageBatches.map((batch) => batch.id)), [stageBatches]);
   const outputCapturesQuery = useQuery({
     queryKey: [
       "production-output-captures",
       persistedOrderId,
-      isSingleCaptureMode ? outputCaptureSourceBatchId ?? "all" : "stage-batches",
+      outputStage,
+      "stage-batches",
     ],
-    enabled:
-      queriesEnabled &&
-      persistedOrderId !== null &&
-      (isSingleCaptureMode ? outputCaptureSourceBatchId !== null : true),
+    enabled: queriesEnabled && persistedOrderId !== null,
     queryFn: async () => {
       const response = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/output-captures/`, {
-        params:
-          isSingleCaptureMode && outputCaptureSourceBatchId
-            ? { source_batch: outputCaptureSourceBatchId }
-            : undefined,
+        params: undefined,
       });
       return normalizeListResponse<ProductionOutputCapture>(response.data).map(mapPersistedOutputCaptureRecord);
     },
   });
+  const persistedCapturedOutputs = useMemo(() => {
+    const records = outputCapturesQuery.data ?? [];
+    return records.filter((record) => record.sourceBatchId != null && stageBatchIds.has(record.sourceBatchId));
+  }, [outputCapturesQuery.data, stageBatchIds]);
+  const capturedStageBatchIds = useMemo(
+    () => new Set(persistedCapturedOutputs.map((record) => record.sourceBatchId).filter((value): value is number => typeof value === "number")),
+    [persistedCapturedOutputs],
+  );
+  const activeBatch = useMemo(() => {
+    if (selectedContextBatchId !== null) {
+      const selectedBatch = stageBatches.find((batch) => batch.id === selectedContextBatchId) ?? null;
+      if (selectedBatch && selectedBatch.status !== "COMPLETED" && !capturedStageBatchIds.has(selectedBatch.id)) {
+        return selectedBatch;
+      }
+    }
+
+    if (isSingleCaptureMode) {
+      return stageBatches.find((batch) => batch.status !== "COMPLETED" && !capturedStageBatchIds.has(batch.id)) ?? null;
+    }
+
+    if (deferAdBatchCreationUntilFinalCapture) {
+      return null;
+    }
+
+    return stageBatches.find((batch) => batch.status !== "COMPLETED") ?? null;
+  }, [capturedStageBatchIds, deferAdBatchCreationUntilFinalCapture, isSingleCaptureMode, selectedContextBatchId, stageBatches]);
+  const outputCaptureSourceBatchId = isSingleCaptureMode ? activeBatch?.id ?? null : adOutputBatchId;
 
   const recipeNo = useMemo(() => {
     if (isSingleCaptureMode) {
@@ -258,6 +268,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     [
       activeBatch,
       isGlMode,
+      isPrMode,
       isSingleCaptureMode,
       outputCaptureSourceBatchId,
       productionId,
@@ -281,15 +292,9 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     [outputComponents],
   );
   const activeComponent = outputComponents[activeIndex] ?? null;
-  const persistedCapturedOutputs = useMemo(() => {
-    const records = outputCapturesQuery.data ?? [];
-    if (isSingleCaptureMode) {
-      return records;
-    }
-
-    return records.filter((record) => record.sourceBatchId != null && stageBatchIds.has(record.sourceBatchId));
-  }, [isSingleCaptureMode, outputCapturesQuery.data, stageBatchIds]);
-  const existingSingleCapture = isSingleCaptureMode ? persistedCapturedOutputs[0] ?? null : null;
+  const existingSingleCapture = isSingleCaptureMode
+    ? persistedCapturedOutputs.find((record) => record.sourceBatchId === activeBatch?.id) ?? null
+    : null;
   const visibleCapturedOutputs =
     persistedOrderId !== null
       ? persistedCapturedOutputs.length > 0
@@ -300,11 +305,23 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   useEffect(() => {
     if (activeBatch?.id) {
       activeBatchIdRef.current = activeBatch.id;
+      return;
     }
-  }, [activeBatch?.id]);
+
+    if (isSingleCaptureMode) {
+      activeBatchIdRef.current = null;
+    }
+  }, [activeBatch?.id, isSingleCaptureMode]);
 
   useEffect(() => {
     if (isSingleCaptureMode) {
+      return;
+    }
+
+    if (deferAdBatchCreationUntilFinalCapture) {
+      if (adOutputBatchId !== null) {
+        setAdOutputBatchId(null);
+      }
       return;
     }
 
@@ -316,7 +333,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     if (adOutputBatchId === null && stageBatches[0]?.id) {
       setAdOutputBatchId(stageBatches[0].id);
     }
-  }, [activeBatch?.id, adOutputBatchId, isSingleCaptureMode, stageBatches]);
+  }, [activeBatch?.id, adOutputBatchId, deferAdBatchCreationUntilFinalCapture, isSingleCaptureMode, stageBatches]);
 
   useEffect(() => {
     capturedSessionKeysRef.current = new Set(visibleCapturedOutputs.map((record) => record.sessionKey));
@@ -546,10 +563,10 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     return batch;
   }, [
     activeBatch,
-    invalidateBatchQueries,
     isBlMode,
     isGlMode,
     isSingleCaptureMode,
+    invalidateBatchQueries,
     outputStage,
     persistedOrderId,
     stageBatches,
@@ -601,36 +618,100 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     [capturedWeights, outputComponents, persistedOrderId],
   );
 
+  const saveAdCapturedWeight = useCallback(
+    async (component: OutputCaptureComponent, weightKg: number, capturedAt: Date) => {
+      if (persistedOrderId === null) {
+        return;
+      }
+
+      const batch = await ensureAdBatchForFinalCapture();
+      if (!batch) {
+        throw new Error("Save the order first to create the AD batch.");
+      }
+
+      const matchedEntry = findMatchingBatchEntry(batch, component);
+      if (!matchedEntry) {
+        throw new Error(`No AD batch component matches ${component.itemName}.`);
+      }
+
+      await coreApi.post<unknown>(
+        `/api/production/orders/${persistedOrderId}/batches/${batch.id}/weights/${matchedEntry.id}/`,
+        {
+          entered_weight_grams: weightKg.toFixed(3),
+        },
+      );
+
+      setCapturedWeights((current) => {
+        const next = new Map(current);
+        next.set(component.id, {
+          componentId: component.id,
+          weightKg,
+          capturedAt,
+        });
+        return next;
+      });
+
+      invalidateBatchQueries();
+      await stageBatchesQuery.refetch();
+    },
+    [ensureAdBatchForFinalCapture, invalidateBatchQueries, persistedOrderId, stageBatchesQuery],
+  );
+
   const handleCapture = useCallback(() => {
     if (!canCapture || !weight || !activeComponent || isSyncingCapture || isFinalizingCapture || outwardingRecordId !== null) {
       return;
     }
 
-    setCapturedWeights((current) => {
-      const next = new Map(current);
-      next.set(activeComponent.id, {
-        componentId: activeComponent.id,
-        weightKg: weight.value,
-        capturedAt: weight.timestamp,
-      });
+      const captureWeight = async () => {
+      if (!isSingleCaptureMode && !deferAdBatchCreationUntilFinalCapture) {
+        setIsSyncingCapture(true);
+        try {
+          await saveAdCapturedWeight(activeComponent, weight.value, weight.timestamp);
+          toast.success("Weight saved.");
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, "Failed to save the AD weight."));
+          return;
+        } finally {
+          setIsSyncingCapture(false);
+        }
+      } else {
+        setCapturedWeights((current) => {
+          const next = new Map(current);
+          next.set(activeComponent.id, {
+            componentId: activeComponent.id,
+            weightKg: weight.value,
+            capturedAt: weight.timestamp,
+          });
+          return next;
+        });
+      }
 
+      const persistedIds = new Set(
+        isSingleCaptureMode
+          ? Array.from(capturedWeights.keys()).concat(activeComponent.id)
+          : Array.from(capturedWeights.keys()).concat(activeComponent.id),
+      );
       const nextIndex = outputComponents.findIndex(
-        (component, index) => index > activeIndex && !next.has(component.id),
+        (component, index) => index > activeIndex && !persistedIds.has(component.id),
       );
       if (nextIndex >= 0) {
         setActiveIndex(nextIndex);
       }
+    };
 
-      return next;
-    });
+    void captureWeight();
   }, [
     activeComponent,
     activeIndex,
     canCapture,
+    capturedWeights,
     isFinalizingCapture,
+    isSingleCaptureMode,
     isSyncingCapture,
+    deferAdBatchCreationUntilFinalCapture,
     outwardingRecordId,
     outputComponents,
+    saveAdCapturedWeight,
     weight,
   ]);
 
@@ -746,20 +827,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               refreshedOutputCaptures.data?.find((record) => record.sourceBatchId === startedBatch.id) ??
               persistedRecord;
             if (isBlMode) {
-              const nextBatchResponse = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
-                params: { stage: "GL" },
-              });
-              const nextGlBatch = normalizeListResponse<ProductionBatch>(nextBatchResponse.data)
-                .sort((left, right) => right.id - left.id)
-                .find((candidate) => candidate.status !== "COMPLETED");
-              const nextBatchDisplayNo = nextGlBatch?.display_batch_no?.trim() || nextGlBatch?.batch_no?.trim();
-              if (nextBatchDisplayNo) {
-                form.setValue("details.batch_auto", nextBatchDisplayNo, {
-                  shouldDirty: false,
-                  shouldTouch: false,
-                  shouldValidate: false,
-                });
-              }
               form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_BL, {
                 shouldDirty: false,
                 shouldTouch: false,
@@ -877,14 +944,13 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               ? "GL captured output recorded and moved to Granulation Store."
               : isPrMode
                 ? "PR captured output recorded."
-              : "Captured output recorded and AD batch completed."
+              : "Captured output recorded, AD batch completed, and stock moved to Blend WIP."
           : "Captured output recorded.",
       );
     };
 
     void finalizeCapture();
   }, [
-    activeBatch,
     activeComponent,
     allRequiredCaptured,
     binlotValue,
@@ -998,7 +1064,17 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       (!allRequiredCaptured && existingSingleCapture === null)
     : !allRequiredCaptured || requiredComponents.length === 0 || isFinalizingCapture || isSyncingCapture || outwardingRecordId !== null;
   const currentBatchLabel =
-    activeBatch?.display_batch_no?.trim() || activeBatch?.batch_no?.trim() || (binlotValue !== "-" ? binlotValue : "Not assigned");
+    activeBatch?.display_batch_no?.trim() ||
+    activeBatch?.batch_no?.trim() ||
+    (isBlMode
+      ? "Blend WIP"
+      : isGlMode
+        ? "Granulation Work Center"
+      : isPrMode
+        ? "Connection to Line"
+        : binlotValue !== "-"
+          ? binlotValue
+          : "Not assigned");
   const activeCapture = activeComponent ? capturedWeights.get(activeComponent.id) ?? null : null;
 
   return (

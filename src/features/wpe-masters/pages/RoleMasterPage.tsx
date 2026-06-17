@@ -9,10 +9,13 @@ import {
 } from "@/components/ui/select";
 import CodeMasterPage from "@/features/wpe-masters/components/CodeMasterPage";
 import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
+import { adminMasterApi } from "@/features/admin-master/api/adminMasterApi";
 import {
   roleMasterSchema,
   type RoleMasterFormValues,
 } from "@/features/wpe-masters/schemas/masters";
+
+const ROLE_SCREEN_CODE = "role-master";
 
 const defaultValues: RoleMasterFormValues = {
   code: "",
@@ -28,6 +31,12 @@ const RoleMasterPage = () => {
     queryFn: wpeMastersApi.designations.lookup,
   });
 
+  const columnConfigQuery = useQuery({
+    queryKey: ["admin-master", "user-screens", "table-columns", ROLE_SCREEN_CODE],
+    queryFn: () => adminMasterApi.fetchTableColumns(ROLE_SCREEN_CODE),
+    staleTime: 5 * 60 * 1000,
+  });
+
   return (
     <CodeMasterPage
       title="Role"
@@ -36,6 +45,7 @@ const RoleMasterPage = () => {
       api={wpeMastersApi.roles}
       schema={roleMasterSchema}
       defaultValues={defaultValues}
+      columnConfig={columnConfigQuery.data}
       mapRecordToForm={(record) => ({
         code: record.code ?? "",
         name: record.name,
@@ -55,7 +65,9 @@ const RoleMasterPage = () => {
       descriptionLabel="Role Details"
       createLabel="Add Role"
       createButtonLabel="Create Role"
-      renderNameSecondary={(record) => record.designation_name ? `Designation: ${record.designation_name}` : "No designation linked"}
+      renderNameSecondary={(record) =>
+        record.designation_name ? `Designation: ${record.designation_name}` : "No designation linked"
+      }
       extraColumns={[
         {
           key: "designation",
