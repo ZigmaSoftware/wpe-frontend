@@ -6,22 +6,18 @@ import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import RequestItemsPreviewDialog, { getRequestItemSummary } from "@/features/requests/components/RequestItemsPreviewDialog";
 import { toast } from "@/components/ui/sonner";
 import { blendingApi } from "@/features/blending/api/blendingApi";
-import { formatDate, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
+import { formatDate, getApiErrorMessage } from "@/lib/api-helpers";
 import type { StoreStockRequest } from "@/lib/types";
 
 type HeadAction = "approve" | "reject";
 
-const getRequestQuantity = (request: StoreStockRequest) => {
-  const quantity = request.total_requested_qty ?? request.quantity;
-  const unit = request.unit || request.items?.[0]?.unit || "";
-  return `${formatDecimal(quantity)}${unit ? ` ${unit}` : ""}`;
-};
-
 const BlendingHeadApprovalPage = () => {
   const queryClient = useQueryClient();
   const [confirmation, setConfirmation] = useState<{ request: StoreStockRequest; action: HeadAction } | null>(null);
+  const [previewRequest, setPreviewRequest] = useState<StoreStockRequest | null>(null);
 
   const approvalsQuery = useQuery({
     queryKey: ["blending", "head-approvals"],
@@ -73,56 +69,63 @@ const BlendingHeadApprovalPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((request) => (
-                    <TableRow key={request.id}>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium">{request.request_no || `SR-${request.id}`}</div>
-                          <div className="text-xs text-muted-foreground">{formatDate(request.request_date || request.requested_at)}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{request.requested_by_username}</TableCell>
-                      <TableCell>{request.department}</TableCell>
-                      <TableCell>
-                        <div>{request.request_reason || "-"}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {request.require_date ? formatDate(request.require_date) : "No required date"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium">{getRequestQuantity(request)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {(request.items ?? []).map((item) => item.item_name).join(", ") || request.item_name || "-"}
+                  {rows.map((request) => {
+                    const summary = getRequestItemSummary(request);
+
+                    return (
+                      <TableRow key={request.id}>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{request.request_no || `SR-${request.id}`}</div>
+                            <div className="text-xs text-muted-foreground">{formatDate(request.request_date || request.requested_at)}</div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-                            onClick={() => setConfirmation({ request, action: "approve" })}
-                            disabled={reviewMutation.isPending}
-                            title="Approve"
+                        </TableCell>
+                        <TableCell>{request.requested_by_username}</TableCell>
+                        <TableCell>{request.department}</TableCell>
+                        <TableCell>
+                          <div>{request.request_reason || "-"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {request.require_date ? formatDate(request.require_date) : "No required date"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            className="space-y-0.5 text-left transition-colors hover:text-primary"
+                            onClick={() => setPreviewRequest(request)}
                           >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                            onClick={() => setConfirmation({ request, action: "reject" })}
-                            disabled={reviewMutation.isPending}
-                            title="Reject"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            <div className="font-medium text-card-foreground">{summary.title}</div>
+                            {summary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{summary.subtitle}</div> : null}
+                            {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                              onClick={() => setConfirmation({ request, action: "approve" })}
+                              disabled={reviewMutation.isPending}
+                              title="Approve"
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                              onClick={() => setConfirmation({ request, action: "reject" })}
+                              disabled={reviewMutation.isPending}
+                              title="Reject"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -131,6 +134,17 @@ const BlendingHeadApprovalPage = () => {
           <EmptyState title="No requests pending Head approval" description="New store requests will appear here for review." />
         )
       ) : null}
+
+      <RequestItemsPreviewDialog
+        open={Boolean(previewRequest)}
+        request={previewRequest}
+        requestLabel="Head Approval"
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewRequest(null);
+          }
+        }}
+      />
 
       <ConfirmDialog
         open={Boolean(confirmation)}
