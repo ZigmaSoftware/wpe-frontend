@@ -23,9 +23,7 @@ export const designationMasterSchema = codeMasterSchema.extend({
   department: z.coerce.number().min(1, "Department is required."),
 });
 
-export const roleMasterSchema = codeMasterSchema.extend({
-  designation: z.coerce.number().min(1, "Designation is required."),
-});
+export const roleMasterSchema = codeMasterSchema;
 
 export const unitMasterSchema = z.object({
   uom_code: trimmedRequired("UOM code"),

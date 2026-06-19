@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
+import RequestItemsPreviewDialog, { getRequestItemSummary } from "@/features/requests/components/RequestItemsPreviewDialog";
 import { storeApi } from "@/features/store/api/storeApi";
 import StoreTablePagination from "@/features/store/components/StoreTablePagination";
 import StoreTableToolbar, {
@@ -113,17 +114,17 @@ const getProcessQtyError = (value: string, requestedQty: string) => {
   return undefined;
 };
 
-const getRequestItemNames = (row: StoreStockRequest) =>
-  row.items?.length ? row.items.map((item) => item.item_name).join(", ") : readText(row.item_name);
-
-const getRequestItemCodes = (row: StoreStockRequest) =>
-  row.items?.length ? row.items.map((item) => item.item_code).join(", ") : readText(row.item_code);
-
 const getRequestQuantity = (row: StoreStockRequest) => {
   const quantity = row.total_requested_qty ?? row.quantity;
   const unit = row.unit || row.items?.[0]?.unit || "";
   return `${formatDecimal(quantity)}${unit ? ` ${unit}` : ""}`;
 };
+
+const getRequestItemNames = (row: StoreStockRequest) =>
+  row.items?.length ? row.items.map((item) => item.item_name).join(", ") : readText(row.item_name);
+
+const getRequestItemCodes = (row: StoreStockRequest) =>
+  row.items?.length ? row.items.map((item) => item.item_code).join(", ") : readText(row.item_code);
 
 const getProcessedQuantity = (row: StoreStockRequest) => formatDecimal(row.total_approved_qty ?? null);
 const getReleasedQuantity = (row: StoreStockRequest) => formatDecimal(row.total_issued_qty ?? null);
@@ -248,6 +249,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilterState>(createDefaultTransactionFilters);
   const [isTransactionFilterPending, startTransactionFilterTransition] = useTransition();
 
+  const [previewRequest, setPreviewRequest] = useState<StoreStockRequest | null>(null);
   const [requestReviewTarget, setRequestReviewTarget] = useState<StoreStockRequest | null>(null);
   const [requestReviewItems, setRequestReviewItems] = useState<RequestReviewLine[]>([]);
   const [requestReviewErrors, setRequestReviewErrors] = useState<Record<number, RequestReviewError>>({});
@@ -362,7 +364,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         itemName: item.item_name,
         itemCode: item.item_code,
         requestedQty: item.requested_qty,
-        processQty: item.approved_qty || item.requested_qty,
+        processQty: item.requested_qty,
         unit: item.unit,
         reason: item.remarks || "",
       })),
@@ -604,54 +606,66 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedRequestRows.map((row, index) => (
-                  <TableRow
-                    key={row.id}
-                    tabIndex={0}
-                    role="button"
-                    className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={() => openRequestReviewDialog(row)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        openRequestReviewDialog(row);
-                      }
-                    }}
-                  >
-                    <TableCell className="text-center font-medium text-muted-foreground">
-                      {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
-                        <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">{row.department}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium text-card-foreground">{getRequestItemNames(row)}</div>
-                        <div className="font-mono text-xs text-muted-foreground">{getRequestItemCodes(row)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
-                    <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8"
-                        onClick={(event) => {
-                          event.stopPropagation();
+                {paginatedRequestRows.map((row, index) => {
+                  const summary = getRequestItemSummary(row);
+
+                  return (
+                    <TableRow
+                      key={row.id}
+                      tabIndex={0}
+                      role="button"
+                      className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => openRequestReviewDialog(row)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
                           openRequestReviewDialog(row);
-                        }}
-                      >
-                        <Eye className="mr-1.5 h-4 w-4" />
-                        Open
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        }
+                      }}
+                    >
+                      <TableCell className="text-center font-medium text-muted-foreground">
+                        {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
+                          <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">{row.department}</TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          className="space-y-0.5 text-left transition-colors hover:text-primary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPreviewRequest(row);
+                          }}
+                        >
+                          <div className="font-medium text-card-foreground">{summary.title}</div>
+                          {summary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{summary.subtitle}</div> : null}
+                          {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openRequestReviewDialog(row);
+                          }}
+                        >
+                          <Eye className="mr-1.5 h-4 w-4" />
+                          Open
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -682,50 +696,59 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedRequestRows.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-center font-medium text-muted-foreground">
-                      {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
-                        <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">{row.department}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium text-card-foreground">{getRequestItemNames(row)}</div>
-                        <div className="font-mono text-xs text-muted-foreground">{getRequestItemCodes(row)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
-                    <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-8 w-8 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-                          onClick={() => setReleaseConfirmation({ request: row, action: "release" })}
-                          title="Release request"
+                {paginatedRequestRows.map((row, index) => {
+                  const summary = getRequestItemSummary(row);
+
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell className="text-center font-medium text-muted-foreground">
+                        {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
+                          <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">{row.department}</TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          className="space-y-0.5 text-left transition-colors hover:text-primary"
+                          onClick={() => setPreviewRequest(row)}
                         >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-8 w-8 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                          onClick={() => setReleaseConfirmation({ request: row, action: "reject" })}
-                          title="Reject request"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          <div className="font-medium text-card-foreground">{summary.title}</div>
+                          {summary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{summary.subtitle}</div> : null}
+                          {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                            onClick={() => setReleaseConfirmation({ request: row, action: "release" })}
+                            title="Release request"
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                            onClick={() => setReleaseConfirmation({ request: row, action: "reject" })}
+                            title="Reject request"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -754,33 +777,42 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedRequestRows.map((row, index) => (
-                <TableRow key={row.id}>
-                  <TableCell className="text-center font-medium text-muted-foreground">
-                    {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
-                      <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">{row.department}</TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="font-medium text-card-foreground">{getRequestItemNames(row)}</div>
-                      <div className="font-mono text-xs text-muted-foreground">{getRequestItemCodes(row)}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div>{row.released_by_username || "-"}</div>
-                      <div className="text-xs text-muted-foreground">{row.released_at ? formatDateTime(row.released_at) : "-"}</div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {paginatedRequestRows.map((row, index) => {
+                const summary = getRequestItemSummary(row);
+
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
+                        <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium">{row.department}</TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        className="space-y-0.5 text-left transition-colors hover:text-primary"
+                        onClick={() => setPreviewRequest(row)}
+                      >
+                        <div className="font-medium text-card-foreground">{summary.title}</div>
+                        {summary.subtitle ? <div className="font-mono text-xs text-muted-foreground">{summary.subtitle}</div> : null}
+                        {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div>{row.released_by_username || "-"}</div>
+                        <div className="text-xs text-muted-foreground">{row.released_at ? formatDateTime(row.released_at) : "-"}</div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -1110,6 +1142,17 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
           {renderTransactionTable()}
         </div>
       ) : null}
+
+      <RequestItemsPreviewDialog
+        open={Boolean(previewRequest)}
+        request={previewRequest}
+        requestLabel="Request Approval"
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewRequest(null);
+          }
+        }}
+      />
 
       <Dialog
         open={Boolean(requestReviewTarget)}
