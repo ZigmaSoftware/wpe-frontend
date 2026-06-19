@@ -42,6 +42,10 @@ import StoreTableToolbar, {
   type StoreExportFormat,
   type StorePageSizeValue,
 } from "@/features/store/components/StoreTableToolbar";
+import RequestItemsPreviewDialog, {
+  getRequestDisplayId,
+  getRequestItemSummary,
+} from "@/features/requests/components/RequestItemsPreviewDialog";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import { printStoreRequest } from "@/features/blending/utils/printSR";
 import { getStoreRequestStatusLabel } from "@/features/blending/utils/requestStatus";
@@ -172,27 +176,6 @@ const readText = (value: unknown) => {
   return String(value);
 };
 
-const getItemCategory = (item: NonNullable<StoreStockRequest["items"]>[number]) =>
-  item.sub_group || item.group || item.category || "-";
-
-const getRequestItemSummary = (request: StoreStockRequest) => {
-  const items = request.items ?? [];
-  if (!items.length) {
-    return {
-      title: request.item_name || "-",
-      subtitle: request.item_code || null,
-      extra: null as string | null,
-    };
-  }
-
-  const [firstItem, ...restItems] = items;
-  return {
-    title: firstItem.item_name,
-    subtitle: firstItem.item_code,
-    extra: restItems.length ? `+${restItems.length} more` : null,
-  };
-};
-
 const getTransactionItemCodeSummary = (request: StoreStockRequest) => {
   const items = request.items ?? [];
   if (!items.length) {
@@ -211,8 +194,6 @@ const getTransactionItemCodeSummary = (request: StoreStockRequest) => {
   };
 };
 
-const getRequestDisplayId = (request: StoreStockRequest) => request.request_no || `SR-${request.id}`;
-
 const statusClassName = (status: StoreStockRequest["status"]) => {
   switch (status) {
     case "CLOSED_WON":
@@ -228,20 +209,6 @@ const statusClassName = (status: StoreStockRequest["status"]) => {
     default:
       return "text-slate-700";
   }
-};
-
-const getRequestItemsText = (request: StoreStockRequest) => {
-  if (request.items?.length) {
-    return request.items.map((item) => item.item_name).join(", ");
-  }
-  return readText(request.item_name);
-};
-
-const getRequestItemCodes = (request: StoreStockRequest) => {
-  if (request.items?.length) {
-    return request.items.map((item) => item.item_code).join(", ");
-  }
-  return readText(request.item_code);
 };
 
 const BLENDING_MODULE_META: Record<BlendingPageModule, { title: string; description: string }> = {
@@ -807,6 +774,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                               title="Delete request"
                               disabled={!canManage || cancelRequestMutation.isPending}
                               onClick={() => setDeleteTarget(request)}
+                              className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -1229,45 +1197,16 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(previewRequest)} onOpenChange={(open) => !open && setPreviewRequest(null)}>
-        <DialogContent className="sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>{previewRequest ? getRequestDisplayId(previewRequest) : "Store Request Items"}</DialogTitle>
-            <DialogDescription>Full product list for this store request.</DialogDescription>
-          </DialogHeader>
-
-          {previewRequest ? (
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16 text-center">S.No</TableHead>
-                    <TableHead>Item Code</TableHead>
-                    <TableHead>Item</TableHead>
-                    <TableHead className="text-right">Requested Qty</TableHead>
-                    <TableHead className="text-right">Available Qty</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Category</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(previewRequest.items ?? []).map((item, index) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                      <TableCell className="font-mono text-xs">{readText(item.item_code)}</TableCell>
-                      <TableCell>{readText(item.item_name)}</TableCell>
-                      <TableCell className="text-right font-medium">{formatDecimal(item.requested_qty)}</TableCell>
-                      <TableCell className="text-right">{formatDecimal(item.available_qty)}</TableCell>
-                      <TableCell>{readText(item.unit)}</TableCell>
-                      <TableCell>{getItemCategory(item)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <RequestItemsPreviewDialog
+        open={Boolean(previewRequest)}
+        request={previewRequest}
+        requestLabel="Store Request"
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewRequest(null);
+          }
+        }}
+      />
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}

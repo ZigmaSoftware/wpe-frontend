@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LookupItem } from "@/features/wpe-masters/types";
+import type { LookupOption } from "@/features/admin-master/types";
 import type { ProductionMachine } from "@/lib/types";
 import { buildInchargeOptions } from "./ProductionOrderForm";
 import {
@@ -24,7 +24,7 @@ const machineFixture: ProductionMachine = {
   updated_at: "2026-01-01T00:00:00Z",
 };
 
-const createUserFixture = (overrides: Partial<LookupItem>): LookupItem => ({
+const createUserFixture = (overrides: Partial<LookupOption>): LookupOption => ({
   id: 1,
   name: "User One",
   username: "user1",
@@ -117,15 +117,15 @@ describe("productionOrderForm create flow", () => {
 
   it("includes all lookup users in the shift incharge options", () => {
     const options = buildInchargeOptions([
-      createUserFixture({ id: 1, name: "Dimple", username: "kiran" }),
-      createUserFixture({ id: 2, name: "Operator", username: "operator1" }),
+      createUserFixture({ id: 1, staff_code: "970", name: "Raja", username: "raja" }),
+      createUserFixture({ id: 2, staff_code: "971", name: "Operator", username: "operator1" }),
       createUserFixture({ id: 3, name: "", username: "fallback-user" }),
     ]);
 
     expect(options).toEqual([
-      expect.objectContaining({ id: "1", name: "Dimple", description: "kiran" }),
-      expect.objectContaining({ id: "3", name: "fallback-user", description: "fallback-user" }),
-      expect.objectContaining({ id: "2", name: "Operator", description: "operator1" }),
+      expect.objectContaining({ id: "1", name: "970 - Raja" }),
+      expect.objectContaining({ id: "2", name: "971 - Operator" }),
+      expect.objectContaining({ id: "3", name: "fallback-user" }),
     ]);
   });
 
