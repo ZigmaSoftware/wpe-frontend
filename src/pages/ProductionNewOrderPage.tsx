@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
-import type { CreateProductionOrderPayload } from "@/features/production/components/order-dialog/productionOrderForm";
+import type { CreateProductionOrderPayload, NamedOption } from "@/features/production/components/order-dialog/productionOrderForm";
 import {
   PRODUCTION_AD_WEIGHTAGE_ROUTE,
   PRODUCTION_BL_BLENDING_ROUTE,
@@ -13,6 +13,11 @@ import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse } from "@/lib/api-helpers";
 import type { ProductionMachine } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
+
+const ADDITIVE_PRODUCTION_FACILITY: NamedOption = {
+  id: "Unit 1",
+  name: "Unit 1",
+};
 
 type ProductionNewOrderLocationState = {
   backTo?: string;
@@ -28,9 +33,11 @@ const ProductionNewOrderPage = () => {
   const backRoute = typeof locationState?.backTo === "string" && locationState.backTo.trim().length > 0
     ? locationState.backTo
     : PRODUCTION_ROUTE;
-  const isAdEntry = locationState?.entryStage === "AD" || backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE;
   const isBlEntry = locationState?.entryStage === "BL" || backRoute === PRODUCTION_BL_BLENDING_ROUTE;
   const isGlEntry = locationState?.entryStage === "GL" || backRoute === PRODUCTION_GL_GRANULATION_ROUTE;
+  const isAdEntry =
+    locationState?.entryStage === "AD" ||
+    (!isBlEntry && !isGlEntry && (backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE || location.pathname === "/app/production/neworder"));
   const backLabel = isAdEntry ? "Back to AD list" : isBlEntry ? "Back to BL List" : isGlEntry ? "Back to GL List" : undefined;
   const formTitle = isAdEntry
     ? "New Additive Creation"
@@ -75,6 +82,7 @@ const ProductionNewOrderPage = () => {
         machinesLoading={machinesQ.isLoading}
         formTitle={formTitle}
         submitLabel={submitLabel}
+        fixedProductionFacility={isAdEntry ? ADDITIVE_PRODUCTION_FACILITY : undefined}
         defaultWorkCenterName={isAdEntry ? locationState?.defaultWorkCenterName ?? "New Line Additive Work Center WIP" : undefined}
       />
     </ProductionOrderPageLayout>

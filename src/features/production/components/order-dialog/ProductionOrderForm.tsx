@@ -42,6 +42,7 @@ type ProductionOrderFormProps = {
   formTitle?: string;
   submitLabel?: string;
   defaultProductionType?: string;
+  fixedProductionFacility?: NamedOption;
   defaultWorkCenterName?: string;
   initialTab?: ProductionDialogTab;
   visibleTabs?: ProductionDialogTab[];
@@ -64,10 +65,12 @@ const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
 const REQUIRED_PRODUCTION_TYPE_OPTIONS = [DEFAULT_PRODUCTION_TYPE, "WPE Blend Production"] as const;
 
 const mapNamedOptions = (items: LookupItem[]) =>
-  items.map((item) => ({
-    id: String(item.id),
-    name: item.name,
-  }));
+  items
+    .map((item) => ({
+      id: String(item.id ?? "").trim(),
+      name: String(item.name ?? "").trim(),
+    }))
+    .filter((item) => item.id.length > 0 && item.name.length > 0);
 
 const formatProductionTypeLabel = (value: string) => {
   const normalized = value.trim();
@@ -87,17 +90,18 @@ const formatProductionTypeLabel = (value: string) => {
   return normalized;
 };
 
-const mapProductionTypeOptions = (items: LookupItem[]): ProductionTypeOption[] =>
+export const mapProductionTypeOptions = (items: LookupItem[]): ProductionTypeOption[] =>
   {
     const options: ProductionTypeOption[] = items
       .filter((item) => {
-        const name = item.name.trim();
-        return name.length > 0 && name.toLowerCase() !== "all";
+        const id = String(item.id ?? "").trim();
+        const name = String(item.name ?? "").trim();
+        return id.length > 0 && name.length > 0 && name.toLowerCase() !== "all";
       })
       .map((item) => ({
-        id: String(item.id),
-        value: item.name,
-        label: item.name,
+        id: String(item.id).trim(),
+        value: String(item.name).trim(),
+        label: String(item.name).trim(),
       }));
 
     const knownValues = new Set(options.map((option) => option.value.trim().toLowerCase()));
@@ -118,8 +122,9 @@ const mapProductionTypeOptions = (items: LookupItem[]): ProductionTypeOption[] =
   };
 
 const buildFacilityOptions = (locations: LookupItem[]) => {
-  const nonWorkCenterLocations = locations.filter((location) => !/work center/i.test(location.name));
-  const source = nonWorkCenterLocations.length > 0 ? nonWorkCenterLocations : locations;
+  const validLocations = locations.filter((location) => String(location.id ?? "").trim() && String(location.name ?? "").trim());
+  const nonWorkCenterLocations = validLocations.filter((location) => !/work center/i.test(String(location.name ?? "")));
+  const source = nonWorkCenterLocations.length > 0 ? nonWorkCenterLocations : validLocations;
   return mapNamedOptions(source);
 };
 
@@ -129,7 +134,7 @@ export const buildWorkCenterOptions = (locations: LookupItem[], workCenters: Loo
     return explicitWorkCenters;
   }
 
-  const locationWorkCenters = locations.filter((location) => /work center/i.test(location.name));
+  const locationWorkCenters = locations.filter((location) => /work center/i.test(String(location.name ?? "")));
   return mapNamedOptions(locationWorkCenters);
 };
 
@@ -163,6 +168,7 @@ const ProductionOrderForm = ({
   formTitle,
   submitLabel,
   defaultProductionType = DEFAULT_PRODUCTION_TYPE,
+  fixedProductionFacility,
   defaultWorkCenterName,
   initialTab,
   visibleTabs,
@@ -259,8 +265,8 @@ const ProductionOrderForm = ({
   }, [form, productionDate, shift]);
 
   const facilityOptions = useMemo(
-    () => buildFacilityOptions(locationsQuery.data ?? []),
-    [locationsQuery.data],
+    () => (fixedProductionFacility ? [fixedProductionFacility] : buildFacilityOptions(locationsQuery.data ?? [])),
+    [fixedProductionFacility, locationsQuery.data],
   );
 
   const workCenterOptions = useMemo(
@@ -311,6 +317,22 @@ const ProductionOrderForm = ({
       shouldValidate: false,
     });
   }, [defaultProductionTypeOption, form, productionType]);
+
+  useEffect(() => {
+    if (!fixedProductionFacility) {
+      return;
+    }
+
+    if (form.getValues("resources.production_facility") === fixedProductionFacility.id) {
+      return;
+    }
+
+    form.setValue("resources.production_facility", fixedProductionFacility.id, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: false,
+    });
+  }, [fixedProductionFacility, form]);
 
   useEffect(() => {
     if (!defaultWorkCenterName) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LookupItem } from "@/features/wpe-masters/types";
 import type { ProductionMachine } from "@/lib/types";
-import { buildInchargeOptions } from "./ProductionOrderForm";
+import { buildInchargeOptions, mapProductionTypeOptions } from "./ProductionOrderForm";
 import {
   createProductionOrderDefaultValues,
   isMaterialRowConfigured,
@@ -127,6 +127,30 @@ describe("productionOrderForm create flow", () => {
       expect.objectContaining({ id: "3", name: "fallback-user", description: "fallback-user" }),
       expect.objectContaining({ id: "2", name: "Operator", description: "operator1" }),
     ]);
+  });
+
+  it("ignores malformed production type lookup rows instead of throwing", () => {
+    const options = mapProductionTypeOptions([
+      { id: 1, name: "WPE Additive Production" },
+      { id: "", name: "Missing ID" },
+      { id: 3, name: "" },
+      { id: 4, name: "All" },
+      { id: null, name: null },
+    ] as unknown as LookupItem[]);
+
+    expect(options).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "WPE Additive Production" }),
+        expect.objectContaining({ value: "WPE Blend Production" }),
+      ]),
+    );
+    expect(options).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "Missing ID" }),
+        expect.objectContaining({ value: "" }),
+        expect.objectContaining({ value: "All" }),
+      ]),
+    );
   });
 
   it("treats incomplete transient material rows as not configured", () => {
