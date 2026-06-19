@@ -28,7 +28,7 @@ const ENV =
       ? "local"
       : (import.meta.env.VITE_ENV ?? "local");
 
-const USE_DEV_SERVER_PROXY = import.meta.env.DEV && !isLocalFrontendHost();
+const USE_DEV_SERVER_PROXY = import.meta.env.DEV && !isLocalFrontendHost() && !isLiveFrontendHost();
 
 export const CORE_API_URL = trimTrailingSlash(
   USE_DEV_SERVER_PROXY
