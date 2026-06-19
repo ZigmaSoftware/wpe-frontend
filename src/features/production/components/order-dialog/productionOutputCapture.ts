@@ -279,9 +279,11 @@ export const buildCapturedOutputRecord = ({
   };
 };
 
+const safeText = (value: unknown) => String(value ?? "").trim();
+
 const resolveDisplayedBinlot = (capture: ProductionOutputCapture) => {
-  const assignedBinlot = capture.binlot.trim();
-  const sourceBatchNo = capture.source_batch_no.trim();
+  const assignedBinlot = safeText(capture.binlot);
+  const sourceBatchNo = safeText(capture.source_batch_no);
 
   if (!assignedBinlot || assignedBinlot === sourceBatchNo) {
     return "-";
@@ -291,34 +293,34 @@ const resolveDisplayedBinlot = (capture: ProductionOutputCapture) => {
 };
 
 const resolveDisplayedBatchId = (capture: ProductionOutputCapture) =>
-  capture.source_batch_display_batch_no?.trim() || capture.source_batch_no.trim() || "-";
+  safeText(capture.source_batch_display_batch_no) || safeText(capture.source_batch_no) || "-";
 
 const resolveDisplayedProductionStatus = (capture: ProductionOutputCapture) =>
-  capture.source_batch_display_status?.trim() || "IN_PROGRESS";
+  safeText(capture.source_batch_display_status) || "IN_PROGRESS";
 
 export const mapPersistedOutputCaptureRecord = (capture: ProductionOutputCapture): CapturedOutputRecord => ({
   id: `persisted-output-${capture.id}`,
-  sessionKey: capture.session_key,
-  scancodeId: capture.scancode_id,
-  recipeNo: capture.recipe_no || "—",
-  capturedAt: capture.captured_at,
-  qty: capture.quantity_kg,
-  weightKg: capture.weight_kg,
+  sessionKey: safeText(capture.session_key) || `persisted-output-${capture.id}`,
+  scancodeId: safeText(capture.scancode_id),
+  recipeNo: safeText(capture.recipe_no) || "—",
+  capturedAt: safeText(capture.captured_at),
+  qty: safeText(capture.quantity_kg) || "0",
+  weightKg: safeText(capture.weight_kg) || "0",
   binlot: resolveDisplayedBinlot(capture),
   batchId: resolveDisplayedBatchId(capture),
   productionStatus: resolveDisplayedProductionStatus(capture),
-  isOutwarded: capture.is_outwarded,
-  sourceBatchId: capture.source_batch,
-  sequence: capture.sequence,
-  componentColumns: capture.component_columns.map((column) => ({
+  isOutwarded: Boolean(capture.is_outwarded),
+  sourceBatchId: typeof capture.source_batch === "number" ? capture.source_batch : null,
+  sequence: Number(capture.sequence ?? 0),
+  componentColumns: (capture.component_columns ?? []).map((column) => ({
     id: String(column.id),
-    label: column.label,
+    label: safeText(column.label),
   })),
-  details: capture.details.map((detail) => ({
+  details: (capture.details ?? []).map((detail) => ({
     componentId: String(detail.component_id),
-    itemCode: detail.item_code,
-    itemName: detail.item_name,
-    weightKg: detail.weight_kg,
-    capturedAt: detail.captured_at,
+    itemCode: safeText(detail.item_code),
+    itemName: safeText(detail.item_name),
+    weightKg: safeText(detail.weight_kg) || "0",
+    capturedAt: safeText(detail.captured_at),
   })),
 });
