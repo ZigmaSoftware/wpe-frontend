@@ -166,8 +166,8 @@ const QCRPage = () => {
           <TableHeader>
             <TableRow>
               <TableHead className="w-16 text-center">S.No</TableHead>
-              <TableHead>GRN Reference</TableHead>
-              <TableHead>Supplier</TableHead>
+              <TableHead>Ref .No</TableHead>
+              <TableHead>GRN No</TableHead>
               <TableHead>Item</TableHead>
               <TableHead>Quantity</TableHead>
               <TableHead>Department</TableHead>
@@ -183,7 +183,7 @@ const QCRPage = () => {
               <TableRow key={record.id}>
                 <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                 <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
-                <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
+                <TableCell className="font-medium">{record.generated_grn_no || "-"}</TableCell>
                 <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
                 <TableCell>{readText(getQcrField(record, "quantity"))}</TableCell>
                 <TableCell>{readText(getQcrField(record, "req_department"))}</TableCell>

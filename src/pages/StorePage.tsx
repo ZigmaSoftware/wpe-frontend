@@ -1,43 +1,47 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye } from "lucide-react";
+import { Check, Eye, X } from "lucide-react";
 import { useDeferredValue, useEffect, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
 import { storeApi } from "@/features/store/api/storeApi";
-import { getStoreRequestStatusLabel } from "@/features/blending/utils/requestStatus";
 import StoreTablePagination from "@/features/store/components/StoreTablePagination";
 import StoreTableToolbar, {
   type StoreExportFormat,
   type StorePageSizeValue,
 } from "@/features/store/components/StoreTableToolbar";
-import { STORE_STOCK_ROUTE, type StoreWorkspaceModuleDefinition } from "@/features/store/utils/routes";
+import {
+  STORE_CLOSED_WON_ROUTE,
+  STORE_RELEASE_STOCK_ROUTE,
+  STORE_REQUEST_PROCESS_ROUTE,
+  STORE_REQUEST_ROUTE,
+  STORE_STOCK_ROUTE,
+  type StoreWorkspaceModuleDefinition,
+} from "@/features/store/utils/routes";
 import { getPageCount, getPageSizeNumber, paginateRows } from "@/features/store/utils/table";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import { toast } from "@/components/ui/sonner";
-import { coreApi } from "@/lib/api";
 import { formatDate, formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
-import { cn } from "@/lib/utils";
 import type { StoreStockRequest, StoreTransactionRecord } from "@/lib/types";
 
-type StorePageModule = "stock" | "requests" | "transactions";
-type RequestStatusFilter = "pending_store_issue" | "all";
+type StorePageModule = "stock" | "request-process" | "release-stock" | "closed-won" | "transactions";
+type RequestQueueModule = Extract<StorePageModule, "request-process" | "release-stock" | "closed-won">;
 type TransactionTypeFilter = "all" | "inwards" | "outwards";
 
 type RequestFilterState = {
   fromDate: string;
   toDate: string;
-  status: RequestStatusFilter;
   department: string;
 };
 
@@ -53,26 +57,24 @@ type RequestReviewLine = {
   itemName: string;
   itemCode: string;
   requestedQty: string;
-  providedQty: string;
+  processQty: string;
   unit: string;
   reason: string;
 };
 
 type RequestReviewError = {
-  providedQty?: string;
-  reason?: string;
+  processQty?: string;
 };
 
-const createDefaultDateRange = () => {
-  return {
-    fromDate: "",
-    toDate: "",
-  };
-};
+type ReleaseAction = "release" | "reject";
+
+const createDefaultDateRange = () => ({
+  fromDate: "",
+  toDate: "",
+});
 
 const createDefaultRequestFilters = (): RequestFilterState => ({
   ...createDefaultDateRange(),
-  status: "pending_store_issue",
   department: "all",
 });
 
@@ -81,14 +83,6 @@ const createDefaultTransactionFilters = (): TransactionFilterState => ({
   type: "all",
   department: "all",
 });
-
-const toRequestStatusParam = (status: RequestStatusFilter) => {
-  if (status === "all") {
-    return "all";
-  }
-
-  return status.toUpperCase();
-};
 
 const readText = (value: unknown) => {
   if (value === null || value === undefined || value === "") {
@@ -102,18 +96,18 @@ const isNonNegativeDecimalDraft = (value: string) => /^\d*(?:\.\d*)?$/.test(valu
 
 const shouldBlockQuantityKey = (key: string) => key === "-" || key === "+";
 
-const getProvideQtyError = (value: string, requestedQty: string) => {
-  if (!value.trim()) return "Provide Qty is required.";
-  if (value.includes("-")) return "Provide Qty cannot be negative.";
-  if (!isNonNegativeDecimalDraft(value)) return "Provide Qty must be numeric.";
+const getProcessQtyError = (value: string, requestedQty: string) => {
+  if (!value.trim()) return "Process Qty is required.";
+  if (value.includes("-")) return "Process Qty cannot be negative.";
+  if (!isNonNegativeDecimalDraft(value)) return "Process Qty must be numeric.";
 
   const parsedValue = Number(value);
-  if (!Number.isFinite(parsedValue)) return "Provide Qty must be numeric.";
-  if (parsedValue < 0) return "Provide Qty cannot be negative.";
+  if (!Number.isFinite(parsedValue)) return "Process Qty must be numeric.";
+  if (parsedValue < 0) return "Process Qty cannot be negative.";
 
   const parsedRequestedQty = requestedQty ? Number(requestedQty) : Number.NaN;
   if (Number.isFinite(parsedRequestedQty) && parsedValue > parsedRequestedQty) {
-    return "Provide Qty cannot exceed Requested Qty.";
+    return "Process Qty cannot exceed Requested Qty.";
   }
 
   return undefined;
@@ -128,32 +122,11 @@ const getRequestItemCodes = (row: StoreStockRequest) =>
 const getRequestQuantity = (row: StoreStockRequest) => {
   const quantity = row.total_requested_qty ?? row.quantity;
   const unit = row.unit || row.items?.[0]?.unit || "";
-
   return `${formatDecimal(quantity)}${unit ? ` ${unit}` : ""}`;
 };
 
-const getRequestApprovedQuantity = (row: StoreStockRequest) => formatDecimal(row.total_approved_qty ?? null);
-
-const getRequestIssuedQuantity = (row: StoreStockRequest) => formatDecimal(row.total_issued_qty ?? null);
-
-const getRequestResponseLabel = (row: StoreStockRequest) => {
-  const responder = row.approved_by_username?.trim();
-  const respondedAt = row.approved_at ? formatDateTime(row.approved_at) : "";
-
-  if (responder && respondedAt) {
-    return { responder, respondedAt };
-  }
-
-  if (responder) {
-    return { responder, respondedAt: "-" };
-  }
-
-  if (respondedAt) {
-    return { responder: "-", respondedAt };
-  }
-
-  return { responder: "-", respondedAt: "-" };
-};
+const getProcessedQuantity = (row: StoreStockRequest) => formatDecimal(row.total_approved_qty ?? null);
+const getReleasedQuantity = (row: StoreStockRequest) => formatDecimal(row.total_issued_qty ?? null);
 
 const getTransactionDirection = (row: StoreTransactionRecord) => {
   const inwardQty = Number(row.inward_qty ?? 0);
@@ -194,32 +167,57 @@ const formatTransactionType = (type: string) =>
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
 
-const statusBadgeClassName = (status: StoreStockRequest["status"]) => {
-  switch (status) {
-    case "APPROVED":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "REJECTED":
-      return "border-rose-200 bg-rose-50 text-rose-700";
-    case "PENDING_STORE_ISSUE":
-      return "border-amber-200 bg-amber-50 text-amber-700";
-    default:
-      return "border-slate-200 bg-slate-100 text-slate-700";
-  }
-};
-
-const STORE_MODULE_META: Record<StorePageModule, Pick<StoreWorkspaceModuleDefinition, "label" | "description">> = {
+const STORE_MODULE_META: Record<Exclude<StorePageModule, RequestQueueModule>, Pick<StoreWorkspaceModuleDefinition, "label" | "description">> = {
   stock: {
     label: "Store Stock",
     description: "Monitor current store stock balances, inwards, outwards, and item-level movement access.",
-  },
-  requests: {
-    label: "Request Approval's",
-    description: "Review department requests, approval decisions, issued quantities, and request reasons.",
   },
   transactions: {
     label: "Store Transactions",
     description: "Audit stock movement transactions by type, department, warehouse, and reference history.",
   },
+};
+
+const STORE_REQUEST_APPROVAL_META: Pick<StoreWorkspaceModuleDefinition, "label" | "description"> = {
+  label: "Request Approval's",
+  description: "Process approved requests, release stock, and review completed handovers in one workspace.",
+};
+
+const REQUEST_QUEUE_META: Record<RequestQueueModule, Pick<StoreWorkspaceModuleDefinition, "label" | "description">> = {
+  "request-process": {
+    label: "Process Request",
+    description: "Review head-approved requests, set process quantities, and move them to stock release.",
+  },
+  "release-stock": {
+    label: "Release Stock",
+    description: "Release processed requests, post stock movements, and complete department handover.",
+  },
+  "closed-won": {
+    label: "Closed Won",
+    description: "Review completed released requests and final release ownership.",
+  },
+};
+
+const REQUEST_QUEUE_ROUTE_MAP: Record<RequestQueueModule, string> = {
+  "request-process": STORE_REQUEST_ROUTE,
+  "release-stock": STORE_RELEASE_STOCK_ROUTE,
+  "closed-won": STORE_CLOSED_WON_ROUTE,
+};
+
+const isRequestQueueModule = (value: StorePageModule): value is RequestQueueModule =>
+  value === "request-process" || value === "release-stock" || value === "closed-won";
+
+const getRequestQueue = (module: RequestQueueModule) => {
+  switch (module) {
+    case "request-process":
+      return "request_process" as const;
+    case "release-stock":
+      return "release_stock" as const;
+    case "closed-won":
+      return "closed_won" as const;
+    default:
+      return undefined;
+  }
 };
 
 type StorePageProps = {
@@ -229,6 +227,8 @@ type StorePageProps = {
 const StorePage = ({ module = "stock" }: StorePageProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const requestQueueModule = isRequestQueueModule(module) ? module : null;
+  const pageMeta = requestQueueModule ? STORE_REQUEST_APPROVAL_META : STORE_MODULE_META[module];
 
   const [stockSearch, setStockSearch] = useState("");
   const [stockPage, setStockPage] = useState(1);
@@ -236,7 +236,6 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
 
   const [requestSearch, setRequestSearch] = useState("");
   const [requestPage, setRequestPage] = useState(1);
-  const [respondedRequestPage, setRespondedRequestPage] = useState(1);
   const [requestPageSize, setRequestPageSize] = useState<StorePageSizeValue>("10");
   const [requestDraftFilters, setRequestDraftFilters] = useState<RequestFilterState>(createDefaultRequestFilters);
   const [requestFilters, setRequestFilters] = useState<RequestFilterState>(createDefaultRequestFilters);
@@ -248,9 +247,11 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   const [transactionDraftFilters, setTransactionDraftFilters] = useState<TransactionFilterState>(createDefaultTransactionFilters);
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilterState>(createDefaultTransactionFilters);
   const [isTransactionFilterPending, startTransactionFilterTransition] = useTransition();
+
   const [requestReviewTarget, setRequestReviewTarget] = useState<StoreStockRequest | null>(null);
   const [requestReviewItems, setRequestReviewItems] = useState<RequestReviewLine[]>([]);
   const [requestReviewErrors, setRequestReviewErrors] = useState<Record<number, RequestReviewError>>({});
+  const [releaseConfirmation, setReleaseConfirmation] = useState<{ request: StoreStockRequest; action: ReleaseAction } | null>(null);
 
   const deferredStockSearch = useDeferredValue(stockSearch.trim());
   const deferredRequestSearch = useDeferredValue(requestSearch.trim());
@@ -271,22 +272,22 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   });
 
   const requestsQuery = useQuery({
-    queryKey: ["store", "requests", requestFilters, deferredRequestSearch],
+    queryKey: ["store", "requests", module, requestFilters, deferredRequestSearch],
     queryFn: () =>
       storeApi.listRequests({
+        queue: requestQueueModule ? getRequestQueue(requestQueueModule) : undefined,
         search: deferredRequestSearch,
-        status: toRequestStatusParam(requestFilters.status),
         dateFrom: requestFilters.fromDate,
         dateTo: requestFilters.toDate,
         department: requestFilters.department,
       }),
-    enabled: module === "requests",
+    enabled: Boolean(requestQueueModule),
     placeholderData: (previousData) => previousData,
   });
 
   const requestLookupQuery = useQuery({
     queryKey: ["store", "request-lookup"],
-    queryFn: () => storeApi.listRequests({}),
+    queryFn: () => storeApi.listRequests({ queue: "all" }),
     enabled: module === "transactions",
     staleTime: 5 * 60 * 1000,
     placeholderData: (previousData) => previousData,
@@ -304,12 +305,37 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
     placeholderData: (previousData) => previousData,
   });
 
-  const showAllRequestStatuses = () => {
-    setRequestDraftFilters((current) => (current.status === "all" ? current : { ...current, status: "all" }));
-    setRequestFilters((current) => (current.status === "all" ? current : { ...current, status: "all" }));
-    setRequestPage(1);
-    setRespondedRequestPage(1);
-  };
+  const processRequestMutation = useMutation({
+    mutationFn: async (payload: { requestId: number; items: Array<{ item: number; provided_qty: string; remarks?: string }> }) =>
+      storeApi.processRequest(payload.requestId, { items: payload.items }),
+    onSuccess: () => {
+      toast.success("Request processed.");
+      closeRequestReviewDialog();
+      void queryClient.invalidateQueries({ queryKey: ["store"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to process the request.")),
+  });
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: (requestId: number) => storeApi.rejectProcessedRequest(requestId),
+    onSuccess: () => {
+      toast.success("Request rejected.");
+      closeRequestReviewDialog();
+      void queryClient.invalidateQueries({ queryKey: ["store"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to reject the request.")),
+  });
+
+  const releaseRequestMutation = useMutation({
+    mutationFn: async ({ requestId, action }: { requestId: number; action: ReleaseAction }) =>
+      action === "release" ? storeApi.releaseRequest(requestId) : storeApi.rejectReleaseRequest(requestId),
+    onSuccess: (_response, variables) => {
+      toast.success(variables.action === "release" ? "Request released." : "Request rejected.");
+      setReleaseConfirmation(null);
+      void queryClient.invalidateQueries({ queryKey: ["store"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update the release request.")),
+  });
 
   const openRequestReviewDialog = (row: StoreStockRequest) => {
     const reviewRows = row.items?.length
@@ -323,6 +349,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
               item_name: readText(row.item_name),
               unit: readText(row.unit),
               requested_qty: row.quantity,
+              approved_qty: row.quantity,
+              remarks: null,
             },
           ]
         : [];
@@ -334,9 +362,9 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         itemName: item.item_name,
         itemCode: item.item_code,
         requestedQty: item.requested_qty,
-        providedQty: item.requested_qty,
+        processQty: item.approved_qty || item.requested_qty,
         unit: item.unit,
-        reason: "",
+        reason: item.remarks || "",
       })),
     );
     setRequestReviewErrors({});
@@ -348,88 +376,15 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
     setRequestReviewErrors({});
   };
 
-  const requestReviewMutation = useMutation({
-    mutationFn: async (payload: { requestId: number; items: Array<{ item: number; provided_qty: string; remarks: string }> }) => {
-      const response = await coreApi.post(`/api/store/approve-request/${payload.requestId}/`, {
-        items: payload.items,
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      closeRequestReviewDialog();
-      showAllRequestStatuses();
-      toast.success("Store request reviewed.");
-      void queryClient.invalidateQueries({ queryKey: ["store"] });
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to save store request review.")),
-  });
-
+  const stockRows = stockQuery.data ?? [];
+  const requestRows = requestsQuery.data ?? [];
   const requestDepartmentMap = (requestLookupQuery.data ?? []).reduce<Record<string, string>>((map, row) => {
     if (row.request_no) {
       map[row.request_no] = row.department;
     }
-
     return map;
   }, {});
-
-  const isRequestReviewReady =
-    requestReviewItems.length > 0 &&
-    requestReviewItems.every((item) => {
-      const qtyError = getProvideQtyError(item.providedQty, item.requestedQty);
-      if (qtyError) {
-        return false;
-      }
-
-      const providedQty = Number(item.providedQty);
-      const requestedQty = Number(item.requestedQty);
-      const quantityChanged = Number.isFinite(providedQty) && Number.isFinite(requestedQty) && providedQty !== requestedQty;
-      if (quantityChanged && !item.reason.trim()) {
-        return false;
-      }
-
-      return true;
-    });
-
-  const submitRequestReview = () => {
-    if (!requestReviewTarget) {
-      return;
-    }
-
-    const nextErrors: Record<number, RequestReviewError> = {};
-    let hasErrors = false;
-
-    requestReviewItems.forEach((item, index) => {
-      const providedQtyError = getProvideQtyError(item.providedQty, item.requestedQty);
-      const providedQty = Number(item.providedQty);
-      const requestedQty = Number(item.requestedQty);
-      const quantityChanged = Number.isFinite(providedQty) && Number.isFinite(requestedQty) && providedQty !== requestedQty;
-      const reasonError = quantityChanged && !item.reason.trim() ? "Reason is required when Provide Qty is different from Requested Qty." : undefined;
-
-      if (providedQtyError || reasonError) {
-        nextErrors[index] = {
-          providedQty: providedQtyError,
-          reason: reasonError,
-        };
-        hasErrors = true;
-      }
-    });
-
-    if (hasErrors) {
-      setRequestReviewErrors(nextErrors);
-      return;
-    }
-
-    requestReviewMutation.mutate({
-      requestId: requestReviewTarget.id,
-      items: requestReviewItems.map((item) => ({
-        item: item.itemId,
-        provided_qty: item.providedQty,
-        remarks: item.reason.trim(),
-      })),
-    });
-  };
-
-  const filteredTransactions = (transactionsQuery.data ?? []).filter((row) => {
+  const transactionRows = (transactionsQuery.data ?? []).filter((row) => {
     if (!matchesTransactionType(row, transactionFilters.type)) {
       return false;
     }
@@ -441,14 +396,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
     return getTransactionDepartment(row, requestDepartmentMap) === transactionFilters.department;
   });
 
-  const stockRows = stockQuery.data ?? [];
-  const requestRows = requestsQuery.data ?? [];
-  const transactionRows = filteredTransactions;
-  const pendingRequestRows = requestRows.filter((row) => row.status === "PENDING_STORE_ISSUE");
-  const respondedRequestRows = requestRows.filter((row) => row.status !== "PENDING_STORE_ISSUE");
-
-  const paginatedRequestRows = paginateRows(pendingRequestRows, requestPage, requestPageSize);
-  const paginatedRespondedRequestRows = paginateRows(respondedRequestRows, respondedRequestPage, requestPageSize);
+  const paginatedRequestRows = paginateRows(requestRows, requestPage, requestPageSize);
   const paginatedTransactionRows = paginateRows(transactionRows, transactionPage, transactionPageSize);
 
   useEffect(() => {
@@ -459,18 +407,11 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   }, [stockPage, stockPageSize, stockRows.length]);
 
   useEffect(() => {
-    const totalPages = getPageCount(requestPageSize, pendingRequestRows.length);
+    const totalPages = getPageCount(requestPageSize, requestRows.length);
     if (requestPage > totalPages) {
       setRequestPage(totalPages);
     }
-  }, [pendingRequestRows.length, requestPage, requestPageSize]);
-
-  useEffect(() => {
-    const totalPages = getPageCount(requestPageSize, respondedRequestRows.length);
-    if (respondedRequestPage > totalPages) {
-      setRespondedRequestPage(totalPages);
-    }
-  }, [requestPageSize, respondedRequestPage, respondedRequestRows.length]);
+  }, [requestPage, requestPageSize, requestRows.length]);
 
   useEffect(() => {
     const totalPages = getPageCount(transactionPageSize, transactionRows.length);
@@ -478,6 +419,51 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
       setTransactionPage(totalPages);
     }
   }, [transactionPage, transactionPageSize, transactionRows.length]);
+
+  const isRequestReviewReady =
+    requestReviewItems.length > 0 &&
+    requestReviewItems.every((item) => !getProcessQtyError(item.processQty, item.requestedQty)) &&
+    requestReviewItems.some((item) => Number(item.processQty) > 0);
+
+  const submitRequestProcess = () => {
+    if (!requestReviewTarget) {
+      return;
+    }
+
+    const nextErrors: Record<number, RequestReviewError> = {};
+    let hasErrors = false;
+    let hasPositiveQuantity = false;
+
+    requestReviewItems.forEach((item, index) => {
+      const processQtyError = getProcessQtyError(item.processQty, item.requestedQty);
+      if (processQtyError) {
+        nextErrors[index] = { processQty: processQtyError };
+        hasErrors = true;
+      }
+      if (Number(item.processQty) > 0) {
+        hasPositiveQuantity = true;
+      }
+    });
+
+    if (!hasPositiveQuantity) {
+      toast.error("At least one item must have Process Qty greater than zero.");
+      return;
+    }
+
+    if (hasErrors) {
+      setRequestReviewErrors(nextErrors);
+      return;
+    }
+
+    processRequestMutation.mutate({
+      requestId: requestReviewTarget.id,
+      items: requestReviewItems.map((item) => ({
+        item: item.itemId,
+        provided_qty: item.processQty,
+        remarks: item.reason.trim() || undefined,
+      })),
+    });
+  };
 
   const handleStockExport = (format: StoreExportFormat) => {
     try {
@@ -509,22 +495,19 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         { label: "Request No", value: (row) => readText(row.request_no) },
         { label: "Requested Date", value: (row) => formatDateTime(row.requested_at) },
         { label: "Department", value: (row) => row.department },
-        { label: "Approved By", value: (row) => row.requested_by_username },
+        { label: "Approved By", value: (row) => row.approved_by_username || "-" },
         { label: "Requested For", value: (row) => row.requested_for_name || "-" },
-        { label: "Status", value: (row) => getStoreRequestStatusLabel(row.status) },
         { label: "Item Codes", value: (row) => getRequestItemCodes(row) },
         { label: "Items", value: (row) => getRequestItemNames(row) },
         { label: "Requested Qty", value: (row) => getRequestQuantity(row) },
-        { label: "Approved Qty", value: (row) => getRequestApprovedQuantity(row) },
-        { label: "Issued Qty", value: (row) => getRequestIssuedQuantity(row) },
-        { label: "Reason", value: (row) => row.request_reason || "-" },
-        { label: "Responded By", value: (row) => row.approved_by_username || "-" },
-        { label: "Response Date", value: (row) => (row.approved_at ? formatDateTime(row.approved_at) : "-") },
+        { label: "Processed Qty", value: (row) => getProcessedQuantity(row) },
+        { label: "Released Qty", value: (row) => getReleasedQuantity(row) },
+        { label: "Released By", value: (row) => row.released_by_username || "-" },
       ];
 
       exportTableData({
-        title: "Request Approval's",
-        filename: "store-requests",
+        title: requestQueueModule ? REQUEST_QUEUE_META[requestQueueModule].label : STORE_REQUEST_APPROVAL_META.label,
+        filename: module,
         rows: requestRows,
         columns,
         format,
@@ -573,12 +556,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
     }
 
     if (!stockRows.length) {
-      return (
-        <EmptyState
-          title="No store stock rows"
-          description="No store inventory rows matched the current search."
-        />
-      );
+      return <EmptyState title="No store stock rows" description="No store inventory rows matched the current search." />;
     }
 
     return (
@@ -592,205 +570,226 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
     );
   };
 
-  const renderRequestTable = () => {
+  const renderRequestQueueTable = () => {
+    if (!requestQueueModule) {
+      return null;
+    }
+
     if (requestsQuery.isLoading) {
-      return <LoadingState label="Loading request approvals..." />;
+      return <LoadingState label={`Loading ${REQUEST_QUEUE_META[requestQueueModule].label.toLowerCase()}...`} />;
     }
 
     if (requestsQuery.isError) {
-      return <ErrorState description={getApiErrorMessage(requestsQuery.error, "Unable to load request approvals.")} />;
+      return <ErrorState description={getApiErrorMessage(requestsQuery.error, "Unable to load requests.")} />;
     }
 
     if (!requestRows.length) {
+      return <EmptyState title={`No ${REQUEST_QUEUE_META[requestQueueModule].label.toLowerCase()}`} description="No requests matched the selected filters." />;
+    }
+
+    if (requestQueueModule === "request-process") {
       return (
-        <EmptyState
-          title="No request approvals"
-          description="No department requests matched the selected date range, status, or department filters."
-        />
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                <TableRow className="hover:bg-card">
+                  <TableHead className="w-16 text-center">S.No</TableHead>
+                  <TableHead>Request</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="hidden lg:table-cell">Approved By</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedRequestRows.map((row, index) => (
+                  <TableRow
+                    key={row.id}
+                    tabIndex={0}
+                    role="button"
+                    className="cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => openRequestReviewDialog(row)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openRequestReviewDialog(row);
+                      }
+                    }}
+                  >
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
+                        <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium">{row.department}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium text-card-foreground">{getRequestItemNames(row)}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{getRequestItemCodes(row)}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openRequestReviewDialog(row);
+                        }}
+                      >
+                        <Eye className="mr-1.5 h-4 w-4" />
+                        Open
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <StoreTablePagination
+            page={requestPage}
+            pageSize={getPageSizeNumber(requestPageSize, requestRows.length)}
+            total={requestRows.length}
+            onPageChange={setRequestPage}
+          />
+        </div>
+      );
+    }
+
+    if (requestQueueModule === "release-stock") {
+      return (
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                <TableRow className="hover:bg-card">
+                  <TableHead className="w-16 text-center">S.No</TableHead>
+                  <TableHead>Request</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="hidden lg:table-cell">Approved By</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedRequestRows.map((row, index) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-center font-medium text-muted-foreground">
+                      {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
+                        <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium">{row.department}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium text-card-foreground">{getRequestItemNames(row)}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{getRequestItemCodes(row)}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                          onClick={() => setReleaseConfirmation({ request: row, action: "release" })}
+                          title="Release request"
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                          onClick={() => setReleaseConfirmation({ request: row, action: "reject" })}
+                          title="Reject request"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <StoreTablePagination
+            page={requestPage}
+            pageSize={getPageSizeNumber(requestPageSize, requestRows.length)}
+            total={requestRows.length}
+            onPageChange={setRequestPage}
+          />
+        </div>
       );
     }
 
     return (
-      <div className="space-y-6">
-        {pendingRequestRows.length ? (
-          <div className="space-y-3">
-            <div className="px-1 text-sm font-semibold text-card-foreground">Pending Requests</div>
-            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              <div className="max-h-[calc(100vh-21rem)] overflow-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
-                    <TableRow className="hover:bg-card">
-                      <TableHead className="w-16 text-center">S.No</TableHead>
-                      <TableHead>Request</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="hidden lg:table-cell">Approved By</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedRequestRows.map((row, index) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="text-center font-medium text-muted-foreground">
-                          {(requestPage - 1) * getPageSizeNumber(requestPageSize, pendingRequestRows.length) + index + 1}
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
-                            <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
-                            <div className="text-xs text-muted-foreground">{row.requested_for_name || "General request"}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">{row.department}</TableCell>
-                        <TableCell>
-                          <div className="space-y-2">
-                            {row.items?.length ? (
-                              row.items.map((item) => (
-                                <div key={item.id} className="space-y-0.5">
-                                  <div className="font-medium text-card-foreground">{item.item_name}</div>
-                                  <div className="font-mono text-xs text-muted-foreground">{item.item_code}</div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="space-y-0.5">
-                                <div className="font-medium text-card-foreground">{readText(row.item_name)}</div>
-                                <div className="font-mono text-xs text-muted-foreground">{readText(row.item_code)}</div>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <div className="space-y-0.5">
-                            <div>{row.requested_by_username}</div>
-                            <div className="text-xs text-muted-foreground" title={row.request_reason || "-"}>
-                              {row.request_reason || "-"}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={cn("font-medium", statusBadgeClassName(row.status))}>
-                            {getStoreRequestStatusLabel(row.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8"
-                              onClick={() => openRequestReviewDialog(row)}
-                              disabled={requestReviewMutation.isPending}
-                            >
-                              <Eye className="mr-1.5 h-4 w-4" />
-                              Open
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <StoreTablePagination
-                page={requestPage}
-                pageSize={getPageSizeNumber(requestPageSize, pendingRequestRows.length)}
-                total={pendingRequestRows.length}
-                onPageChange={setRequestPage}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {respondedRequestRows.length ? (
-          <div className="space-y-3">
-            <div className="px-1 text-sm font-semibold text-card-foreground">Responded Requests</div>
-            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              <div className="max-h-[calc(100vh-21rem)] overflow-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
-                    <TableRow className="hover:bg-card">
-                      <TableHead className="w-16 text-center">S.No</TableHead>
-                      <TableHead>Request</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="hidden lg:table-cell">Approved By</TableHead>
-                      <TableHead className="hidden xl:table-cell">Responded By and Date</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedRespondedRequestRows.map((row, index) => {
-                      const responseDetails = getRequestResponseLabel(row);
-
-                      return (
-                        <TableRow key={row.id}>
-                          <TableCell className="text-center font-medium text-muted-foreground">
-                            {(respondedRequestPage - 1) * getPageSizeNumber(requestPageSize, respondedRequestRows.length) + index + 1}
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
-                              <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
-                              <div className="text-xs text-muted-foreground">{row.requested_for_name || "General request"}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium">{row.department}</TableCell>
-                          <TableCell>
-                            <div className="space-y-2">
-                              {row.items?.length ? (
-                                row.items.map((item) => (
-                                  <div key={item.id} className="space-y-0.5">
-                                    <div className="font-medium text-card-foreground">{item.item_name}</div>
-                                    <div className="font-mono text-xs text-muted-foreground">{item.item_code}</div>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="space-y-0.5">
-                                  <div className="font-medium text-card-foreground">{readText(row.item_name)}</div>
-                                  <div className="font-mono text-xs text-muted-foreground">{readText(row.item_code)}</div>
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
-                          <TableCell className="hidden lg:table-cell">
-                            <div className="space-y-0.5">
-                              <div>{row.requested_by_username}</div>
-                              <div className="text-xs text-muted-foreground" title={row.request_reason || "-"}>
-                                {row.request_reason || "-"}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden xl:table-cell">
-                            <div className="space-y-0.5">
-                              <div>{responseDetails.responder}</div>
-                              <div className="text-xs text-muted-foreground">{responseDetails.respondedAt}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={cn("font-medium", statusBadgeClassName(row.status))}>
-                              {getStoreRequestStatusLabel(row.status)}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <StoreTablePagination
-                page={respondedRequestPage}
-                pageSize={getPageSizeNumber(requestPageSize, respondedRequestRows.length)}
-                total={respondedRequestRows.length}
-                onPageChange={setRespondedRequestPage}
-              />
-            </div>
-          </div>
-        ) : null}
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="max-h-[calc(100vh-21rem)] overflow-auto">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+              <TableRow className="hover:bg-card">
+                <TableHead className="w-16 text-center">S.No</TableHead>
+                <TableHead>Request</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead>Released By</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedRequestRows.map((row, index) => (
+                <TableRow key={row.id}>
+                  <TableCell className="text-center font-medium text-muted-foreground">
+                    {(requestPage - 1) * getPageSizeNumber(requestPageSize, requestRows.length) + index + 1}
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="font-medium text-card-foreground">{readText(row.request_no)}</div>
+                      <div className="text-xs text-muted-foreground">{formatDateTime(row.requested_at)}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium">{row.department}</TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div className="font-medium text-card-foreground">{getRequestItemNames(row)}</div>
+                      <div className="font-mono text-xs text-muted-foreground">{getRequestItemCodes(row)}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div>{row.released_by_username || "-"}</div>
+                      <div className="text-xs text-muted-foreground">{row.released_at ? formatDateTime(row.released_at) : "-"}</div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <StoreTablePagination
+          page={requestPage}
+          pageSize={getPageSizeNumber(requestPageSize, requestRows.length)}
+          total={requestRows.length}
+          onPageChange={setRequestPage}
+        />
       </div>
     );
   };
@@ -846,7 +845,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                       <div className="text-xs text-muted-foreground">{formatDateTime(row.created_at)}</div>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden lg:table-cell font-mono text-xs">{readText(row.transaction_no)}</TableCell>
+                  <TableCell className="hidden font-mono text-xs lg:table-cell">{readText(row.transaction_no)}</TableCell>
                   <TableCell>
                     <div className="space-y-0.5">
                       <div className="font-medium text-card-foreground">{row.item_name}</div>
@@ -887,10 +886,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
 
   return (
     <div className="space-y-3">
-      <PageHeader
-        title={STORE_MODULE_META[module].label}
-        description={STORE_MODULE_META[module].description}
-      />
+      <PageHeader title={pageMeta.label} description={pageMeta.description} />
+
       {module === "stock" ? (
         <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
           <StoreTableToolbar
@@ -912,105 +909,107 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         </div>
       ) : null}
 
-      {module === "requests" ? (
-        <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <StoreTableToolbar
-            searchValue={requestSearch}
-            onSearchChange={(value) => {
-              setRequestSearch(value);
-              setRequestPage(1);
-              setRespondedRequestPage(1);
-            }}
-            filterContent={
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_220px_auto]">
-                <div className="space-y-1">
-                  <label htmlFor="store-request-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    From Date
-                  </label>
-                  <Input
-                    id="store-request-from-date"
-                    type="date"
-                    value={requestDraftFilters.fromDate}
-                    onChange={(event) => setRequestDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
-                    className="h-9"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor="store-request-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    To Date
-                  </label>
-                  <Input
-                    id="store-request-to-date"
-                    type="date"
-                    value={requestDraftFilters.toDate}
-                    onChange={(event) => setRequestDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
-                    className="h-9"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
-                  <Select
-                    value={requestDraftFilters.status}
-                    onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, status: value as RequestStatusFilter }))}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending_store_issue">Pending Store Issue</SelectItem>
-                      <SelectItem value="all">All</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Department</div>
-                  <Select
-                    value={requestDraftFilters.department}
-                    onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, department: value }))}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      {departmentOptions.map((department) => (
-                        <SelectItem key={department.id} value={department.name}>
-                          {department.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    className="h-9 w-full"
-                    onClick={() =>
-                      startRequestFilterTransition(() => {
-                        setRequestFilters(requestDraftFilters);
-                        setRequestPage(1);
-                        setRespondedRequestPage(1);
-                      })
-                    }
-                    disabled={isRequestFilterPending}
-                  >
-                    Go
-                  </Button>
-                </div>
-              </div>
+      {requestQueueModule ? (
+        <Tabs
+          value={requestQueueModule}
+          onValueChange={(value) => {
+            if (value === "request-process" || value === "release-stock" || value === "closed-won") {
+              navigate(REQUEST_QUEUE_ROUTE_MAP[value]);
             }
-            pageSize={requestPageSize}
-            onPageSizeChange={(value) => {
-              setRequestPageSize(value);
-              setRequestPage(1);
-              setRespondedRequestPage(1);
-            }}
-            onExport={handleRequestExport}
-            summaryText={`${pendingRequestRows.length} pending and ${respondedRequestRows.length} responded requests in the current result set`}
-            isFetching={requestsQuery.isFetching || requestReviewMutation.isPending}
-          />
-          {renderRequestTable()}
-        </div>
+          }}
+          className="space-y-4"
+        >
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-xl border border-border/70 bg-muted/30 p-1">
+              <TabsTrigger value="request-process">Process Request</TabsTrigger>
+              <TabsTrigger value="release-stock">Release Stock</TabsTrigger>
+              <TabsTrigger value="closed-won">Closed Won</TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value={requestQueueModule} className="mt-0">
+            <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <StoreTableToolbar
+                searchValue={requestSearch}
+                onSearchChange={(value) => {
+                  setRequestSearch(value);
+                  setRequestPage(1);
+                }}
+                filterContent={
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_220px_auto]">
+                    <div className="space-y-1">
+                      <label htmlFor="store-request-from-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        From Date
+                      </label>
+                      <Input
+                        id="store-request-from-date"
+                        type="date"
+                        value={requestDraftFilters.fromDate}
+                        onChange={(event) => setRequestDraftFilters((current) => ({ ...current, fromDate: event.target.value }))}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="store-request-to-date" className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        To Date
+                      </label>
+                      <Input
+                        id="store-request-to-date"
+                        type="date"
+                        value={requestDraftFilters.toDate}
+                        onChange={(event) => setRequestDraftFilters((current) => ({ ...current, toDate: event.target.value }))}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Department</div>
+                      <Select
+                        value={requestDraftFilters.department}
+                        onValueChange={(value) => setRequestDraftFilters((current) => ({ ...current, department: value }))}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All departments</SelectItem>
+                          {departmentOptions.map((option) => (
+                            <SelectItem key={option.value} value={String(option.label)}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        type="button"
+                        className="h-9 w-full"
+                        disabled={isRequestFilterPending}
+                        onClick={() =>
+                          startRequestFilterTransition(() => {
+                            setRequestFilters(requestDraftFilters);
+                            setRequestPage(1);
+                          })
+                        }
+                      >
+                        Go
+                      </Button>
+                    </div>
+                  </div>
+                }
+                pageSize={requestPageSize}
+                onPageSizeChange={(value) => {
+                  setRequestPageSize(value);
+                  setRequestPage(1);
+                }}
+                onExport={handleRequestExport}
+                summaryText={`${requestRows.length} requests in the current queue`}
+                isFetching={requestsQuery.isFetching}
+              />
+              {renderRequestQueueTable()}
+            </div>
+          </TabsContent>
+        </Tabs>
       ) : null}
 
       {module === "transactions" ? (
@@ -1073,10 +1072,10 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      {departmentOptions.map((department) => (
-                        <SelectItem key={department.id} value={department.name}>
-                          {department.name}
+                      <SelectItem value="all">All departments</SelectItem>
+                      {departmentOptions.map((option) => (
+                        <SelectItem key={option.value} value={String(option.label)}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1086,13 +1085,13 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                   <Button
                     type="button"
                     className="h-9 w-full"
+                    disabled={isTransactionFilterPending}
                     onClick={() =>
                       startTransactionFilterTransition(() => {
                         setTransactionFilters(transactionDraftFilters);
                         setTransactionPage(1);
                       })
                     }
-                    disabled={isTransactionFilterPending}
                   >
                     Go
                   </Button>
@@ -1115,34 +1114,31 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
       <Dialog
         open={Boolean(requestReviewTarget)}
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && !processRequestMutation.isPending && !rejectRequestMutation.isPending) {
             closeRequestReviewDialog();
           }
         }}
       >
         <DialogContent className="max-w-5xl">
           <DialogHeader>
-            <DialogTitle>Request Review</DialogTitle>
+            <DialogTitle>{requestReviewTarget?.request_no || "Store Request"}</DialogTitle>
             <DialogDescription>
-              Review each requested item for <span className="font-semibold">{requestReviewTarget?.request_no ?? "-"}</span>.
-              Full approval keeps the requested quantity. Reduce any line to reject or partially approve it.
+              Review and process the requested quantities. Processed items will move to <span className="font-medium">Release Stock</span>.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[70vh] space-y-4 overflow-y-auto">
             <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:grid-cols-3">
               <div>
                 <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Request No</div>
-                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.request_no ?? "-"}</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.request_no || "-"}</div>
               </div>
               <div>
                 <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Department</div>
-                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.department ?? "-"}</div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.department || "-"}</div>
               </div>
               <div>
                 <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Approved By</div>
-                <div className="mt-1 text-sm font-semibold text-foreground">
-                  {requestReviewTarget?.approved_by_username || requestReviewTarget?.requested_by_username || "-"}
-                </div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{requestReviewTarget?.approved_by_username || "-"}</div>
               </div>
             </div>
 
@@ -1150,143 +1146,122 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
               <Table className="min-w-[920px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-16 text-center">S.no</TableHead>
+                    <TableHead className="w-16 text-center">S.No</TableHead>
                     <TableHead>Item Name</TableHead>
-                    <TableHead className="w-44">Requested Qty</TableHead>
+                    <TableHead className="w-48">Requested Qty</TableHead>
                     <TableHead className="w-56">
-                      Provide Qty <span className="text-destructive">*</span>
+                      Process Qty <span className="text-destructive">*</span>
                     </TableHead>
                     <TableHead className="w-80">Reason</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {requestReviewItems.map((item, index) => {
-                    const requestedQtyNumber = Number(item.requestedQty);
-                    const providedQtyNumber = Number(item.providedQty);
-                    const reasonRequired =
-                      item.providedQty.trim() &&
-                      Number.isFinite(providedQtyNumber) &&
-                      Number.isFinite(requestedQtyNumber) &&
-                      providedQtyNumber !== requestedQtyNumber;
+                  {requestReviewItems.map((item, index) => (
+                    <TableRow key={`${item.itemId}-${index}`} className="align-top">
+                      <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell>
+                        <div className="font-semibold text-foreground">{item.itemName}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {item.itemCode}
+                          {item.unit ? ` | ${item.unit}` : ""}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold text-foreground">
+                        {formatDecimal(item.requestedQty)}{item.unit ? ` ${item.unit}` : ""}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Label htmlFor={`process-qty-${index}`} className="sr-only">
+                            Process Qty
+                          </Label>
+                          <Input
+                            id={`process-qty-${index}`}
+                            inputMode="decimal"
+                            value={item.processQty}
+                            onKeyDown={(event) => {
+                              if (shouldBlockQuantityKey(event.key)) {
+                                event.preventDefault();
+                              }
+                            }}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              const nextError = getProcessQtyError(nextValue, item.requestedQty);
 
-                    return (
-                      <TableRow key={`${item.itemId}-${index}`} className="align-top">
-                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell>
-                          <div className="font-semibold text-foreground">{item.itemName}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {item.itemCode}
-                            {item.unit ? ` | ${item.unit}` : ""}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-semibold text-foreground">
-                          {formatDecimal(item.requestedQty)}{item.unit ? ` ${item.unit}` : ""}
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-2">
-                            <Label htmlFor={`request-provided-${index}`} className="sr-only">
-                              Provide Qty
-                            </Label>
-                            <Input
-                              id={`request-provided-${index}`}
-                              inputMode="decimal"
-                              value={item.providedQty}
-                              onKeyDown={(event) => {
-                                if (shouldBlockQuantityKey(event.key)) {
-                                  event.preventDefault();
-                                }
-                              }}
-                              onPaste={(event) => {
-                                const pastedValue = event.clipboardData.getData("text");
-                                const pastedError = getProvideQtyError(pastedValue, item.requestedQty);
-                                if (pastedError) {
-                                  event.preventDefault();
-                                  setRequestReviewErrors((current) => ({
-                                    ...current,
-                                    [index]: {
-                                      ...current[index],
-                                      providedQty: pastedError,
-                                    },
-                                  }));
-                                }
-                              }}
-                              onChange={(event) => {
-                                const nextValue = event.target.value;
-                                const nextError = getProvideQtyError(nextValue, item.requestedQty);
-
-                                setRequestReviewItems((current) =>
-                                  current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, providedQty: nextValue } : entry)),
-                                );
-                                setRequestReviewErrors((current) => {
-                                  const nextErrors = { ...current, [index]: { ...current[index], providedQty: nextError } };
-                                  if (
-                                    nextValue.trim() &&
-                                    Number.isFinite(Number(nextValue)) &&
-                                    Number.isFinite(Number(item.requestedQty)) &&
-                                    Number(nextValue) === Number(item.requestedQty)
-                                  ) {
-                                    nextErrors[index] = { providedQty: nextError };
-                                  } else if (nextValue.trim() && !nextError && !current[index]?.reason?.trim()) {
-                                    nextErrors[index] = {
-                                      providedQty: nextError,
-                                      reason: "Reason is required when Provide Qty is different from Requested Qty.",
-                                    };
-                                  } else if (!nextValue.trim()) {
-                                    nextErrors[index] = { providedQty: nextError };
-                                  }
-                                  return nextErrors;
-                                });
-                              }}
-                              placeholder="Enter provide quantity"
-                              className={requestReviewErrors[index]?.providedQty ? "border-destructive" : ""}
-                            />
-                            {requestReviewErrors[index]?.providedQty ? (
-                              <p className="text-xs text-destructive">{requestReviewErrors[index]?.providedQty}</p>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-2">
-                            <Label htmlFor={`request-reason-${index}`} className="sr-only">
-                              Reason{reasonRequired ? " required" : ""}
-                            </Label>
-                            <Textarea
-                              id={`request-reason-${index}`}
-                              rows={2}
-                              value={item.reason}
-                              onChange={(event) => {
-                                const nextValue = event.target.value;
-                                setRequestReviewItems((current) =>
-                                  current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reason: nextValue } : entry)),
-                                );
-                                setRequestReviewErrors((current) => ({ ...current, [index]: { ...current[index], reason: undefined } }));
-                              }}
-                              placeholder="Enter reason"
-                              className={requestReviewErrors[index]?.reason ? "border-destructive" : ""}
-                            />
-                            {reasonRequired && !requestReviewErrors[index]?.reason ? (
-                              <p className="text-xs text-muted-foreground">Required when provide qty is different.</p>
-                            ) : null}
-                            {requestReviewErrors[index]?.reason ? <p className="text-xs text-destructive">{requestReviewErrors[index]?.reason}</p> : null}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                              setRequestReviewItems((current) =>
+                                current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, processQty: nextValue } : entry)),
+                              );
+                              setRequestReviewErrors((current) => ({
+                                ...current,
+                                [index]: { processQty: nextError },
+                              }));
+                            }}
+                          />
+                          {requestReviewErrors[index]?.processQty ? (
+                            <p className="text-xs text-destructive">{requestReviewErrors[index]?.processQty}</p>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Textarea
+                          value={item.reason}
+                          rows={3}
+                          placeholder="Optional reason"
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setRequestReviewItems((current) =>
+                              current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reason: nextValue } : entry)),
+                            );
+                          }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeRequestReviewDialog} disabled={requestReviewMutation.isPending}>
-              Cancel
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => requestReviewTarget && rejectRequestMutation.mutate(requestReviewTarget.id)}
+              disabled={processRequestMutation.isPending || rejectRequestMutation.isPending}
+            >
+              Reject
             </Button>
-            <Button onClick={submitRequestReview} disabled={requestReviewMutation.isPending || !isRequestReviewReady}>
-              {requestReviewMutation.isPending ? "Saving..." : "Submit Review"}
+            <Button type="button" onClick={submitRequestProcess} disabled={!isRequestReviewReady || processRequestMutation.isPending || rejectRequestMutation.isPending}>
+              Process
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(releaseConfirmation)}
+        onOpenChange={(open) => {
+          if (!open && !releaseRequestMutation.isPending) {
+            setReleaseConfirmation(null);
+          }
+        }}
+        title={releaseConfirmation?.action === "release" ? "Release request" : "Reject request"}
+        description={
+          releaseConfirmation?.action === "release"
+            ? "Are you sure you want to release this request?"
+            : "Are you sure you want to reject this request?"
+        }
+        cancelLabel="Cancel"
+        confirmLabel={releaseConfirmation?.action === "release" ? "Release" : "Reject"}
+        onConfirm={() => {
+          if (!releaseConfirmation) {
+            return;
+          }
+
+          releaseRequestMutation.mutate({
+            requestId: releaseConfirmation.request.id,
+            action: releaseConfirmation.action,
+          });
+        }}
+      />
     </div>
   );
 };

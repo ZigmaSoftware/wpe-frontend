@@ -1,12 +1,13 @@
 import type { StoreStockRequest } from "@/lib/types";
 
 export const STORE_REQUEST_STATUS_LABELS: Record<StoreStockRequest["status"], string> = {
-  PENDING_HEAD_APPROVAL: "Pending Blending Head Approval",
-  PENDING_STORE_ISSUE: "Pending Store Issue",
-  HEAD_REJECTED: "Rejected by Blending Head",
-  APPROVED: "Fully Issued",
-  PARTIALLY_APPROVED: "Partially Issued",
-  REJECTED: "Rejected by Store",
+  PENDING_HEAD_APPROVAL: "Pending Head Approval",
+  PENDING_REQUEST_PROCESS: "Pending Request Process",
+  PENDING_STOCK_RELEASE: "Pending Stock Release",
+  HEAD_REJECTED: "Rejected by Head",
+  REQUEST_REJECTED: "Rejected During Request Process",
+  RELEASE_REJECTED: "Rejected During Stock Release",
+  CLOSED_WON: "Closed Won",
   CANCELLED: "Cancelled",
 };
 
