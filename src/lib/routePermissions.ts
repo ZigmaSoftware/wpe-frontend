@@ -12,9 +12,17 @@ import { GRN_PROCESS_ROUTE, GRN_ROUTE, GRN_STATUS_ROUTE } from "@/features/grn/u
 import { INVENTORY_ROUTE, PRODUCTION_INVENTORY_ROUTE, STORE_INVENTORY_ROUTE, WAREHOUSE_INVENTORY_ROUTE } from "@/features/items/utils/routes";
 import { PRODUCTION_MASTERS_ROUTE } from "@/features/production-masters/utils/routes";
 import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_BL_BLENDING_ROUTE, PRODUCTION_GL_GRANULATION_ROUTE, PRODUCTION_PR_PRODUCTION_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
-import { REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
+import { REQUESTS_HEAD_APPROVAL_ROUTE, REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
 import { RECIPE_BOM_MASTERS_ROUTE } from "@/features/recipe-bom-masters/utils/routes";
-import { STORE_REQUEST_ROUTE, STORE_ROUTE, STORE_STOCK_ROUTE, STORE_TRANSACTIONS_ROUTE } from "@/features/store/utils/routes";
+import {
+  STORE_CLOSED_WON_ROUTE,
+  STORE_RELEASE_STOCK_ROUTE,
+  STORE_REQUEST_PROCESS_ROUTE,
+  STORE_REQUEST_ROUTE,
+  STORE_ROUTE,
+  STORE_STOCK_ROUTE,
+  STORE_TRANSACTIONS_ROUTE,
+} from "@/features/store/utils/routes";
 import {
   INVENTORY_STORE_MASTERS_ROUTE,
   WPE_ITEM_VARIANTS_ROUTE,
@@ -127,9 +135,8 @@ export const WORKSPACE_GROUP_SCREEN_CODES = {
   blending: uniqueCodes(
     WORKSPACE_SCREEN_CODES.blendingStock,
     WORKSPACE_SCREEN_CODES.blendingTransactions,
-    WORKSPACE_SCREEN_CODES.blendingHeadApproval,
   ),
-  requests: uniqueCodes(WORKSPACE_SCREEN_CODES.requestsStoreRequest),
+  requests: uniqueCodes(WORKSPACE_SCREEN_CODES.requestsStoreRequest, WORKSPACE_SCREEN_CODES.blendingHeadApproval),
   production: uniqueCodes(
     WORKSPACE_SCREEN_CODES.productionAdWeightage,
     WORKSPACE_SCREEN_CODES.productionBlBlending,
@@ -224,8 +231,12 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   [PRODUCTION_GL_GRANULATION_ROUTE]: WORKSPACE_SCREEN_CODES.productionGlGranulation,
   [PRODUCTION_PR_PRODUCTION_ROUTE]: WORKSPACE_SCREEN_CODES.productionPrProduction,
   [REQUESTS_STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.requestsStoreRequest,
+  [REQUESTS_HEAD_APPROVAL_ROUTE]: WORKSPACE_SCREEN_CODES.blendingHeadApproval,
   [STORE_STOCK_ROUTE]: WORKSPACE_SCREEN_CODES.storeStock,
   [STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.storeRequest,
+  [STORE_REQUEST_PROCESS_ROUTE]: WORKSPACE_SCREEN_CODES.storeRequest,
+  [STORE_RELEASE_STOCK_ROUTE]: WORKSPACE_SCREEN_CODES.storeRequest,
+  [STORE_CLOSED_WON_ROUTE]: WORKSPACE_SCREEN_CODES.storeRequest,
   [STORE_TRANSACTIONS_ROUTE]: WORKSPACE_SCREEN_CODES.storeTransactions,
   [GRN_PROCESS_ROUTE]: WORKSPACE_SCREEN_CODES.grnProcess,
   [GRN_STATUS_ROUTE]: WORKSPACE_SCREEN_CODES.grnStatus,
@@ -301,6 +312,8 @@ const screenCodeRoutePathMap = {
   "requests-store-request-workspace": REQUESTS_STORE_REQUEST_ROUTE,
   "store-request": REQUESTS_STORE_REQUEST_ROUTE,
   "blending-store-request-workspace": REQUESTS_STORE_REQUEST_ROUTE,
+  "blending-head-approval-workspace": REQUESTS_HEAD_APPROVAL_ROUTE,
+  "store-request-workspace": STORE_REQUEST_PROCESS_ROUTE,
 };
 
 export const getRoutePathForScreenCode = (screenCode: string, backendRoutePath?: string | null) => {

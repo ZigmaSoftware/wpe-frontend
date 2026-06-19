@@ -43,8 +43,11 @@ import {
   getGrnProcessEditRoute,
   getGrnProcessViewRoute,
 } from "@/features/grn/utils/routes";
-import { REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
+import { REQUESTS_HEAD_APPROVAL_ROUTE, REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
 import {
+  STORE_CLOSED_WON_ROUTE,
+  STORE_RELEASE_STOCK_ROUTE,
+  STORE_REQUEST_PROCESS_ROUTE,
   STORE_REQUEST_ROUTE,
   STORE_ROUTE,
   STORE_STOCK_ROUTE,
@@ -266,9 +269,6 @@ const App = () => (
                     <Route path={BLENDING_TRANSACTIONS_ROUTE} element={<BlendingPage module="transactions" />} />
                     <Route path={`${BLENDING_TRANSACTIONS_ROUTE}/:requestId`} element={<BlendingTransactionPage />} />
                   </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.blendingHeadApproval} />}>
-                    <Route path={BLENDING_HEAD_APPROVAL_ROUTE} element={<BlendingHeadApprovalPage />} />
-                  </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.requestsWorkspace} />}>
                     <Route path={REQUESTS_ROUTE} element={<WorkspaceGroupRedirect groupKey="requests" fallback={REQUESTS_STORE_REQUEST_ROUTE} />} />
@@ -276,6 +276,10 @@ const App = () => (
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.requestsStoreRequest} />}>
                     <Route path={BLENDING_STORE_REQUEST_ROUTE} element={<Navigate to={REQUESTS_STORE_REQUEST_ROUTE} replace />} />
                     <Route path={REQUESTS_STORE_REQUEST_ROUTE} element={<RequestsPage />} />
+                  </Route>
+                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.blendingHeadApproval} />}>
+                    <Route path={BLENDING_HEAD_APPROVAL_ROUTE} element={<Navigate to={REQUESTS_HEAD_APPROVAL_ROUTE} replace />} />
+                    <Route path={REQUESTS_HEAD_APPROVAL_ROUTE} element={<BlendingHeadApprovalPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.productionAdWeightage} />}>
@@ -358,7 +362,10 @@ const App = () => (
                     <Route path={`${STORE_STOCK_ROUTE}/:itemId`} element={<StoreStockItemPage />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.storeRequest} />}>
-                    <Route path={STORE_REQUEST_ROUTE} element={<StorePage module="requests" />} />
+                    <Route path={STORE_REQUEST_ROUTE} element={<StorePage module="request-process" />} />
+                    <Route path={STORE_REQUEST_PROCESS_ROUTE} element={<StorePage module="request-process" />} />
+                    <Route path={STORE_RELEASE_STOCK_ROUTE} element={<StorePage module="release-stock" />} />
+                    <Route path={STORE_CLOSED_WON_ROUTE} element={<StorePage module="closed-won" />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.storeTransactions} />}>
                     <Route path={STORE_TRANSACTIONS_ROUTE} element={<StorePage module="transactions" />} />

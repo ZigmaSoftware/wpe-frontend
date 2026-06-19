@@ -1,4 +1,4 @@
-import { Blend, Box, ClipboardCheck, Route, type LucideIcon } from "lucide-react";
+import { Blend, Box, Route, type LucideIcon } from "lucide-react";
 
 export const BLENDING_ROUTE = "/app/blending";
 export const BLENDING_STOCK_ROUTE = `${BLENDING_ROUTE}/stock`;
@@ -25,12 +25,6 @@ export const blendingWorkspaceModuleDefinitions: BlendingWorkspaceModuleDefiniti
     icon: Route,
     label: "Blending Transactions",
     description: "Review approved, pending, and rejected blending transfers.",
-  },
-  {
-    to: BLENDING_HEAD_APPROVAL_ROUTE,
-    icon: ClipboardCheck,
-    label: "Blending Head Approval",
-    description: "Review pending Blending Store Requests before Store issue.",
   },
 ];
 

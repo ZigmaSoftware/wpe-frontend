@@ -1,11 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FlaskConical, Printer, Plus, Trash2 } from "lucide-react";
+import { FlaskConical, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useDeferredValue, useEffect, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import AdditiveItemAutocomplete from "@/components/AdditiveItemAutocomplete";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import { Button } from "@/components/ui/button";
@@ -51,8 +52,17 @@ import type { StoreStockRecord, StoreStockRequest } from "@/lib/types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type BlendingPageModule = "stock" | "requests" | "transactions";
-type RequestStatusFilter = "all" | "pending_head_approval" | "pending_store_issue" | "approved" | "partially_approved" | "cancelled";
-type TransactionStatusFilter = "all" | "pending_store_issue" | "approved" | "rejected";
+type RequestStatusFilter =
+  | "all"
+  | "pending_head_approval"
+  | "pending_request_process"
+  | "pending_stock_release"
+  | "closed_won"
+  | "head_rejected"
+  | "request_rejected"
+  | "release_rejected"
+  | "cancelled";
+type TransactionStatusFilter = "all" | "pending_request_process" | "pending_stock_release" | "closed_won" | "request_rejected" | "release_rejected";
 
 type RequestFilterState = {
   fromDate: string;
@@ -105,6 +115,35 @@ const createAdditiveRequestDefaults = (department: string): AdditiveRequestValue
   require_time: "",
   requested_for_name: "",
   request_reason: "",
+});
+
+const createRequestLineStockRecord = (
+  item: NonNullable<StoreStockRequest["items"]>[number],
+): StoreStockRecord => ({
+  id: item.id,
+  item: item.item,
+  item_code: item.item_code,
+  item_name: item.item_name,
+  category: item.category,
+  group: item.group,
+  sub_group: item.sub_group,
+  unit: item.unit,
+  quantity: item.available_qty,
+  created_at: item.created_at,
+  updated_at: item.updated_at,
+});
+
+const createRequestFormValues = (request: StoreStockRequest, department: string): AdditiveRequestValues => ({
+  items: (request.items ?? []).map((item) => ({
+    item_id: String(item.item),
+    quantity: item.requested_qty,
+  })),
+  department: request.department || department,
+  request_date: request.request_date || getTodayDateInputValue(),
+  require_date: request.require_date || "",
+  require_time: request.require_time || "",
+  requested_for_name: request.requested_for_name || "",
+  request_reason: request.request_reason || "",
 });
 
 const createDefaultRequestFilters = (): RequestFilterState => ({
@@ -176,12 +215,15 @@ const getRequestDisplayId = (request: StoreStockRequest) => request.request_no |
 
 const statusClassName = (status: StoreStockRequest["status"]) => {
   switch (status) {
-    case "APPROVED":
+    case "CLOSED_WON":
       return "text-emerald-700";
-    case "REJECTED":
+    case "HEAD_REJECTED":
+    case "REQUEST_REJECTED":
+    case "RELEASE_REJECTED":
       return "text-rose-700";
     case "PENDING_HEAD_APPROVAL":
-    case "PENDING_STORE_ISSUE":
+    case "PENDING_REQUEST_PROCESS":
+    case "PENDING_STOCK_RELEASE":
       return "text-amber-700";
     default:
       return "text-slate-700";
@@ -226,6 +268,8 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<StoreStockRequest | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StoreStockRequest | null>(null);
   const [productPickerItem, setProductPickerItem] = useState<StoreStockRecord | null>(null);
   const [productPickerResetKey, setProductPickerResetKey] = useState(0);
   const [selectedAdditiveItems, setSelectedAdditiveItems] = useState<StoreStockRecord[]>([]);
@@ -332,13 +376,63 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
       });
     },
     onSuccess: () => {
-      toast.success("Store request submitted.");
+      toast.success(editingRequest ? "Store request updated." : "Store request submitted.");
       handleDialogOpenChange(false);
       void queryClient.invalidateQueries({ queryKey: ["blending"] });
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, "Unable to submit the store request."));
+      toast.error(getApiErrorMessage(error, editingRequest ? "Unable to update the store request." : "Unable to submit the store request."));
     },
+  });
+
+  const updateRequestMutation = useMutation({
+    mutationFn: async ({ requestId, payload }: { requestId: number; payload: AdditiveRequestValues }) => {
+      const normalizedItems = payload.items.reduce<Array<{ item_id: number; quantity: string }>>((result, item) => {
+        const itemId = Number(item.item_id);
+        const existingItem = result.find((row) => row.item_id === itemId);
+
+        if (!existingItem) {
+          result.push({
+            item_id: itemId,
+            quantity: item.quantity,
+          });
+          return result;
+        }
+
+        existingItem.quantity = String(Number(existingItem.quantity) + Number(item.quantity));
+        return result;
+      }, []);
+
+      const trimmedRequireDate = payload.require_date?.trim();
+      const trimmedRequireTime = payload.require_time?.trim();
+
+      return blendingApi.updateStoreRequest(requestId, {
+        request_type: "ADDITIVE",
+        department: payload.department,
+        request_date: payload.request_date,
+        ...(trimmedRequireDate ? { require_date: trimmedRequireDate } : {}),
+        ...(trimmedRequireTime ? { require_time: trimmedRequireTime } : {}),
+        requested_for_name: payload.requested_for_name,
+        request_reason: payload.request_reason,
+        items: normalizedItems,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Store request updated.");
+      handleDialogOpenChange(false);
+      void queryClient.invalidateQueries({ queryKey: ["blending"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update the store request.")),
+  });
+
+  const cancelRequestMutation = useMutation({
+    mutationFn: (requestId: number) => blendingApi.cancelStoreRequest(requestId),
+    onSuccess: () => {
+      toast.success("Store request deleted.");
+      setDeleteTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ["blending"] });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to delete the store request.")),
   });
 
   const stockRows = stockQuery.data ?? [];
@@ -393,12 +487,14 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
     !hasDuplicateSelectedItems &&
     Boolean(watchedRequestedForName.trim()) &&
     Boolean(watchedRequestReason.trim()) &&
-    !requestStockMutation.isPending;
+    !requestStockMutation.isPending &&
+    !updateRequestMutation.isPending;
 
   const handleDialogOpenChange = (open: boolean) => {
     setDialogOpen(open);
 
     if (!open) {
+      setEditingRequest(null);
       form.reset(createAdditiveRequestDefaults(requestDepartment));
       setProductPickerItem(null);
       setProductPickerResetKey(0);
@@ -406,9 +502,28 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
     }
   };
 
+  const openCreateDialog = () => {
+    setEditingRequest(null);
+    form.reset(createAdditiveRequestDefaults(requestDepartment));
+    setSelectedAdditiveItems([]);
+    setProductPickerItem(null);
+    setProductPickerResetKey((current) => current + 1);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (request: StoreStockRequest) => {
+    setEditingRequest(request);
+    form.reset(createRequestFormValues(request, requestDepartment));
+    setSelectedAdditiveItems((request.items ?? []).map(createRequestLineStockRecord));
+    setProductPickerItem(null);
+    setProductPickerResetKey((current) => current + 1);
+    setDialogOpen(true);
+  };
+
   useEffect(() => {
     if (module !== "requests") {
       setDialogOpen(false);
+      setEditingRequest(null);
       form.reset(createAdditiveRequestDefaults(requestDepartment));
       setProductPickerItem(null);
       setProductPickerResetKey(0);
@@ -593,10 +708,13 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="pending_head_approval">Pending Blending Head Approval</SelectItem>
-                  <SelectItem value="pending_store_issue">Pending Store Issue</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="partially_approved">Partially Approved</SelectItem>
+                  <SelectItem value="pending_head_approval">Pending Head Approval</SelectItem>
+                  <SelectItem value="pending_request_process">Pending Request Process</SelectItem>
+                  <SelectItem value="pending_stock_release">Pending Stock Release</SelectItem>
+                  <SelectItem value="closed_won">Closed Won</SelectItem>
+                  <SelectItem value="head_rejected">Rejected by Head</SelectItem>
+                  <SelectItem value="request_rejected">Rejected in Request Process</SelectItem>
+                  <SelectItem value="release_rejected">Rejected in Release Stock</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
@@ -644,12 +762,13 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                     <TableHead>Requested Date</TableHead>
                     <TableHead>Approved By</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-20 text-center">Actions</TableHead>
+                    <TableHead className="w-32 text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedRequestRows.map((request, index) => {
                     const summary = getRequestItemSummary(request);
+                    const canManage = request.status === "PENDING_HEAD_APPROVAL";
                     return (
                       <TableRow key={request.id}>
                         <TableCell className="text-center font-medium text-muted-foreground">
@@ -672,14 +791,34 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                         <TableCell>{request.approved_by_username || "-"}</TableCell>
                         <TableCell className={statusClassName(request.status)}>{getStoreRequestStatusLabel(request.status)}</TableCell>
                         <TableCell className="text-center">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            title="Print SR"
-                            onClick={() => printStoreRequest(request)}
-                          >
-                            <Printer className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              title="Edit request"
+                              disabled={!canManage}
+                              onClick={() => openEditDialog(request)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              title="Delete request"
+                              disabled={!canManage || cancelRequestMutation.isPending}
+                              onClick={() => setDeleteTarget(request)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              title="Print SR"
+                              onClick={() => printStoreRequest(request)}
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -746,9 +885,11 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="pending_store_issue">Pending Store Issue</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="pending_request_process">Pending Request Process</SelectItem>
+                  <SelectItem value="pending_stock_release">Pending Stock Release</SelectItem>
+                  <SelectItem value="closed_won">Closed Won</SelectItem>
+                  <SelectItem value="request_rejected">Rejected in Request Process</SelectItem>
+                  <SelectItem value="release_rejected">Rejected in Release Stock</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -853,7 +994,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
         title={BLENDING_MODULE_META[module].title}
         description={BLENDING_MODULE_META[module].description}
         actions={module === "requests" ? (
-          <Button onClick={() => setDialogOpen(true)}>
+          <Button onClick={openCreateDialog}>
             <Plus className="mr-2 h-4 w-4" />
             Store Request
           </Button>
@@ -866,14 +1007,26 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create Store Request</DialogTitle>
+            <DialogTitle>{editingRequest ? "Edit Store Request" : "Create Store Request"}</DialogTitle>
             <DialogDescription>
-              Submit a blending store request with one or more product lines for store approval.
+              {editingRequest
+                ? "Update the pending store request before it moves to Head approval."
+                : "Submit a blending store request with one or more product lines for store approval."}
             </DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit((values) => requestStockMutation.mutate(values))} className="space-y-4">
+            <form
+              onSubmit={form.handleSubmit((values) => {
+                if (editingRequest) {
+                  updateRequestMutation.mutate({ requestId: editingRequest.id, payload: values });
+                  return;
+                }
+
+                requestStockMutation.mutate(values);
+              })}
+              className="space-y-4"
+            >
               <div className="space-y-3">
                 <FormItem>
                   <FormLabel>Additive Items*</FormLabel>
@@ -1068,7 +1221,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={!canSubmitAdditiveRequest}>
-                  Submit Request
+                  {editingRequest ? "Update Request" : "Submit Request"}
                 </Button>
               </div>
             </form>
@@ -1115,6 +1268,26 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !cancelRequestMutation.isPending) {
+            setDeleteTarget(null);
+          }
+        }}
+        title="Delete store request"
+        description="Are you sure you want to delete this store request?"
+        cancelLabel="Cancel"
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (!deleteTarget) {
+            return;
+          }
+
+          cancelRequestMutation.mutate(deleteTarget.id);
+        }}
+      />
     </div>
   );
 };

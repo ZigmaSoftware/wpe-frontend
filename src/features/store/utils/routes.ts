@@ -2,6 +2,9 @@ import { Archive, Box, FileText, Route, type LucideIcon } from "lucide-react";
 
 export const STORE_ROUTE = "/app/store";
 export const STORE_STOCK_ROUTE = `${STORE_ROUTE}/stock`;
+export const STORE_REQUEST_PROCESS_ROUTE = `${STORE_ROUTE}/request-process`;
+export const STORE_RELEASE_STOCK_ROUTE = `${STORE_ROUTE}/release-stock`;
+export const STORE_CLOSED_WON_ROUTE = `${STORE_ROUTE}/closed-won`;
 export const STORE_REQUEST_ROUTE = `${STORE_ROUTE}/request`;
 export const STORE_TRANSACTIONS_ROUTE = `${STORE_ROUTE}/transactions`;
 
@@ -12,6 +15,8 @@ export type StoreWorkspaceModuleDefinition = {
   icon: LucideIcon;
   label: string;
   description: string;
+  exact?: boolean;
+  activeMatchPaths?: string[];
 };
 
 export const storeWorkspaceModuleDefinitions: StoreWorkspaceModuleDefinition[] = [
@@ -25,7 +30,13 @@ export const storeWorkspaceModuleDefinitions: StoreWorkspaceModuleDefinition[] =
     to: STORE_REQUEST_ROUTE,
     icon: FileText,
     label: "Request Approval's",
-    description: "Review and action department store requests with approval workflow context.",
+    description: "Process requests, release stock, and review completed handovers in one workspace.",
+    activeMatchPaths: [
+      STORE_REQUEST_ROUTE,
+      STORE_REQUEST_PROCESS_ROUTE,
+      STORE_RELEASE_STOCK_ROUTE,
+      STORE_CLOSED_WON_ROUTE,
+    ],
   },
   {
     to: STORE_TRANSACTIONS_ROUTE,

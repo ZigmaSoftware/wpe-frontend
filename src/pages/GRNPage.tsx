@@ -352,7 +352,7 @@ const defaultValues: GrnFormValues = {
 };
 
 const grnTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr", "next-grn", "rejected"];
-const processTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr", "next-grn"];
+const processTabs: GrnTabValue[] = ["active", "moved-to-qcr", "next-grn"];
 const statusTabs: GrnTabValue[] = ["next-grn"];
 
 const completedGrnStatusOptions = ["Approved", "Rejected"] as const;
@@ -360,7 +360,7 @@ const completedGrnStatusOptions = ["Approved", "Rejected"] as const;
 const GRN_MODULE_META: Record<GrnPageModule, { title: string; description: string; defaultTab: GrnTabValue }> = {
   process: {
     title: "Gate Entry",
-    description: "Manage Gate Entry, GRN Pending, QCR, and Completed GRN movement from one workspace.",
+    description: "Manage Gate Entry, QCR, and Completed GRN movement from one workspace.",
     defaultTab: "active",
   },
   status: {
@@ -567,10 +567,6 @@ const getQcrItemErrors = (items: QcrCompletionFormItem[]) =>
       itemErrors.rejectedQty = "Received Qty is not available for this row.";
     } else if (rejectedQtyError) {
       itemErrors.rejectedQty = rejectedQtyError;
-    }
-
-    if (Number.isFinite(rejected) && rejected > 0 && !item.reason.trim()) {
-      itemErrors.reason = "Reason is required when Rejected Qty is greater than zero.";
     }
 
     if (itemErrors.rejectedQty || itemErrors.reason) {
@@ -1806,14 +1802,14 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
       return response.data;
     },
     onSuccess: (_payload, grnId) => {
-      toast.success("Gate Entry moved to GRN Pending.");
+      toast.success("Gate Entry moved to QCR.");
       setMoveTarget(null);
       setDetailState((current) => (current?.scope === "active" && current.recordId === grnId ? null : current));
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
       queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move Gate Entry to GRN Pending.")),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move Gate Entry to QCR.")),
   });
 
   const pendingToQcrMutation = useMutation({
@@ -1879,7 +1875,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
     },
     onSuccess: (payload) => {
       const successMessage = readTypedMessage(payload);
-      toast.success(successMessage.trim() ? successMessage : "QCR completed. Only accepted quantity was moved to store.");
+      toast.success(successMessage.trim() ? successMessage : "QCR completed successfully.");
       setQcrEntryTarget(null);
       setQcrEntryItems([]);
       setQcrEntryErrors({});
@@ -2224,22 +2220,14 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
           : qcrRejectedRecords;
     const columns: StoreExportColumn<QcrRecord | CompletedGrnDisplayRow>[] = [
       { label: "S.No", value: (_row, index) => index + 1 },
-      ...(activeTab === "next-grn"
-        ? [
-            {
-              label: "GRN No",
-              value: (row: QcrRecord | CompletedGrnDisplayRow) =>
-                "record" in row && row.statusGroup === "Approved" ? row.record.generated_grn_no || "-" : "-",
-            },
-          ]
-        : []),
       {
-        label: "GRN Reference",
+        label: "Ref .No",
         value: (row) => ("record" in row ? row.record.grn_reference_no : row.grn_reference_no),
       },
       {
-        label: "Supplier",
-        value: (row) => ("record" in row ? readText(getQcrField(row.record, "trade_name")) : readText(getQcrField(row, "trade_name"))),
+        label: "GRN No",
+        value: (row: QcrRecord | CompletedGrnDisplayRow) =>
+          "record" in row ? row.record.generated_grn_no || "-" : row.generated_grn_no || "-",
       },
       {
         label: "Item",
@@ -2476,8 +2464,8 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>GRN Reference</TableHead>
-                <TableHead>Supplier</TableHead>
+                <TableHead>Ref .No</TableHead>
+                <TableHead>GRN No</TableHead>
                 <TableHead>Item</TableHead>
                 <TableHead>Quantity</TableHead>
                 <TableHead>Status</TableHead>
@@ -2499,12 +2487,20 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                         : "border-success/20 bg-success/10 text-success";
 
                 return (
-                  <TableRow key={record.id} className="transition-colors hover:bg-muted/50">
+                  <TableRow
+                    key={record.id}
+                    className={cn("transition-colors hover:bg-muted/50", record.status === "Active" ? "cursor-pointer" : "")}
+                    onClick={() => {
+                      if (record.status === "Active") {
+                        openQcrEntryDialog(record);
+                      }
+                    }}
+                  >
                     <TableCell className="text-center font-medium text-muted-foreground">
                       {getPageSerialNumber(pageByTab[tab], pageSizeByTab[tab], records.length, index)}
                     </TableCell>
                     <TableCell className="font-medium">{record.grn_reference_no}</TableCell>
-                    <TableCell>{readText(getQcrField(record, "trade_name"))}</TableCell>
+                    <TableCell className="font-medium">{record.generated_grn_no || "-"}</TableCell>
                     <TableCell>{readText(getQcrField(record, "product_description"))}</TableCell>
                     <TableCell>{formatDecimal(getQcrDisplayQuantity(record, tab))}</TableCell>
                     <TableCell>
@@ -2516,8 +2512,17 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                     <TableCell>{record.moved_to_qcr_by || "-"}</TableCell>
                     <TableCell className="text-right">
                       {record.status === "Active" ? (
-                        <Button type="button" variant="outline" size="sm" onClick={() => openQcrEntryDialog(record)} disabled={qcrCompletionMutation.isPending}>
-                          QC Entry
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openQcrEntryDialog(record);
+                          }}
+                          disabled={qcrCompletionMutation.isPending}
+                        >
+                          Open
                         </Button>
                       ) : (
                         <span className="text-muted-foreground">—</span>
@@ -2554,7 +2559,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
               <TableRow>
                 <TableHead className="w-16 text-center">S.No</TableHead>
                 <TableHead>GRN No</TableHead>
-                <TableHead>GRN Reference</TableHead>
+                <TableHead>Ref .No</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>Item</TableHead>
                 <TableHead>Quantity</TableHead>
@@ -2623,7 +2628,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>GRN Reference</TableHead>
+                <TableHead>Ref .No</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>PO No</TableHead>
                 <TableHead>Items</TableHead>
@@ -2631,18 +2636,14 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                 <TableHead>Total After Tax</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-24 text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedRows.map((record, index) => {
-                const isSelected = detailState?.scope === "active" && detailState.recordId === record.id;
                 const itemSummary = getActiveItemSummary(record);
                 return (
-                  <TableRow
-                    key={record.id}
-                    className={cn("cursor-pointer transition-colors hover:bg-muted/50", isSelected ? "bg-primary/5" : "")}
-                    onClick={() => navigate(getGrnProcessEditRoute(record.id))}
-                  >
+                  <TableRow key={record.id} className="transition-colors hover:bg-muted/50">
                     <TableCell className="text-center font-medium text-muted-foreground">
                       {getPageSerialNumber(pageByTab.active, pageSizeByTab.active, records.length, index)}
                     </TableCell>
@@ -2677,6 +2678,11 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                         {record.process_status}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button type="button" variant="outline" size="sm" onClick={() => navigate(getGrnProcessEditRoute(record.id))}>
+                        Open
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -2707,7 +2713,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>GRN Reference</TableHead>
+                <TableHead>Ref .No</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>PO No</TableHead>
                 <TableHead>Items</TableHead>
@@ -3568,13 +3574,13 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
           <DialogHeader>
             <DialogTitle>QCR Entry</DialogTitle>
             <DialogDescription>
-              Review every received line for <span className="font-semibold">{qcrEntryTarget?.grn_reference_no}</span>. Only accepted quantity will be moved to store stock.
+              Review every received line for <span className="font-semibold">{qcrEntryTarget?.grn_reference_no}</span>.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[70vh] space-y-4 overflow-y-auto">
             <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:grid-cols-3">
               <div>
-                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">GRN Reference</div>
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Ref. No</div>
                 <div className="mt-1 text-sm font-semibold text-foreground">{qcrEntryTarget?.grn_reference_no ?? "-"}</div>
               </div>
               <div>
@@ -3597,9 +3603,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                     <TableHead>Item Name</TableHead>
                     <TableHead className="w-40">Sent Qty</TableHead>
                     <TableHead className="w-48">Accepted Qty</TableHead>
-                    <TableHead className="w-56">
-                      Rejected Qty <span className="text-destructive">*</span>
-                    </TableHead>
+                    <TableHead className="w-56">Rejected Qty</TableHead>
                     <TableHead className="w-80">Reason</TableHead>
                   </TableRow>
                 </TableHeader>
