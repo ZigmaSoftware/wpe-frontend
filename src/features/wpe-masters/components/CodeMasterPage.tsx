@@ -48,6 +48,12 @@ type RenderExtrasArgs<TFormValues extends FieldValues> = {
   editing: boolean;
 };
 
+export type TableColumnConfig = {
+  key: string;
+  title: string;
+  field: string;
+};
+
 interface CodeMasterPageProps<
   TRecord extends CodeMasterRecord,
   TFormValues extends FieldValues,
@@ -64,6 +70,7 @@ interface CodeMasterPageProps<
   extraColumns?: ExtraColumn<TRecord>[];
   renderExtras?: (args: RenderExtrasArgs<TFormValues>) => ReactNode;
   renderNameSecondary?: (record: TRecord) => ReactNode;
+  columnConfig?: TableColumnConfig[];
   codeFieldName?: Path<TFormValues>;
   nameFieldName?: Path<TFormValues>;
   descriptionFieldName?: Path<TFormValues>;
@@ -99,6 +106,7 @@ const CodeMasterPage = <
   extraColumns = [],
   renderExtras,
   renderNameSecondary,
+  columnConfig,
   codeFieldName = "code" as Path<TFormValues>,
   nameFieldName = "name" as Path<TFormValues>,
   descriptionFieldName = "description" as Path<TFormValues>,
@@ -215,6 +223,74 @@ const CodeMasterPage = <
   const records = query.data?.items ?? [];
   const submitDisabled = createMutation.isPending || updateMutation.isPending;
 
+  const actionsColumn = {
+    key: "actions",
+    title: "Actions",
+    className: "w-[140px] text-right",
+    render: (record: TRecord) => (
+      <RowActions
+        onEdit={() => openEdit(record)}
+        onToggle={() => setToggleTarget(record)}
+        onDelete={allowDelete ? () => setDeleteTarget(record) : undefined}
+        isActive={record.is_active}
+      />
+    ),
+  };
+
+  const resolvedColumns =
+    columnConfig && columnConfig.length > 0
+      ? [
+          ...columnConfig.map((col) => ({
+            key: col.key,
+            title: col.title,
+            render: (record: TRecord) => {
+              const value = (record as Record<string, unknown>)[col.field];
+              if (col.field === "is_active") return <MasterStatusBadge active={Boolean(value)} />;
+              if (col.field === "code")
+                return <span className="font-mono text-xs text-muted-foreground">{String(value ?? "-")}</span>;
+              if (col.field === "name")
+                return (
+                  <div className="space-y-1">
+                    <div className="font-medium">{String(value ?? "-")}</div>
+                    {renderNameSecondary ? (
+                      <div className="text-xs text-muted-foreground">{renderNameSecondary(record)}</div>
+                    ) : null}
+                  </div>
+                );
+              return <span>{String(value ?? "-")}</span>;
+            },
+          })),
+          actionsColumn,
+        ]
+      : [
+          {
+            key: "code",
+            title: codeLabel.replace("*", ""),
+            render: (record: TRecord) => (
+              <span className="font-mono text-xs text-muted-foreground">{record.code || "-"}</span>
+            ),
+          },
+          {
+            key: "name",
+            title: nameLabel.replace("*", ""),
+            render: (record: TRecord) => (
+              <div className="space-y-1">
+                <div className="font-medium">{record.name}</div>
+                {renderNameSecondary ? (
+                  <div className="text-xs text-muted-foreground">{renderNameSecondary(record)}</div>
+                ) : null}
+              </div>
+            ),
+          },
+          ...extraColumns,
+          {
+            key: "status",
+            title: "Status",
+            render: (record: TRecord) => <MasterStatusBadge active={record.is_active} />,
+          },
+          actionsColumn,
+        ];
+
   return (
     <div className="space-y-6">
       <PageHeader title={title} description={description} />
@@ -228,42 +304,7 @@ const CodeMasterPage = <
         onCreate={openCreate}
       />
       <MasterTable
-        columns={[
-          {
-            key: "code",
-            title: codeLabel.replace("*", ""),
-            render: (record) => <span className="font-mono text-xs text-muted-foreground">{record.code || "-"}</span>,
-          },
-          {
-            key: "name",
-            title: nameLabel.replace("*", ""),
-            render: (record) => (
-              <div className="space-y-1">
-                <div className="font-medium">{record.name}</div>
-                {renderNameSecondary ? <div className="text-xs text-muted-foreground">{renderNameSecondary(record)}</div> : null}
-              </div>
-            ),
-          },
-          ...extraColumns,
-          {
-            key: "status",
-            title: "Status",
-            render: (record) => <MasterStatusBadge active={record.is_active} />,
-          },
-          {
-            key: "actions",
-            title: "Actions",
-            className: "w-[140px] text-right",
-            render: (record) => (
-              <RowActions
-                onEdit={() => openEdit(record)}
-                onToggle={() => setToggleTarget(record)}
-                onDelete={allowDelete ? () => setDeleteTarget(record) : undefined}
-                isActive={record.is_active}
-              />
-            ),
-          },
-        ]}
+        columns={resolvedColumns}
         records={records}
         isLoading={query.isLoading}
         isError={query.isError}

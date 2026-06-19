@@ -185,11 +185,13 @@ export const buildAppNavigation = (
       label: "Store",
       icon: Archive,
       to: STORE_ROUTE,
-      items: filterAccessibleItems(storeWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
+      items: filterAccessibleItems(storeWorkspaceModuleDefinitions.map(({ to, icon, label, description, exact, activeMatchPaths }) => ({
         to,
         icon,
         label,
         description,
+        exact,
+        activeMatchPaths,
       })), adminMenu, hasFullAccess),
     },
     {

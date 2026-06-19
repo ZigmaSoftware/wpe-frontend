@@ -33,7 +33,7 @@ const normalizePaginatedEnvelope = <T,>(payload: PaginatedEnvelope<T>): Paginate
     total: normalized.count ?? 0,
     next: normalized.next ?? null,
     previous: normalized.previous ?? null,
-  };
+    };
 };
 
 const collectAllPages = async <T,>(fetchPage: (page: number, pageSize: number) => Promise<PaginatedPage<T>>) => {
@@ -93,6 +93,19 @@ export const blendingApi = {
     return unwrapSuccessEnvelope(response.data);
   },
 
+  updateStoreRequest: async (requestId: number, payload: BlendingStoreRequestPayload) => {
+    const response = await coreApi.put<ApiSuccessEnvelope<StoreStockRequest>>(`/api/blending/store-requests/${requestId}/`, payload);
+    return unwrapSuccessEnvelope(response.data);
+  },
+
+  cancelStoreRequest: async (requestId: number, remarks?: string) => {
+    const response = await coreApi.post<ApiSuccessEnvelope<StoreStockRequest>>(
+      `/api/blending/store-requests/${requestId}/cancel/`,
+      { remarks },
+    );
+    return unwrapSuccessEnvelope(response.data);
+  },
+
   getBlendingHeadApprovals: async () => {
     const response = await coreApi.get<PaginatedEnvelope<StoreStockRequest>>("/api/blending/head-approvals/", {
       params: { page_size: 200 },
@@ -118,7 +131,7 @@ export const blendingApi = {
     return unwrapSuccessEnvelope(response.data);
   },
 
-  rejectBlendingHeadRequest: async (requestId: number, remarks: string) => {
+  rejectBlendingHeadRequest: async (requestId: number, remarks?: string) => {
     const response = await coreApi.post<ApiSuccessEnvelope<StoreStockRequest>>(
       `/api/blending/head-approvals/${requestId}/reject/`,
       { remarks },

@@ -626,11 +626,15 @@ const ProductionManageBatchPage = () => {
                       </div>
                     </div>
 
-                    {currentManageStage === "AD" && canRunHeaderAction ? (
+                    {(currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL") && canRunHeaderAction ? (
                       <div className="flex justify-end md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2">
                         <Button
                           size="sm"
-                          className="h-10 rounded-xl border-0 bg-[linear-gradient(135deg,#0f766e,#14b8a6)] px-4 text-sm font-semibold text-white shadow-[0_18px_40px_-20px_rgba(15,118,110,0.75)] hover:opacity-95"
+                          className={`h-10 rounded-xl border-0 px-4 text-sm font-semibold text-white hover:opacity-95 ${
+                            currentManageStage === "AD"
+                              ? "bg-[linear-gradient(135deg,#0f766e,#14b8a6)] shadow-[0_18px_40px_-20px_rgba(15,118,110,0.75)]"
+                              : "bg-[linear-gradient(135deg,#2563eb,#3b82f6)] shadow-[0_18px_40px_-20px_rgba(37,99,235,0.75)]"
+                          }`}
                           onClick={handleHeaderAction}
                         >
                           <Plus className="mr-2 h-4 w-4" />
@@ -737,7 +741,7 @@ const ProductionManageBatchPage = () => {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
-                            {currentManageStage !== "AD" ? (
+                            {currentManageStage !== "AD" && currentManageStage !== "BL" && currentManageStage !== "GL" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -777,7 +781,7 @@ const ProductionManageBatchPage = () => {
                                   <StatusBadge status={resolveBatchStatusLabel(displayedBatch)} classes={BATCH_STATUS_CLASSES} />
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  {displayedBatch.status === "PENDING" ? (
+                                  {displayedBatch.stage !== "AD" && displayedBatch.status === "PENDING" ? (
                                     <Button
                                       size="sm"
                                       className="h-8 rounded-md bg-[#2d6cdf] px-2.5 text-xs text-white hover:bg-[#255fc8]"

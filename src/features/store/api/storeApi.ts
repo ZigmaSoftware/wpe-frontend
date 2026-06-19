@@ -76,12 +76,14 @@ export const storeApi = {
     dateFrom?: string;
     dateTo?: string;
     department?: string;
+    queue?: "request_process" | "release_stock" | "closed_won" | "all";
   }) =>
     collectAllPages<StoreStockRequest>(async (page, pageSize) => {
       const response = await coreApi.get<PaginatedEnvelope<StoreStockRequest>>("/api/store/requests/", {
         params: {
           page,
           page_size: pageSize,
+          queue: params.queue || undefined,
           search: params.search?.trim() || undefined,
           status: params.status && params.status !== "all" ? params.status : undefined,
           date_from: params.dateFrom || undefined,
@@ -92,6 +94,48 @@ export const storeApi = {
 
       return normalizePaginatedEnvelope(response.data);
     }),
+
+  processRequest: async (
+    requestId: number,
+    payload: {
+      approval_remarks?: string;
+      items?: Array<{
+        item: number;
+        provided_qty: string;
+        remarks?: string;
+      }>;
+    },
+  ) => {
+    const response = await coreApi.post<ApiSuccessEnvelope<{ request: StoreStockRequest }>>(
+      `/api/store/requests/${requestId}/approve/`,
+      payload,
+    );
+    return unwrapSuccessEnvelope(response.data);
+  },
+
+  rejectProcessedRequest: async (requestId: number, approval_remarks?: string) => {
+    const response = await coreApi.post<ApiSuccessEnvelope<{ request: StoreStockRequest }>>(
+      `/api/store/requests/${requestId}/reject/`,
+      { approval_remarks },
+    );
+    return unwrapSuccessEnvelope(response.data);
+  },
+
+  releaseRequest: async (requestId: number, release_remarks?: string) => {
+    const response = await coreApi.post<ApiSuccessEnvelope<{ request: StoreStockRequest }>>(
+      `/api/store/requests/${requestId}/release/`,
+      { release_remarks },
+    );
+    return unwrapSuccessEnvelope(response.data);
+  },
+
+  rejectReleaseRequest: async (requestId: number, release_remarks?: string) => {
+    const response = await coreApi.post<ApiSuccessEnvelope<{ request: StoreStockRequest }>>(
+      `/api/store/requests/${requestId}/release-reject/`,
+      { release_remarks },
+    );
+    return unwrapSuccessEnvelope(response.data);
+  },
 
   listTransactions: async (params: {
     search?: string;

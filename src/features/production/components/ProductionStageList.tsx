@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -7,12 +7,11 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/QueryState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   productionWorkspaceApi,
   type ProductionStageValue,
 } from "@/features/production/api/productionWorkspaceApi";
-import StoreTablePagination from "@/features/store/components/StoreTablePagination";
+import ProductionStageListResults from "@/features/production/components/ProductionStageListResults";
 import StoreTableToolbar, {
   type StoreExportFormat,
   type StorePageSizeValue,
@@ -20,14 +19,15 @@ import StoreTableToolbar, {
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
 import {
   getProductionStageRoute,
-  getProductionManageBatchRoute,
   getProductionNewOrderRoute,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
 import {
   formatProductionListLabel,
 } from "@/features/production/components/productionListShared";
-import { formatDate } from "@/lib/api-helpers";
+import { toast } from "@/components/ui/sonner";
+import { coreApi } from "@/lib/api";
+import { formatDate, getApiErrorMessage } from "@/lib/api-helpers";
 import type { ProductionOrder, ProductionStageRecord } from "@/lib/types";
 
 type ProductionStageListProps = {
@@ -136,6 +136,7 @@ const getExportColumns = (
 
 const ProductionStageList = ({ stage, headerTitle, headerDescription }: ProductionStageListProps) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const meta = STAGE_PAGE_META[stage];
   const showsBatchCount = stage !== "PR";
   const [search, setSearch] = useState("");
@@ -187,6 +188,23 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
       new Map((ordersLookupQuery.data ?? []).map((order) => [order.id, order])),
     [ordersLookupQuery.data],
   );
+  const showRowActions = stage === "AD";
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (orderId: number) => {
+      await coreApi.delete(`/api/production/production/${orderId}/`);
+    },
+    onSuccess: () => {
+      toast.success("Production order deleted.");
+      queryClient.invalidateQueries({ queryKey: ["production-stage-records"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders-stage-lookup"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production-dashboard"] });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Failed to delete production order."));
+    },
+  });
 
   const getProductionName = (row: ProductionStageRecord) => {
     const matchedOrder = ordersById.get(row.order_id);
@@ -205,6 +223,14 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
       columns: getExportColumns(stage, ordersById),
       format,
     });
+  };
+
+  const handleDeleteOrder = (orderId: number, productionId: string) => {
+    if (!window.confirm(`Delete production order ${productionId || orderId} ?`)) {
+      return;
+    }
+
+    deleteOrderMutation.mutate(orderId);
   };
 
   return (
@@ -277,45 +303,20 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
 
         {!stageQuery.isLoading && !stageQuery.isError ? (
           rows.length > 0 ? (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Prd ID</TableHead>
-                      <TableHead>Production Name</TableHead>
-                      <TableHead>No.of Batch</TableHead>
-                      <TableHead>BOM Varient</TableHead>
-                      <TableHead>Started Date</TableHead>
-                      <TableHead>Ended Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((row) => (
-                      <TableRow
-                        key={`${stage}-${row.id}`}
-                        className="cursor-pointer hover:bg-slate-50/80"
-                        onClick={() => navigate(getProductionManageBatchRoute(row.order_id, stage))}
-                      >
-                        <TableCell className="font-mono text-xs font-medium">{row.production_id || "-"}</TableCell>
-                        <TableCell className="font-medium">{getProductionName(row)}</TableCell>
-                        <TableCell>{showsBatchCount ? row.batch_count ?? 0 : row.display_batch_no || row.batch_no || "-"}</TableCell>
-                        <TableCell className="text-muted-foreground">-</TableCell>
-                        <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
-                        <TableCell>{formatDate(row.end_date_time)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <StoreTablePagination
-                page={page}
-                pageSize={resolvedPageSize}
-                total={total}
-                onPageChange={setPage}
-              />
-            </>
+            <ProductionStageListResults
+              rows={rows}
+              stage={stage}
+              showsBatchCount={showsBatchCount}
+              showRowActions={showRowActions}
+              page={page}
+              pageSize={resolvedPageSize}
+              total={total}
+              onPageChange={setPage}
+              onNavigate={(to) => navigate(to)}
+              onDeleteOrder={handleDeleteOrder}
+              isDeleting={deleteOrderMutation.isPending}
+              getProductionName={getProductionName}
+            />
           ) : (
             <EmptyState title={meta.label} description={meta.emptyDescription} />
           )
