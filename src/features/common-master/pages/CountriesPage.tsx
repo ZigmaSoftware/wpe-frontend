@@ -19,7 +19,7 @@ import RowActions from "@/features/common-master/components/RowActions";
 import { countrySchema, type CountryFormValues } from "@/features/common-master/schemas";
 import type { CountryListRow } from "@/features/common-master/types";
 import { useCommonMasterMutations } from "@/features/common-master/hooks/useCommonMasterMutations";
-import { useContinentOptions, useCurrencyOptions } from "@/features/common-master/hooks/useLookupOptions";
+import { useContinentOptions } from "@/features/common-master/hooks/useLookupOptions";
 import { useDebouncedValue } from "@/features/common-master/hooks/useDebouncedValue";
 import { useTableSearchParams } from "@/features/common-master/hooks/useTableSearchParams";
 import { applyBackendErrors } from "@/features/common-master/hooks/useFormErrorMapper";
@@ -41,7 +41,6 @@ const CountriesPage = () => {
   const form = useForm<CountryFormValues>({ resolver: zodResolver(countrySchema), defaultValues });
 
   const continentsQuery = useContinentOptions();
-  const currenciesQuery = useCurrencyOptions();
   const countriesQuery = useQuery({
     queryKey: commonMasterKeys.countries(table.page, table.pageSize, debouncedSearch),
     queryFn: () => commonMasterApi.listCountries({ page: table.page, pageSize: table.pageSize, search: debouncedSearch }),

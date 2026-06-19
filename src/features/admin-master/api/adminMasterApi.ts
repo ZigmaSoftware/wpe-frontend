@@ -147,6 +147,13 @@ export const adminMasterApi = {
   updateUserScreen: (id: number, payload: Partial<UserScreenRecord>) => updateEntity<UserScreenRecord>(`/api/users/user-screens/${id}/`, payload),
   deleteUserScreen: (id: number) => deleteEntity(`/api/users/user-screens/${id}/`),
   toggleUserScreen: (id: number) => toggleEntity(`/api/users/user-screens/${id}/toggle-status/`),
+  fetchTableColumns: async (screenCode: string): Promise<Array<{ key: string; title: string; field: string }>> => {
+    const response = await coreApi.get<Array<{ key: string; title: string; field: string }>>(`/api/users/user-screens/table-columns/`, {
+      params: { code: screenCode },
+    });
+    return response.data;
+  },
+
   lookupUserScreens: async (params?: { mainScreenId?: number | null; screenSectionId?: number | null }) => {
     const response = await coreApi.get<LookupOption[]>("/api/users/user-screens/lookup/", {
       params: {
@@ -247,7 +254,7 @@ export const adminMasterApi = {
   },
 
   listCompaniesForSelect: async () => {
-    const response = await coreApi.get("/api/masters/company/", {
+    const response = await coreApi.get<PaginatedResponse<{ id: number; name?: string; company_name?: string; code?: string }> | DataTableResponse<{ id: number; name?: string; company_name?: string; code?: string }> | { id: number; name?: string; company_name?: string; code?: string }[]>("/api/masters/company/", {
       params: { page: 1, page_size: 200 },
     });
     const normalized = normalizeList<{ id: number; name?: string; company_name?: string; code?: string }>(response.data);

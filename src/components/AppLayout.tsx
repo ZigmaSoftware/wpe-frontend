@@ -204,6 +204,7 @@ const AppLayout = () => {
               <div className="wpe-mega-stack">
                 {group.items.map((item) => {
                   const active = isNavItemActive(location.pathname, item);
+                  const displayLabel = group.key === "grn" && item.label === "Gate Entry" ? "GRN Pending" : item.label;
 
                   return (
                     <Link
@@ -219,7 +220,7 @@ const AppLayout = () => {
                         <item.icon className="h-4 w-4" />
                       </span>
                       <span className="wpe-mega-link-copy">
-                        <span className="wpe-mega-link-title">{item.label}</span>
+                        <span className="wpe-mega-link-title">{displayLabel}</span>
                       </span>
                     </Link>
                   );

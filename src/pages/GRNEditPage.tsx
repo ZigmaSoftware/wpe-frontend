@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MoveRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import ConfirmDialog from "@/components/ConfirmDialog";
 import { ErrorState, LoadingState } from "@/components/QueryState";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/components/ui/sonner";
 import GrnPageLayout from "@/features/grn/components/GrnPageLayout";
 import GrnRecordForm from "@/features/grn/components/GrnRecordForm";
@@ -41,13 +43,68 @@ const buildEditInitialValues = (record: GrnRecord) => {
   return values;
 };
 
+type PendingMoveFormItem = {
+  lineIndex: number;
+  itemName: string;
+  sentQty: string;
+  receivedQty: string;
+  unit: string;
+};
+
+const isNonNegativeDecimalDraft = (value: string) => /^\d*(?:\.\d*)?$/.test(value);
+
+const shouldBlockQuantityKey = (key: string) => key === "-";
+
+const getReceivedQtyError = (value: string, sentQty: string) => {
+  if (!value.trim()) return "Received Qty is required.";
+  if (value.includes("-")) return "Received Qty cannot be negative.";
+  if (!isNonNegativeDecimalDraft(value)) return "Received Qty must be numeric.";
+
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) return "Received Qty must be numeric.";
+  if (parsedValue < 0) return "Received Qty cannot be negative.";
+
+  const parsedSentQty = sentQty ? Number(sentQty) : Number.NaN;
+  if (Number.isFinite(parsedSentQty) && parsedValue > parsedSentQty) {
+    return "Received Qty cannot exceed Sent Qty.";
+  }
+  return undefined;
+};
+
+const buildPendingMoveFormItems = (record: GrnRecord): PendingMoveFormItem[] => {
+  const sourceItems = record.items.length
+    ? record.items
+    : [
+        {
+          item_id: record.item_id ?? "",
+          product_description: record.product_description ?? "",
+          quantity: record.quantity ?? record.total_quantity ?? "",
+          total_quantity: record.total_quantity ?? "",
+          unit: record.unit ?? "",
+        },
+      ];
+
+  return sourceItems.map((item, index) => {
+    const sentQty = item.quantity ?? item.total_quantity ?? "";
+    return {
+      lineIndex: index,
+      itemName: String(item.product_description ?? item.item_id ?? `Line ${index + 1}`),
+      sentQty: sentQty === null || sentQty === undefined ? "" : String(sentQty),
+      receivedQty: "",
+      unit: item.unit ? String(item.unit) : "",
+    };
+  });
+};
+
 const GRNEditPage = () => {
   const { id } = useParams<{ id: string }>();
   const recordId = Number(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [moveConfirmOpen, setMoveConfirmOpen] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<GrnFormValues | null>(null);
+  const [pendingMoveTarget, setPendingMoveTarget] = useState<GrnRecord | null>(null);
+  const [pendingMoveItems, setPendingMoveItems] = useState<PendingMoveFormItem[]>([]);
+  const [pendingMoveErrors, setPendingMoveErrors] = useState<Record<number, { receivedQty?: string }>>({});
   const hasValidRecordId = Number.isFinite(recordId);
 
   const detailQuery = useQuery({
@@ -68,7 +125,6 @@ const GRNEditPage = () => {
       return response.data;
     },
     onSuccess: (payload) => {
-      toast.success(payload.message || "GRN updated successfully.");
       setFormInitialValues(mapRecordToFormValues(payload.data));
       queryClient.setQueryData(["grn-detail", payload.data.id], payload);
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
@@ -79,19 +135,26 @@ const GRNEditPage = () => {
   });
 
   const moveMutation = useMutation({
-    mutationFn: async () => {
-      const response = await grnApi.post(`/api/grn/${recordId}/move-to-qcr/`);
+    mutationFn: async (items: PendingMoveFormItem[]) => {
+      const response = await grnApi.post(`/api/grn/${recordId}/move-to-qcr/`, {
+        items: items.map((item) => ({
+          line_index: item.lineIndex,
+          received_qty: item.receivedQty,
+        })),
+      });
       return response.data;
     },
     onSuccess: () => {
-      toast.success("GRN moved to GRN Pending.");
+      toast.success("Gate Entry moved to QCR.");
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
-      queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
       queryClient.invalidateQueries({ queryKey: ["qcr"] });
+      setPendingMoveTarget(null);
+      setPendingMoveItems([]);
+      setPendingMoveErrors({});
       navigate(GRN_PROCESS_ROUTE);
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move GRN to GRN Pending.")),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move Gate Entry to QCR.")),
   });
 
   useEffect(() => {
@@ -126,64 +189,154 @@ const GRNEditPage = () => {
     );
   }
 
+  const closePendingMoveDialog = () => {
+    if (moveMutation.isPending) return;
+    setPendingMoveTarget(null);
+    setPendingMoveItems([]);
+    setPendingMoveErrors({});
+  };
+
+  const submitPendingMove = () => {
+    const nextErrors = pendingMoveItems.reduce<Record<number, { receivedQty?: string }>>((errors, item, index) => {
+      const receivedQtyError = getReceivedQtyError(item.receivedQty, item.sentQty);
+      if (receivedQtyError) {
+        errors[index] = { receivedQty: receivedQtyError };
+      }
+      return errors;
+    }, {});
+
+    setPendingMoveErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    moveMutation.mutate(pendingMoveItems);
+  };
+
   return (
     <GrnPageLayout onBack={() => navigate(GRN_PROCESS_ROUTE)}>
       <>
         <GrnRecordForm
           title={`Edit Gate Entry — ${record.grn_no}`}
-          subtitle="Update receipt, supplier, item, and valuation values before sending the record to GRN Pending."
-          submitLabel="Save Changes"
-          onSubmit={(values) => updateMutation.mutate(values)}
+          subtitle="Update receipt, supplier, item, and valuation values before moving this record to QCR."
+          submitLabel="Move to QCR"
+          onSubmit={async (values) => {
+            const payload = await updateMutation.mutateAsync(values);
+            toast.success(payload.message || "Gate Entry saved successfully.");
+            setPendingMoveTarget(payload.data);
+            setPendingMoveItems(buildPendingMoveFormItems(payload.data));
+            setPendingMoveErrors({});
+          }}
           onCancel={() => navigate(GRN_PROCESS_ROUTE)}
-          isSubmitting={updateMutation.isPending}
+          isSubmitting={updateMutation.isPending || moveMutation.isPending}
           initialValues={formInitialValues}
           requiredDocumentFields={["gateentry_bookno", "gateentry_bookdate"]}
-          headerActionsPlacement="side-center"
-          headerActions={({ isDirty, setActiveTab, getValue, setFieldError, clearFieldError }) =>
-            isActiveRecord ? (
-              <Button
-                type="button"
-                className="h-10 rounded-full bg-[linear-gradient(135deg,#0ea56b_0%,#067647_100%)] px-5 text-white shadow-[0_12px_24px_-16px_rgba(6,118,71,0.85)] hover:opacity-95"
-                onClick={() => {
-                  setActiveTab("document");
-                  const gateEntryBookNo = String(getValue("document_details.gateentry_bookno") ?? "").trim();
-                  const gateEntryBookDate = String(getValue("document_details.gateentry_bookdate") ?? "").trim();
+        />
 
-                  if (!gateEntryBookNo) {
-                    setFieldError("document_details.gateentry_bookno", "Gate Entry Book No is required.");
-                  } else {
-                    clearFieldError("document_details.gateentry_bookno");
-                  }
+        <Dialog open={Boolean(pendingMoveTarget) && isActiveRecord} onOpenChange={(open) => !open && closePendingMoveDialog()}>
+          <DialogContent className="max-w-5xl">
+            <DialogHeader>
+              <DialogTitle>Move to QCR</DialogTitle>
+              <DialogDescription>
+                Enter received quantity for every item in <span className="font-semibold">{pendingMoveTarget?.grn_no}</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+              <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:grid-cols-3">
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Ref. No</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{pendingMoveTarget?.grn_no ?? "-"}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Supplier</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{pendingMoveTarget?.supplier_details.trade_name || pendingMoveTarget?.trade_name || "-"}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">Quantity Check</div>
+                </div>
+              </div>
 
-                  if (!gateEntryBookDate) {
-                    setFieldError("document_details.gateentry_bookdate", "Gate Entry Book Date is required.");
-                  } else {
-                    clearFieldError("document_details.gateentry_bookdate");
-                  }
+              <div className="overflow-x-auto rounded-xl border border-border/70 bg-card">
+                <Table className="min-w-[720px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16 text-center">S.No</TableHead>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead className="w-40">Sent Qty</TableHead>
+                      <TableHead className="w-64">
+                        Received Qty <span className="text-destructive">*</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingMoveItems.map((item, index) => (
+                      <TableRow key={`${item.lineIndex}-${index}`} className="align-top">
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell>
+                          <div className="font-semibold text-foreground">{item.itemName}</div>
+                          {item.unit ? <div className="mt-1 text-xs text-muted-foreground">{item.unit}</div> : null}
+                        </TableCell>
+                        <TableCell className="font-semibold text-foreground">
+                          {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <Label htmlFor={`pending-received-${index}`} className="sr-only">
+                              Received Qty
+                            </Label>
+                            <Input
+                              id={`pending-received-${index}`}
+                              inputMode="decimal"
+                              value={item.receivedQty}
+                              onKeyDown={(event) => {
+                                if (shouldBlockQuantityKey(event.key)) {
+                                  event.preventDefault();
+                                }
+                              }}
+                              onPaste={(event) => {
+                                const pastedValue = event.clipboardData.getData("text");
+                                const pastedError = getReceivedQtyError(pastedValue, item.sentQty);
+                                if (pastedError) {
+                                  event.preventDefault();
+                                  setPendingMoveErrors((current) => ({ ...current, [index]: { receivedQty: pastedError } }));
+                                }
+                              }}
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                const nextError = nextValue.trim() ? getReceivedQtyError(nextValue, item.sentQty) : undefined;
+                                if (nextError) {
+                                  setPendingMoveErrors((current) => ({ ...current, [index]: { receivedQty: nextError } }));
+                                  return;
+                                }
 
-                  if (!gateEntryBookNo || !gateEntryBookDate) {
-                    return;
-                  }
-                  setMoveConfirmOpen(true);
-                }}
-                disabled={moveMutation.isPending || updateMutation.isPending || isDirty}
-                title={isDirty ? "Save changes before moving to GRN Pending." : undefined}
-              >
-                <MoveRight className="mr-2 h-4 w-4" />
-                {moveMutation.isPending ? "Moving..." : "Move to GRN Pending"}
+                                setPendingMoveItems((current) =>
+                                  current.map((entry, entryIndex) => (entryIndex === index ? { ...entry, receivedQty: nextValue } : entry)),
+                                );
+                                setPendingMoveErrors((current) => ({ ...current, [index]: { receivedQty: undefined } }));
+                              }}
+                              placeholder="Enter received quantity"
+                              className={pendingMoveErrors[index]?.receivedQty ? "border-destructive" : ""}
+                            />
+                            {pendingMoveErrors[index]?.receivedQty ? <p className="text-xs text-destructive">{pendingMoveErrors[index]?.receivedQty}</p> : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={closePendingMoveDialog} disabled={moveMutation.isPending}>
+                Cancel
               </Button>
-            ) : null
-          }
-        />
-
-        <ConfirmDialog
-          open={moveConfirmOpen}
-          onOpenChange={setMoveConfirmOpen}
-          title="Move Gate Entry to GRN Pending"
-          description={`Move ${record.grn_no} to GRN Pending? This will complete Gate Entry and send the record to the pending handoff queue.`}
-          confirmLabel={moveMutation.isPending ? "Moving..." : "Move to GRN Pending"}
-          onConfirm={() => moveMutation.mutate()}
-        />
+              <Button onClick={submitPendingMove} disabled={moveMutation.isPending}>
+                {moveMutation.isPending ? "Moving..." : "Move to QCR"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     </GrnPageLayout>
   );

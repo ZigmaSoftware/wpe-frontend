@@ -27,7 +27,7 @@ type GrnRecordFormProps = {
   title: string;
   subtitle: string;
   submitLabel: string;
-  onSubmit: (values: GrnFormValues) => void;
+  onSubmit: (values: GrnFormValues) => void | Promise<void>;
   onCancel: () => void;
   isSubmitting?: boolean;
   initialValues?: GrnFormValues;
@@ -124,11 +124,27 @@ const GrnRecordForm = ({
   const today = new Date();
   today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
   const todayDateInputValue = today.toISOString().slice(0, 10);
+  const handleSubmit = form.handleSubmit(async (values) => {
+    const missingFields = requiredDocumentFields.filter((fieldName) => !String(values.document_details[fieldName] ?? "").trim());
+
+    if (missingFields.length) {
+      setActiveTab("document");
+      for (const fieldName of missingFields) {
+        form.setError(`document_details.${fieldName}`, {
+          type: "manual",
+          message: `${documentFieldConfigs.find((config) => config.name === fieldName)?.label ?? "This field"} is required.`,
+        });
+      }
+      return;
+    }
+
+    await onSubmit(values);
+  });
 
   return (
     <div className="flex min-h-full flex-col">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-full flex-col bg-[#eef3f9]">
+        <form onSubmit={handleSubmit} className="flex min-h-full flex-col bg-[#eef3f9]">
           <Tabs
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as GrnFormTab)}
