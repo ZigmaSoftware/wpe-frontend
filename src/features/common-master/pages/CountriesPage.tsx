@@ -28,7 +28,6 @@ const defaultValues: CountryFormValues = {
   code: "",
   continent: 0,
   name: "",
-  currency: null,
   status: true,
 };
 
@@ -86,7 +85,6 @@ const CountriesPage = () => {
       continent: detail.continent,
       name: detail.name,
       code: detail.code,
-      currency: detail.currency ?? null,
       status: record.status === "Active",
     });
     setDialogOpen(true);
@@ -112,7 +110,7 @@ const CountriesPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Country"
-        description="Manage countries and currency mapping."
+        description="Manage countries and continent mapping."
       />
 
       <MasterToolbar search={table.search} onSearchChange={table.setSearch} createLabel="Add Country" onCreate={openCreate} />
@@ -122,7 +120,6 @@ const CountriesPage = () => {
           { key: "country_name", title: "Country", render: (record) => <div className="font-medium">{record.country_name}</div> },
           { key: "code", title: "Country Code", render: (record) => <span className="font-mono text-xs">{record.country_code}</span> },
           { key: "continent", title: "Continent", render: (record) => record.continent },
-          { key: "currency", title: "Currency", render: (record) => record.currency },
           { key: "status", title: "Status", render: (record) => <MasterStatusBadge active={record.status === "Active"} /> },
           {
             key: "actions",
@@ -182,23 +179,6 @@ const CountriesPage = () => {
               />
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem><FormLabel>Country Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="currency" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency</FormLabel>
-                  <Select value={field.value ? String(field.value) : "none"} onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select Currency" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">No currency</SelectItem>
-                      {(currenciesQuery.data ?? []).map((currency) => (
-                        <SelectItem key={currency.id} value={String(currency.id)}>
-                          {currency.code ? `${currency.name} (${currency.code})` : currency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
               )} />
             </div>
             <FormField

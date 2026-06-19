@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
-import type { LookupItem } from "@/features/wpe-masters/types";
+import { adminMasterApi } from "@/features/admin-master/api/adminMasterApi";
+import type { LookupOption } from "@/features/admin-master/types";
 import { coreApi } from "@/lib/api";
 import type { ProductionBatch, ProductionMachine } from "@/lib/types";
+import type { LookupItem } from "@/features/wpe-masters/types";
 import GeneralTab from "./GeneralTab";
 import ProductionTabs from "./ProductionTabs";
 import {
@@ -63,7 +64,7 @@ const ResourcesTab = lazy(() => import("./ResourcesTab"));
 const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
 const REQUIRED_PRODUCTION_TYPE_OPTIONS = [DEFAULT_PRODUCTION_TYPE, "WPE Blend Production"] as const;
 
-const mapNamedOptions = (items: LookupItem[]) =>
+const mapNamedOptions = (items: LookupOption[]) =>
   items.map((item) => ({
     id: String(item.id),
     name: item.name,
@@ -123,7 +124,7 @@ const buildFacilityOptions = (locations: LookupItem[]) => {
   return mapNamedOptions(source);
 };
 
-export const buildWorkCenterOptions = (locations: LookupItem[], workCenters: LookupItem[]) => {
+export const buildWorkCenterOptions = (locations: LookupOption[], workCenters: LookupOption[]) => {
   const explicitWorkCenters = mapNamedOptions(workCenters);
   if (explicitWorkCenters.length > 0) {
     return explicitWorkCenters;
@@ -134,13 +135,15 @@ export const buildWorkCenterOptions = (locations: LookupItem[], workCenters: Loo
 };
 
 
-export const buildInchargeOptions = (users: LookupItem[]): NamedOption[] =>
+export const buildInchargeOptions = (users: LookupOption[]): NamedOption[] =>
   users
     .filter((user) => String(user.id).trim().length > 0 && (user.name?.trim().length || user.username?.trim().length))
     .map((user) => ({
       id: String(user.id),
-      name: user.name?.trim() || user.username?.trim() || `User ${user.id}`,
-      description: user.username?.trim() || undefined,
+      name:
+        user.staff_code?.trim() && user.name?.trim()
+          ? `${user.staff_code.trim()} - ${user.name.trim()}`
+          : user.staff_code?.trim() || user.name?.trim() || user.username?.trim() || `User ${user.id}`,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
@@ -201,8 +204,8 @@ const ProductionOrderForm = ({
   });
 
   const usersQuery = useQuery({
-    queryKey: ["production-order-form", "wpe-users"],
-    queryFn: () => wpeMastersApi.users.lookup(),
+    queryKey: ["production-order-form", "user-creation-options"],
+    queryFn: adminMasterApi.lookupUserCreationSelectOptions,
     staleTime: 5 * 60 * 1000,
   });
 
