@@ -12,24 +12,66 @@ export interface WeightData {
 interface UseWeightStreamOptions {
   deviceId: string;
   enabled?: boolean;
+  scaleDeviceId?: string | null;
   tolerancePercent?: number;
+  workstationId?: string | null;
 }
+
+export type ScaleConnectionStatus =
+  | "stable"
+  | "unstable"
+  | "overload"
+  | "connected"
+  | "disconnected"
+  | "error"
+  | "no_serial_port"
+  | "invalid_reading"
+  | "bridge_not_reporting";
 
 interface ScaleApiResponse {
   weight:        string;
   unit:          string;
-  status:        "stable" | "unstable" | "overload" | "connected" | "disconnected" | "error";
+  status:        ScaleConnectionStatus;
   timestamp:     string | null;
+  last_seen_at?: string | null;
   raw_data:      string;
   error:         string | null;
   detected_port: string | null;
+  device_id?:    string | null;
   platform:      string;
+  source?:       string | null;
+  workstation_id?: string | null;
 }
 
-export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0.5 }: UseWeightStreamOptions) {
+const CONNECTED_STATUSES = new Set<ScaleConnectionStatus>(["connected", "stable", "unstable", "overload"]);
+
+const STATUS_LABELS: Record<ScaleConnectionStatus, string> = {
+  stable: "Scale Connected",
+  unstable: "Scale Connected",
+  overload: "Scale Connected",
+  connected: "Scale Connected",
+  disconnected: "Scale Offline",
+  error: "Scale Error",
+  no_serial_port: "No Serial Port",
+  invalid_reading: "Invalid Reading",
+  bridge_not_reporting: "Bridge Not Reporting",
+};
+
+export function useWeightStream({
+  deviceId,
+  enabled = true,
+  scaleDeviceId = null,
+  tolerancePercent = 0.5,
+  workstationId = null,
+}: UseWeightStreamOptions) {
   const [weight, setWeight]       = useState<WeightData | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError]         = useState<string | null>(null);
+  const [status, setStatus]       = useState<ScaleConnectionStatus>("disconnected");
+  const [source, setSource]       = useState<string | null>(null);
+  const [lastSeenAt, setLastSeenAt] = useState<Date | null>(null);
+  const [resolvedDeviceId, setResolvedDeviceId] = useState<string | null>(null);
+  const [resolvedWorkstationId, setResolvedWorkstationId] = useState<string | null>(null);
   const [isDocumentVisible, setIsDocumentVisible] = useState(
     () => typeof document === "undefined" || document.visibilityState === "visible",
   );
@@ -60,6 +102,7 @@ export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0
         intervalRef.current = undefined;
       }
       setConnected(false);
+      setStatus("disconnected");
       return;
     }
 
@@ -67,16 +110,27 @@ export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0
 
     const poll = async () => {
       try {
-        const res = await coreApi.get<ScaleApiResponse>("/api/scale/weight/latest/");
+        const res = await coreApi.get<ScaleApiResponse>("/api/scale/weight/latest/", {
+          params: {
+            device_id: scaleDeviceId || undefined,
+            workstation_id: workstationId || undefined,
+          },
+        });
         const d   = res.data;
 
         if (cancelled) {
           return;
         }
 
-        const isConnected = d.status !== "disconnected" && d.status !== "error";
+        const nextStatus = d.status ?? "error";
+        const isConnected = CONNECTED_STATUSES.has(nextStatus);
+        setStatus(nextStatus);
         setConnected(isConnected);
         setError(d.error ?? null);
+        setSource(d.source ?? null);
+        setResolvedDeviceId(d.device_id ?? scaleDeviceId ?? null);
+        setResolvedWorkstationId(d.workstation_id ?? workstationId ?? null);
+        setLastSeenAt(d.last_seen_at ? new Date(d.last_seen_at) : d.timestamp ? new Date(d.timestamp) : null);
 
         if (isConnected) {
           const value = parseFloat(d.weight);
@@ -89,12 +143,16 @@ export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0
               deviceId,
             });
           }
+        } else {
+          setWeight(null);
         }
       } catch (err) {
         if (cancelled) {
           return;
         }
         setConnected(false);
+        setStatus("error");
+        setWeight(null);
         setError(err instanceof Error ? err.message : "Scale endpoint unreachable");
       }
     };
@@ -110,7 +168,7 @@ export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0
       }
       setConnected(false);
     };
-  }, [deviceId, isPollingEnabled]);
+  }, [deviceId, isPollingEnabled, scaleDeviceId, workstationId]);
 
   const checkTolerance = useCallback(
     (expected: number): { withinTolerance: boolean; deviation: number; deviationPercent: number } => {
@@ -130,5 +188,17 @@ export function useWeightStream({ deviceId, enabled = true, tolerancePercent = 0
     setWeight((prev) => (prev ? { ...prev, value: 0, stable: true } : null));
   }, []);
 
-  return { weight, connected, error, checkTolerance, tare };
+  return {
+    weight,
+    connected,
+    error,
+    status,
+    statusLabel: STATUS_LABELS[status],
+    source,
+    lastSeenAt,
+    resolvedDeviceId,
+    resolvedWorkstationId,
+    checkTolerance,
+    tare,
+  };
 }
