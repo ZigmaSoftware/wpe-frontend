@@ -537,6 +537,9 @@ export type ProductionOutputCapture = {
   binlot: string;
   is_outwarded: boolean;
   session_key: string;
+  device_id?: string;
+  workstation_id?: string;
+  weight_source?: string;
   captured_at: string;
   component_columns: ProductionOutputCaptureColumn[];
   details: ProductionOutputCaptureDetail[];
