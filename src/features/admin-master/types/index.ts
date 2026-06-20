@@ -83,6 +83,7 @@ export type LookupOption = {
   main_screen_id?: number;
   screen_section_id?: number;
   staff_code?: string;
+  username?: string;
   mobile?: string | null;
   email?: string | null;
   designation_id?: number | null;

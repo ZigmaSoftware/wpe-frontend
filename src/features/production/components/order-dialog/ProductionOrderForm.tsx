@@ -11,6 +11,7 @@ import { adminMasterApi } from "@/features/admin-master/api/adminMasterApi";
 import type { LookupOption } from "@/features/admin-master/types";
 import { coreApi } from "@/lib/api";
 import type { ProductionBatch, ProductionMachine } from "@/lib/types";
+import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import type { LookupItem } from "@/features/wpe-masters/types";
 import GeneralTab from "./GeneralTab";
 import ProductionTabs from "./ProductionTabs";
@@ -20,6 +21,7 @@ import {
   formatDateTimeLabel,
   PRODUCTION_ORDER_TABS,
   productionOrderFormSchema,
+  SHIFT_VALUES,
   toProductionOrderPayload,
   type CreateProductionOrderPayload,
   type NamedOption,
@@ -256,9 +258,12 @@ const ProductionOrderForm = ({
   const productionId = useWatch({ control: form.control, name: "production_id" }) ?? "";
 
   useEffect(() => {
+    const validShift = SHIFT_VALUES.includes(shift as (typeof SHIFT_VALUES)[number])
+      ? (shift as (typeof SHIFT_VALUES)[number])
+      : SHIFT_VALUES[0];
     form.setValue(
       "details.actual_start_time",
-      formatDateTimeLabel(buildActualStartDateTimeValue(productionDate, shift)),
+      formatDateTimeLabel(buildActualStartDateTimeValue(productionDate, validShift)),
       {
         shouldDirty: false,
         shouldTouch: false,
