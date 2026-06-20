@@ -283,6 +283,47 @@ describe("productionOutputCapture helpers", () => {
     );
   });
 
+  it("maps partial persisted output captures without crashing", () => {
+    const record = mapPersistedOutputCaptureRecord({
+      id: 70,
+      production_order: 2,
+      source_batch: null,
+      source_batch_no: null,
+      sequence: null,
+      scancode_id: null,
+      recipe_no: null,
+      quantity_kg: null,
+      weight_kg: null,
+      binlot: null,
+      is_outwarded: null,
+      session_key: null,
+      captured_at: "2026-06-01T12:30:00Z",
+      component_columns: null,
+      details: null,
+      created_at: "2026-06-01T12:30:00Z",
+      updated_at: "2026-06-01T12:30:00Z",
+    } as unknown as Parameters<typeof mapPersistedOutputCaptureRecord>[0]);
+
+    expect(record).toEqual(
+      expect.objectContaining({
+        id: "persisted-output-70",
+        sessionKey: "persisted-output-70",
+        scancodeId: "",
+        recipeNo: "—",
+        qty: "0",
+        weightKg: "0",
+        binlot: "-",
+        batchId: "-",
+        productionStatus: "IN_PROGRESS",
+        isOutwarded: false,
+        sourceBatchId: null,
+        sequence: 0,
+        componentColumns: [],
+        details: [],
+      }),
+    );
+  });
+
   it("shows '-' when persisted binlot is still just the source batch number", () => {
     const record = mapPersistedOutputCaptureRecord({
       id: 8,

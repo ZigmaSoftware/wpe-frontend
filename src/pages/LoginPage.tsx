@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Droplets, Eye, EyeOff, Factory, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -19,7 +19,6 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { isAuthenticated, isBootstrapping, signIn } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -33,16 +32,15 @@ const LoginPage = () => {
 
   useEffect(() => {
     if (!isBootstrapping && isAuthenticated) {
-      navigate("/app", { replace: true });
+      navigate("/app/dashboard", { replace: true });
     }
   }, [isAuthenticated, isBootstrapping, navigate]);
 
   const onSubmit = async (values: LoginFormValues) => {
     try {
       await signIn(values.username, values.password);
-      const destination = (location.state as { from?: string } | null)?.from ?? "/app";
       toast.success(`Welcome back${values.username ? `, ${values.username}` : ""}.`);
-      navigate(destination, { replace: true });
+      navigate("/app/dashboard", { replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Login failed. Please check your credentials.");
     }
