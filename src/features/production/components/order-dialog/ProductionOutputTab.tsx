@@ -8,7 +8,6 @@ import { useScannerInput } from "@/hooks/useScannerInput";
 import { useWeightStream } from "@/hooks/useWeightStream";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
 import { BATCH_STATUS_CLASSES, StatusBadge } from "@/pages/productionShared";
 import ProductionSectionCard from "./ProductionSectionCard";
@@ -36,8 +35,6 @@ const DEFAULT_BATCH_AUTO_VALUE = "Generated on save";
 const NEXT_PRODUCTION_TYPE_AFTER_AD = "WPE Blend Production";
 const NEXT_PRODUCTION_TYPE_AFTER_BL = "WPE Granulated Blend Production";
 const NEXT_PRODUCTION_TYPE_AFTER_GL = "WPE Production Line";
-const SCALE_SELECTION_STORAGE_KEY = "production.output.scale-selection";
-const SERVER_SCALE_KEY = "__server__";
 
 type DemoMaterial = {
   client_id: string;
@@ -61,27 +58,6 @@ const DEMO_MATERIALS: DemoMaterial[] = [
 
 type OutputMaterialRow = ProductionOrderFormValues["materials"]["rows"][number] | DemoMaterial;
 
-type ScaleDeviceSummary = {
-  device_id: string;
-  workstation_id: string;
-  status: string;
-  weight: string;
-  unit: string;
-  source: string;
-  last_seen_at: string | null;
-  captured_at: string | null;
-  detected_port?: string | null;
-  error?: string | null;
-};
-
-type ScaleSelectOption = {
-  key: string;
-  label: string;
-  source: string;
-  deviceId: string | null;
-  workstationId: string | null;
-};
-
 type ProductionOutputTabProps = {
   form: UseFormReturn<ProductionOrderFormValues>;
   context?: {
@@ -102,8 +78,6 @@ const normalizeComparableToken = (value?: string | null) =>
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
-
-const buildScaleOptionKey = (deviceId: string) => `bridge:${deviceId}`;
 
 const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCaptureComponent) => {
   if (component.bomComponentId) {
@@ -172,22 +146,9 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const [isSyncingCapture, setIsSyncingCapture] = useState(false);
   const [isFinalizingCapture, setIsFinalizingCapture] = useState(false);
   const [outwardingRecordId, setOutwardingRecordId] = useState<string | null>(null);
-  const initialScaleSelectionRef = useRef<string | null>(
-    typeof window === "undefined" ? null : window.localStorage.getItem(SCALE_SELECTION_STORAGE_KEY),
-  );
-  const [selectedScaleKey, setSelectedScaleKey] = useState(initialScaleSelectionRef.current ?? SERVER_SCALE_KEY);
   const capturedSessionKeysRef = useRef(new Set<string>());
   const activeBatchIdRef = useRef<number | null>(null);
   const { processScan } = useScannerInput();
-  const scaleDevicesQuery = useQuery({
-    queryKey: ["scale-bridge-devices"],
-    enabled: queriesEnabled,
-    queryFn: async () => {
-      const response = await coreApi.get<{ devices: ScaleDeviceSummary[] }>("/api/scale/devices/");
-      return response.data.devices ?? [];
-    },
-    refetchInterval: queriesEnabled ? 5000 : false,
-  });
 
   const stageBatchesQuery = useQuery({
     queryKey: ["production-output-batches", persistedOrderId, outputStage],
@@ -472,58 +433,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       shouldValidate: false,
     });
   }, [activeBatch?.batch_no, activeBatch?.display_batch_no, form]);
-  const scaleOptions = useMemo<ScaleSelectOption[]>(() => {
-    const bridgeOptions = (scaleDevicesQuery.data ?? []).map((device) => ({
-      key: buildScaleOptionKey(device.device_id),
-      label: `${device.device_id} - ${device.workstation_id}`,
-      source: device.source || "local_bridge",
-      deviceId: device.device_id,
-      workstationId: device.workstation_id,
-    }));
-
-    return [
-      {
-        key: SERVER_SCALE_KEY,
-        label: "Server-connected scale",
-        source: "server_serial",
-        deviceId: null,
-        workstationId: null,
-      },
-      ...bridgeOptions,
-    ];
-  }, [scaleDevicesQuery.data]);
-  const selectedScaleOption = useMemo(
-    () => scaleOptions.find((option) => option.key === selectedScaleKey) ?? scaleOptions[0],
-    [scaleOptions, selectedScaleKey],
-  );
-  const selectedBridgeDevice = useMemo(
-    () =>
-      selectedScaleOption?.deviceId
-        ? (scaleDevicesQuery.data ?? []).find((device) => device.device_id === selectedScaleOption.deviceId) ?? null
-        : null,
-    [scaleDevicesQuery.data, selectedScaleOption?.deviceId],
-  );
-
-  useEffect(() => {
-    if (initialScaleSelectionRef.current !== null) {
-      return;
-    }
-    if ((scaleDevicesQuery.data?.length ?? 0) === 0) {
-      return;
-    }
-    if (selectedScaleKey !== SERVER_SCALE_KEY) {
-      return;
-    }
-    setSelectedScaleKey(buildScaleOptionKey(scaleDevicesQuery.data![0].device_id));
-  }, [scaleDevicesQuery.data, selectedScaleKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(SCALE_SELECTION_STORAGE_KEY, selectedScaleKey);
-  }, [selectedScaleKey]);
-
   const stdWeight = activeComponent?.plannedWeightKg ?? 0;
   const displayStdWeight = Math.abs(stdWeight);
   const fallbackToleranceKg = activeComponent?.toleranceKg ?? 0;
@@ -548,57 +457,11 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       ? activeComponent.maxWeightKg
       : fallbackMaxWeight;
 
-  const {
-    weight,
-    connected,
-    error: scaleError,
-    lastSeenAt,
-    resolvedDeviceId,
-    resolvedWorkstationId,
-    source: scaleSource,
-    status,
-    statusLabel,
-    tare,
-  } = useWeightStream({
+  const { weight, connected, tare } = useWeightStream({
     deviceId: "output-scale-1",
-    scaleDeviceId: selectedScaleOption?.deviceId ?? null,
     tolerancePercent: TOLERANCE_PERCENT,
     enabled: isActive,
-    workstationId: selectedScaleOption?.workstationId ?? null,
   });
-  const scaleCapturePayload = useMemo(
-    () => ({
-      device_id: resolvedDeviceId ?? selectedScaleOption?.deviceId ?? undefined,
-      workstation_id: resolvedWorkstationId ?? selectedScaleOption?.workstationId ?? undefined,
-      source: scaleSource ?? selectedScaleOption?.source ?? "server_serial",
-    }),
-    [resolvedDeviceId, resolvedWorkstationId, scaleSource, selectedScaleOption],
-  );
-  const scaleStatusClassName =
-    status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading"
-      ? "text-amber-400"
-      : connected
-        ? "text-emerald-400"
-        : "text-red-400";
-  const scaleStatusDotClassName =
-    status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading"
-      ? "bg-amber-400"
-      : connected
-        ? "bg-emerald-400 animate-pulse"
-        : "bg-red-500";
-  const scaleSecondaryNote = selectedScaleOption?.deviceId
-    ? selectedBridgeDevice?.detected_port
-      ? `${selectedScaleOption.workstationId} • ${selectedBridgeDevice.detected_port}`
-      : selectedScaleOption.workstationId
-    : "Live server serial fallback";
-  const scaleLastSeenLabel = lastSeenAt
-    ? lastSeenAt.toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      }).toLowerCase()
-    : "no reading yet";
 
   const tolerance =
     !isSingleCaptureMode && displayStdWeight > 0 && weight
@@ -947,7 +810,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               {
                 source_batch: startedBatch.id,
                 weight_kg: weightCapture!.weightKg.toFixed(3),
-                ...scaleCapturePayload,
               },
             );
             persistedRecord = mapPersistedOutputCaptureRecord(
@@ -988,7 +850,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             const activeBatchId = startedBatch.id;
             const confirmResponse = await coreApi.post<unknown>(
               `/api/production/orders/${persistedOrderId}/batches/${activeBatchId}/confirm/`,
-              scaleCapturePayload,
             );
             const confirmedBatch = unwrapSuccessEnvelope(confirmResponse.data as ProductionBatch | unknown) as ProductionBatch;
 
@@ -1220,38 +1081,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     <>
     <ProductionSectionCard title="Output Weight Capture" tone="emerald" icon={Scale}>
       <div className="space-y-4">
-        <div className="grid gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.25)] md:grid-cols-[minmax(0,320px)_1fr] md:items-end">
-          <div className="space-y-1.5">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Scale Device</div>
-            <Select value={selectedScaleKey} onValueChange={setSelectedScaleKey}>
-              <SelectTrigger className="h-11 border-slate-200 bg-white text-left text-sm">
-                <SelectValue placeholder="Select scale device" />
-              </SelectTrigger>
-              <SelectContent>
-                {scaleOptions.map((option) => (
-                  <SelectItem key={option.key} value={option.key}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px]">
-            <span className={`rounded-full border px-2.5 py-1 font-mono font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-red-200 bg-red-50 text-red-700"}`}>
-              {statusLabel}
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
-              {scaleSecondaryNote}
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-500">
-              last seen {scaleLastSeenLabel}
-            </span>
-            {scaleDevicesQuery.isError ? (
-              <span className="font-mono text-amber-700">Device list unavailable</span>
-            ) : null}
-          </div>
-        </div>
-
         <div className="overflow-hidden rounded-2xl border border-slate-700 bg-[#1a1a2e] shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
           <div className="flex min-h-[88px] items-stretch">
             <div className="w-[168px] shrink-0 space-y-[5px] border-r border-slate-700 bg-[#0d0d1a] px-4 py-3 font-mono text-[11px]">
@@ -1336,9 +1165,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                   {tolerance.withinTolerance ? "WITHIN RANGE" : "OUT OF RANGE"}
                 </div>
               ) : (
-                <div className={`mt-1 text-[9px] font-mono tracking-widest ${connected ? "text-slate-500" : scaleStatusClassName}`}>
-                  {connected ? "AWAITING READING" : statusLabel.toUpperCase()}
-                </div>
+                <div className="mt-1 text-[9px] font-mono tracking-widest text-slate-600">AWAITING READING</div>
               )}
             </div>
           </div>
@@ -1478,9 +1305,9 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
 
           <div className="flex items-center justify-between gap-3 border-t border-slate-700 bg-[#0d0d1a] px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className={`h-2 w-2 shrink-0 rounded-full ${scaleStatusDotClassName}`} />
-              <span className={`font-mono text-[11px] ${scaleStatusClassName}`}>
-                {statusLabel.toUpperCase()}
+              <div className={`h-2 w-2 shrink-0 rounded-full ${connected ? "bg-emerald-400 animate-pulse" : "bg-red-500"}`} />
+              <span className="font-mono text-[11px] text-slate-400">
+                {connected ? "SCALE CONNECTED" : "SCALE OFFLINE"}
               </span>
               {weight ? (
                 <span className={`font-mono text-[11px] ${weight.stable ? "text-emerald-400" : "text-yellow-400"}`}>
@@ -1496,9 +1323,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               <span className="font-mono text-[11px] text-slate-500">
                 {capturedWeights.size}/{requiredComponents.length} captured
               </span>
-              {scaleError ? (
-                <span className="font-mono text-[11px] text-amber-400">{scaleError}</span>
-              ) : null}
             </div>
 
             <div className="flex items-center gap-2">

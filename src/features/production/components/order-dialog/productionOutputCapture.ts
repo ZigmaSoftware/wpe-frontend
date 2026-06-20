@@ -114,9 +114,6 @@ export type CapturedOutputRecord = {
   batchId: string;
   productionStatus: string;
   isOutwarded: boolean;
-  deviceId?: string;
-  workstationId?: string;
-  weightSource?: string;
   sourceBatchId?: number | null;
   sequence?: number | null;
   componentColumns: Array<{
@@ -263,11 +260,8 @@ export const buildCapturedOutputRecord = ({
     binlot: binlot.trim() || "-",
     batchId: batchNo?.trim() || "-",
     productionStatus: "IN_PROGRESS",
-  isOutwarded: false,
-  deviceId: undefined,
-  workstationId: undefined,
-  weightSource: "server_serial",
-  componentColumns: requiredComponents.map((component) => ({
+    isOutwarded: false,
+    componentColumns: requiredComponents.map((component) => ({
       id: component.id,
       label: component.itemName,
     })),
@@ -315,20 +309,10 @@ export const mapPersistedOutputCaptureRecord = (capture: ProductionOutputCapture
   binlot: resolveDisplayedBinlot(capture),
   batchId: resolveDisplayedBatchId(capture),
   productionStatus: resolveDisplayedProductionStatus(capture),
-<<<<<<< HEAD
-  isOutwarded: capture.is_outwarded,
-  deviceId: capture.device_id,
-  workstationId: capture.workstation_id,
-  weightSource: capture.weight_source,
-  sourceBatchId: capture.source_batch,
-  sequence: capture.sequence,
-  componentColumns: capture.component_columns.map((column) => ({
-=======
   isOutwarded: Boolean(capture.is_outwarded),
   sourceBatchId: typeof capture.source_batch === "number" ? capture.source_batch : null,
   sequence: Number(capture.sequence ?? 0),
   componentColumns: (capture.component_columns ?? []).map((column) => ({
->>>>>>> 2fc0db92f565dfbaed0611ec41f367291d9fc9f1
     id: String(column.id),
     label: safeText(column.label),
   })),
