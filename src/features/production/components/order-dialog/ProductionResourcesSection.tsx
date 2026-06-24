@@ -78,7 +78,7 @@ const ProductionResourcesSection = ({
           name="resources.production_facility"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={productionFieldLabelClassName}>Production Facility*</FormLabel>
+              <FormLabel className={productionFieldLabelClassName}>Production Facility</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={productionInputClassName}>

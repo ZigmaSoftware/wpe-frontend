@@ -1,47 +1,50 @@
-import LiveWeightDisplay from "@/components/LiveWeightDisplay";
 import { useState } from "react";
+import LiveWeightDisplay from "@/components/LiveWeightDisplay";
 
 const LiveWeightPage = () => {
-  const [captures, setCaptures] = useState<{ device: string; weight: number; time: Date }[]>([]);
+  const [captures, setCaptures] = useState<{ weight: number; time: Date }[]>([]);
 
-  const handleCapture = (device: string) => (weight: number) => {
-    setCaptures((prev) => [{ device, weight, time: new Date() }, ...prev].slice(0, 20));
+  const handleCapture = (weight: number) => {
+    setCaptures((prev) => [{ weight, time: new Date() }, ...prev].slice(0, 20));
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Live Weight Capture</h1>
-        <p className="text-sm text-muted-foreground mt-1">Real-time weight data from connected scales</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Real-time weight data from the latest reporting bridge-connected scale.
+        </p>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <LiveWeightDisplay deviceId="WS-001" label="Blending Scale A" expectedWeight={60.0} onWeightStable={handleCapture("Blending A")} />
-        <LiveWeightDisplay deviceId="WS-002" label="Blending Scale B" expectedWeight={60.0} onWeightStable={handleCapture("Blending B")} />
-        <LiveWeightDisplay deviceId="WS-003" label="Packing Scale" expectedWeight={20.477} onWeightStable={handleCapture("Packing")} />
-        <LiveWeightDisplay deviceId="WS-004" label="QC Verification Scale" onWeightStable={handleCapture("QC")} />
+      <div className="max-w-xl">
+        <LiveWeightDisplay
+          deviceId="bridge-live-weight"
+          preferBridge
+          bridgeDemandEnabled
+          label="Bridge Auto Detect"
+          onWeightStable={handleCapture}
+        />
       </div>
 
       {captures.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-foreground mb-3">Captured Weights</h2>
-          <div className="rounded-lg border border-border overflow-hidden">
+          <h2 className="mb-3 text-lg font-semibold text-foreground">Captured Weights</h2>
+          <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead className="bg-secondary">
                 <tr>
                   <th className="px-4 py-2 text-center text-secondary-foreground">S.No</th>
-                  <th className="text-left px-4 py-2 text-secondary-foreground">Device</th>
-                  <th className="text-right px-4 py-2 text-secondary-foreground">Weight (kg)</th>
-                  <th className="text-right px-4 py-2 text-secondary-foreground">Time</th>
+                  <th className="px-4 py-2 text-right text-secondary-foreground">Weight (kg)</th>
+                  <th className="px-4 py-2 text-right text-secondary-foreground">Time</th>
                 </tr>
               </thead>
               <tbody>
-                {captures.map((c, i) => (
-                  <tr key={i} className="border-t border-border">
-                    <td className="px-4 py-2 text-center font-medium text-muted-foreground">{i + 1}</td>
-                    <td className="px-4 py-2 text-foreground">{c.device}</td>
-                    <td className="px-4 py-2 text-right font-mono text-foreground">{c.weight.toFixed(3)}</td>
-                    <td className="px-4 py-2 text-right text-muted-foreground">{c.time.toLocaleTimeString()}</td>
+                {captures.map((capture, index) => (
+                  <tr key={`${capture.time.toISOString()}-${index}`} className="border-t border-border">
+                    <td className="px-4 py-2 text-center font-medium text-muted-foreground">{index + 1}</td>
+                    <td className="px-4 py-2 text-right font-mono text-foreground">{capture.weight.toFixed(3)}</td>
+                    <td className="px-4 py-2 text-right text-muted-foreground">{capture.time.toLocaleTimeString()}</td>
                   </tr>
                 ))}
               </tbody>

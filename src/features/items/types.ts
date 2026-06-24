@@ -26,6 +26,18 @@ export type WarehouseInventoryRow = {
   reason?: string;
   warehouse_name: string;
   moved_to_qcr_at: string | null;
+  item_lines?: WarehouseInventoryItemLine[];
+};
+
+export type WarehouseInventoryItemLine = {
+  line_index?: number | null;
+  item_id?: string;
+  item_name: string;
+  item_code?: string;
+  sent_qty: string;
+  received_qty?: string;
+  accepted_qty: string;
+  rejected_qty?: string;
 };
 
 export type InventoryHistoryRow = {

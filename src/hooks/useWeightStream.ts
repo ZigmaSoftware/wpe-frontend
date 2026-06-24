@@ -12,6 +12,8 @@ export interface WeightData {
 interface UseWeightStreamOptions {
   deviceId: string;
   enabled?: boolean;
+  preferBridge?: boolean;
+  bridgeDemandEnabled?: boolean;
   scaleDeviceId?: string | null;
   tolerancePercent?: number;
   workstationId?: string | null;
@@ -44,6 +46,9 @@ interface ScaleApiResponse {
 }
 
 const CONNECTED_STATUSES = new Set<ScaleConnectionStatus>(["connected", "stable", "unstable", "overload"]);
+const CLIENT_STABLE_STATUSES = new Set<ScaleConnectionStatus>(["connected", "unstable"]);
+const CLIENT_STABILITY_WINDOW_MS = 1200;
+const CLIENT_STABILITY_EPSILON = 0.001;
 
 const STATUS_LABELS: Record<ScaleConnectionStatus, string> = {
   stable: "Scale Connected",
@@ -60,6 +65,8 @@ const STATUS_LABELS: Record<ScaleConnectionStatus, string> = {
 export function useWeightStream({
   deviceId,
   enabled = true,
+  preferBridge = false,
+  bridgeDemandEnabled = false,
   scaleDeviceId = null,
   tolerancePercent = 0.5,
   workstationId = null,
@@ -70,13 +77,41 @@ export function useWeightStream({
   const [status, setStatus]       = useState<ScaleConnectionStatus>("disconnected");
   const [source, setSource]       = useState<string | null>(null);
   const [lastSeenAt, setLastSeenAt] = useState<Date | null>(null);
+  const [detectedPort, setDetectedPort] = useState<string | null>(null);
   const [resolvedDeviceId, setResolvedDeviceId] = useState<string | null>(null);
   const [resolvedWorkstationId, setResolvedWorkstationId] = useState<string | null>(null);
+  const stabilityTrackerRef = useRef<{ value: number | null; stableSinceMs: number | null }>({
+    value: null,
+    stableSinceMs: null,
+  });
   const [isDocumentVisible, setIsDocumentVisible] = useState(
     () => typeof document === "undefined" || document.visibilityState === "visible",
   );
   const intervalRef               = useRef<ReturnType<typeof setInterval>>();
   const isPollingEnabled = enabled && isDocumentVisible;
+
+  useEffect(() => {
+    if (!preferBridge || !bridgeDemandEnabled || !isPollingEnabled) {
+      return;
+    }
+
+    const heartbeat = async () => {
+      try {
+        await coreApi.post("/api/scale/bridge/demand/activate/");
+      } catch {
+        // Ignore heartbeat failures here; the weight poll will surface bridge status.
+      }
+    };
+
+    void heartbeat();
+    const heartbeatInterval = setInterval(() => {
+      void heartbeat();
+    }, 2000);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+    };
+  }, [bridgeDemandEnabled, isPollingEnabled, preferBridge]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -103,6 +138,7 @@ export function useWeightStream({
       }
       setConnected(false);
       setStatus("disconnected");
+      stabilityTrackerRef.current = { value: null, stableSinceMs: null };
       return;
     }
 
@@ -113,6 +149,7 @@ export function useWeightStream({
         const res = await coreApi.get<ScaleApiResponse>("/api/scale/weight/latest/", {
           params: {
             device_id: scaleDeviceId || undefined,
+            prefer_bridge: preferBridge || undefined,
             workstation_id: workstationId || undefined,
           },
         });
@@ -128,6 +165,7 @@ export function useWeightStream({
         setConnected(isConnected);
         setError(d.error ?? null);
         setSource(d.source ?? null);
+        setDetectedPort(d.detected_port ?? null);
         setResolvedDeviceId(d.device_id ?? scaleDeviceId ?? null);
         setResolvedWorkstationId(d.workstation_id ?? workstationId ?? null);
         setLastSeenAt(d.last_seen_at ? new Date(d.last_seen_at) : d.timestamp ? new Date(d.timestamp) : null);
@@ -135,15 +173,39 @@ export function useWeightStream({
         if (isConnected) {
           const value = parseFloat(d.weight);
           if (!isNaN(value)) {
+            const normalizedValue = Number(value.toFixed(3));
+            const tracker = stabilityTrackerRef.current;
+            let isStable = d.status === "stable";
+
+            if (!isStable) {
+              if (
+                !CLIENT_STABLE_STATUSES.has(nextStatus) ||
+                tracker.value === null ||
+                Math.abs(tracker.value - normalizedValue) > CLIENT_STABILITY_EPSILON
+              ) {
+                tracker.value = normalizedValue;
+                tracker.stableSinceMs = Date.now();
+              } else if (
+                tracker.stableSinceMs !== null &&
+                Date.now() - tracker.stableSinceMs >= CLIENT_STABILITY_WINDOW_MS
+              ) {
+                isStable = true;
+              }
+            } else {
+              tracker.value = normalizedValue;
+              tracker.stableSinceMs = Date.now();
+            }
+
             setWeight({
               value,
               unit:      (d.unit === "g" ? "g" : "kg") as "kg" | "g",
-              stable:    d.status === "stable",
+              stable:    isStable,
               timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
               deviceId,
             });
           }
         } else {
+          stabilityTrackerRef.current = { value: null, stableSinceMs: null };
           setWeight(null);
         }
       } catch (err) {
@@ -154,6 +216,8 @@ export function useWeightStream({
         setStatus("error");
         setWeight(null);
         setError(err instanceof Error ? err.message : "Scale endpoint unreachable");
+        setDetectedPort(null);
+        stabilityTrackerRef.current = { value: null, stableSinceMs: null };
       }
     };
 
@@ -167,8 +231,9 @@ export function useWeightStream({
         intervalRef.current = undefined;
       }
       setConnected(false);
+      stabilityTrackerRef.current = { value: null, stableSinceMs: null };
     };
-  }, [deviceId, isPollingEnabled, scaleDeviceId, workstationId]);
+  }, [deviceId, isPollingEnabled, preferBridge, scaleDeviceId, workstationId]);
 
   const checkTolerance = useCallback(
     (expected: number): { withinTolerance: boolean; deviation: number; deviationPercent: number } => {
@@ -196,6 +261,7 @@ export function useWeightStream({
     statusLabel: STATUS_LABELS[status],
     source,
     lastSeenAt,
+    detectedPort,
     resolvedDeviceId,
     resolvedWorkstationId,
     checkTolerance,

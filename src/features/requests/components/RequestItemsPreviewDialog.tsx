@@ -14,6 +14,11 @@ type RequestItemsPreviewDialogProps = {
   request: StoreStockRequest | null;
   onOpenChange: (open: boolean) => void;
   requestLabel: string;
+  quantityField?: "requested_qty" | "approved_qty" | "issued_qty";
+  quantityLabel?: string;
+  secondaryQuantityField?: "requested_qty" | "approved_qty" | "issued_qty" | null;
+  secondaryQuantityLabel?: string;
+  showAvailableQty?: boolean;
 };
 
 const readText = (value: unknown) => {
@@ -43,7 +48,17 @@ export const getRequestItemSummary = (request: StoreStockRequest) => {
   };
 };
 
-const RequestItemsPreviewDialog = ({ open, request, onOpenChange, requestLabel }: RequestItemsPreviewDialogProps) => (
+const RequestItemsPreviewDialog = ({
+  open,
+  request,
+  onOpenChange,
+  requestLabel,
+  quantityField = "requested_qty",
+  quantityLabel = "Requested Qty",
+  secondaryQuantityField = null,
+  secondaryQuantityLabel = "Available Qty",
+  showAvailableQty = true,
+}: RequestItemsPreviewDialogProps) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="sm:max-w-4xl">
       <DialogHeader>
@@ -59,8 +74,9 @@ const RequestItemsPreviewDialog = ({ open, request, onOpenChange, requestLabel }
                 <TableHead className="w-16 text-center">S.No</TableHead>
                 <TableHead>Item Code</TableHead>
                 <TableHead>Item</TableHead>
-                <TableHead className="text-right">Requested Qty</TableHead>
-                <TableHead className="text-right">Available Qty</TableHead>
+                <TableHead className="text-right">{quantityLabel}</TableHead>
+                {secondaryQuantityField ? <TableHead className="text-right">{secondaryQuantityLabel}</TableHead> : null}
+                {showAvailableQty ? <TableHead className="text-right">Available Qty</TableHead> : null}
                 <TableHead>Unit</TableHead>
               </TableRow>
             </TableHeader>
@@ -70,8 +86,11 @@ const RequestItemsPreviewDialog = ({ open, request, onOpenChange, requestLabel }
                   <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                   <TableCell className="font-mono text-xs">{readText(item.item_code)}</TableCell>
                   <TableCell>{readText(item.item_name)}</TableCell>
-                  <TableCell className="text-right font-medium">{formatDecimal(item.requested_qty)}</TableCell>
-                  <TableCell className="text-right">{formatDecimal(item.available_qty)}</TableCell>
+                  <TableCell className="text-right font-medium">{formatDecimal(item[quantityField] ?? null)}</TableCell>
+                  {secondaryQuantityField ? (
+                    <TableCell className="text-right font-medium">{formatDecimal(item[secondaryQuantityField] ?? null)}</TableCell>
+                  ) : null}
+                  {showAvailableQty ? <TableCell className="text-right">{formatDecimal(item.available_qty)}</TableCell> : null}
                   <TableCell>{readText(item.unit)}</TableCell>
                 </TableRow>
               ))}

@@ -188,7 +188,7 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
       new Map((ordersLookupQuery.data ?? []).map((order) => [order.id, order])),
     [ordersLookupQuery.data],
   );
-  const showRowActions = stage === "AD";
+  const showRowActions = true;
 
   const deleteOrderMutation = useMutation({
     mutationFn: async (orderId: number) => {

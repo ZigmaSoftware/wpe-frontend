@@ -15,7 +15,7 @@ export const PRODUCTION_ORDER_TABS = [
 export type ProductionDialogTab = (typeof PRODUCTION_ORDER_TABS)[number]["value"];
 
 export const ORDER_STATUS_VALUES = ["PLANNED", "IN_PROGRESS", "PLAN_COMPLETED", "CLOSED"] as const;
-export const WORKFLOW_STAGE_VALUES = ["-", "AD", "BL", "GL"] as const;
+export const WORKFLOW_STAGE_VALUES = ["-", "AD", "BL", "GL", "PR"] as const;
 export const SHIFT_VALUES = ["SHIFT_1", "SHIFT_2", "SHIFT_3"] as const;
 export const MATERIAL_SOURCE_TYPE_VALUES = ["ITEM", "PRODUCT_SUBTYPE"] as const;
 
@@ -61,6 +61,7 @@ export const WORKFLOW_STAGE_OPTIONS: Array<{ value: WorkflowStageValue; label: s
   { value: "AD", label: "AD · Material Prep", description: "Additive and raw mix preparation." },
   { value: "BL", label: "BL · Blending", description: "Blend setup and processing." },
   { value: "GL", label: "GL · Granulation", description: "Granulation and downstream conversion." },
+  { value: "PR", label: "PR · Production", description: "Final production-stage processing." },
 ];
 
 export const SHIFT_OPTIONS: Array<{
@@ -159,10 +160,15 @@ export const productionOrderFormSchema = z
       base_customer_name: z.string().default(""),
       base_order_date: z.string().default(""),
     }),
+    source_link: z.object({
+      source_order_id: z.string().default(""),
+      source_production_id: z.string().default(""),
+      source_stage: z.enum(WORKFLOW_STAGE_VALUES).default("-"),
+    }),
     resources: z.object({
       production_date: z.string().min(1, "Production date is required"),
       shift: z.enum(SHIFT_VALUES),
-      production_facility: z.string().min(1, "Production facility is required"),
+      production_facility: z.string().default(""),
       work_center: z.string().min(1, "Work center is required"),
       line_machine_id: z.string().default(""),
       shift_incharge: z.string().min(1, "Shift incharge is required"),
@@ -379,6 +385,11 @@ export const createProductionOrderDefaultValues = (): ProductionOrderFormValues 
       base_customer_name: "",
       base_order_date: "",
     },
+    source_link: {
+      source_order_id: "",
+      source_production_id: "",
+      source_stage: "-",
+    },
     resources: {
       production_date: productionDate,
       shift: "SHIFT_1",
@@ -566,6 +577,9 @@ type ExtraFormData = {
   stage?: string;
   next_workflow_stage?: string;
   notes?: string;
+  source_order_id?: number | string | null;
+  source_production_id?: string | null;
+  source_stage?: string | null;
   finished_goods?: ProductionItemOption | null;
   production_facility?: string;
   work_center?: string;
@@ -649,6 +663,14 @@ export const mapOrderDetailToFormValues = (
     finished_goods: extra.finished_goods ?? null,
     plan_rows: planRows,
     base_order: extra.base_order ?? defaults.base_order,
+    source_link: {
+      source_order_id:
+        extra.source_order_id !== undefined && extra.source_order_id !== null
+          ? String(extra.source_order_id)
+          : defaults.source_link.source_order_id,
+      source_production_id: extra.source_production_id?.trim() ?? defaults.source_link.source_production_id,
+      source_stage: (extra.source_stage as WorkflowStageValue) ?? defaults.source_link.source_stage,
+    },
     custom_specs: extra.custom_specs ?? defaults.custom_specs,
     resources: {
       ...defaults.resources,

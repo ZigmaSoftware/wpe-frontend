@@ -3,6 +3,10 @@ import { Scale, Wifi, WifiOff, AlertTriangle } from "lucide-react";
 
 interface LiveWeightDisplayProps {
   deviceId: string;
+  preferBridge?: boolean;
+  bridgeDemandEnabled?: boolean;
+  scaleDeviceId?: string | null;
+  workstationId?: string | null;
   expectedWeight?: number;
   tolerancePercent?: number;
   label?: string;
@@ -12,6 +16,10 @@ interface LiveWeightDisplayProps {
 
 const LiveWeightDisplay = ({
   deviceId,
+  preferBridge = false,
+  bridgeDemandEnabled = false,
+  scaleDeviceId = null,
+  workstationId = null,
   expectedWeight,
   tolerancePercent = 0.5,
   label = "Live Weight",
@@ -20,6 +28,10 @@ const LiveWeightDisplay = ({
 }: LiveWeightDisplayProps) => {
   const { weight, connected, tare, checkTolerance } = useWeightStream({
     deviceId,
+    preferBridge,
+    bridgeDemandEnabled,
+    scaleDeviceId,
+    workstationId,
     tolerancePercent,
   });
 

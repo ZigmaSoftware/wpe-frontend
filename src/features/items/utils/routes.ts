@@ -4,7 +4,11 @@ export const INVENTORY_ROUTE = "/app/items";
 export const STORE_INVENTORY_ROUTE = `${INVENTORY_ROUTE}/store-inventory`;
 export const BLENDING_INVENTORY_ROUTE = `${INVENTORY_ROUTE}/blending-inventory`;
 export const PRODUCTION_INVENTORY_ROUTE = `${INVENTORY_ROUTE}/production-inventory`;
+export const PRODUCTION_INVENTORY_DETAIL_ROUTE = `${PRODUCTION_INVENTORY_ROUTE}/:stage/:productionId`;
 export const WAREHOUSE_INVENTORY_ROUTE = `${INVENTORY_ROUTE}/warehouse-inventory`;
+
+export const getProductionInventoryDetailRoute = (stage: string, productionId: string) =>
+  `${PRODUCTION_INVENTORY_ROUTE}/${stage}/${encodeURIComponent(productionId)}`;
 
 export type InventoryWorkspaceModuleDefinition = {
   to: string;

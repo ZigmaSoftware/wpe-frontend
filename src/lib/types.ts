@@ -283,15 +283,19 @@ export type GrnSupplierDetails = {
 
 export type GrnItemLine = {
   item_id?: string;
+  item_code?: string;
+  item_name?: string;
   item_serial_number?: number | string;
   product_description?: string;
   hsn_code?: string;
   total_quantity?: string | number;
   quantity?: string | number;
+  received_qty?: string | number;
   free_quantity?: string | number;
   accepted_qty?: string | number;
   rejected_qty?: string | number;
   unit?: string;
+  uom?: string;
   unit_price?: string | number;
   total_amount?: string | number;
   discount?: string;
@@ -330,7 +334,9 @@ export type QcrItemLine = {
   line_index: number;
   item_id?: string | null;
   item_name?: string | null;
+  item_code?: string | null;
   unit?: string | null;
+  uom?: string | null;
   sent_qty?: string | number | null;
   received_qty?: string | number | null;
   accepted_qty?: string | number | null;
@@ -383,6 +389,7 @@ export type QcrRecord = {
   snapshot: Record<string, unknown>;
   status: string;
   remarks: string | null;
+  items?: QcrItemLine[];
   qcr_items?: QcrItemLine[];
   moved_to_qcr_at: string;
   moved_to_qcr_by: string | null;
