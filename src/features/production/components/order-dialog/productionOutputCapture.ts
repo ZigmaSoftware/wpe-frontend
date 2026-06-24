@@ -315,14 +315,13 @@ export const mapPersistedOutputCaptureRecord = (capture: ProductionOutputCapture
   binlot: resolveDisplayedBinlot(capture),
   batchId: resolveDisplayedBatchId(capture),
   productionStatus: resolveDisplayedProductionStatus(capture),
-  isOutwarded: capture.is_outwarded ?? false,
+  isOutwarded: Boolean(capture.is_outwarded),
   deviceId: capture.device_id,
   workstationId: capture.workstation_id,
   weightSource: capture.weight_source,
-  sourceBatchId: capture.source_batch,
-  sequence: capture.sequence ?? 0,
+  sourceBatchId: typeof capture.source_batch === "number" ? capture.source_batch : null,
+  sequence: Number(capture.sequence ?? 0),
   componentColumns: (capture.component_columns ?? []).map((column) => ({
-
     id: String(column.id),
     label: safeText(column.label),
   })),
