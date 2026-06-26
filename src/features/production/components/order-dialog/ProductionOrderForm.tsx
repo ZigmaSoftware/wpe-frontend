@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { adminMasterApi } from "@/features/admin-master/api/adminMasterApi";
 import type { LookupOption } from "@/features/admin-master/types";
+import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import { coreApi } from "@/lib/api";
 import type { ProductionBatch, ProductionMachine } from "@/lib/types";
-import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import type { LookupItem } from "@/features/wpe-masters/types";
 import GeneralTab from "./GeneralTab";
 import ProductionTabs from "./ProductionTabs";
@@ -42,9 +42,11 @@ type ProductionOrderFormProps = {
   machines: ProductionMachine[];
   machinesLoading?: boolean;
   initialValues?: ProductionOrderFormValues;
+  orderId?: number | null;
   formTitle?: string;
   submitLabel?: string;
   defaultProductionType?: string;
+  entryStage?: ProductionBatch["stage"] | null;
   fixedProductionFacility?: NamedOption;
   defaultWorkCenterName?: string;
   initialTab?: ProductionDialogTab;
@@ -65,7 +67,13 @@ const CostTab = lazy(() => import("./CostTab"));
 const ResourcesTab = lazy(() => import("./ResourcesTab"));
 
 const DEFAULT_PRODUCTION_TYPE = "WPE Additive Production";
-const REQUIRED_PRODUCTION_TYPE_OPTIONS = [DEFAULT_PRODUCTION_TYPE, "WPE Blend Production"] as const;
+const DEFAULT_PRODUCTION_TYPE_BY_STAGE: Record<ProductionBatch["stage"], string> = {
+  AD: "WPE Additive Production",
+  BL: "WPE Blend Production",
+  GL: "WPE Granulated Blend Production",
+  PR: "WPE Production Line",
+};
+const REQUIRED_PRODUCTION_TYPE_OPTIONS = Object.values(DEFAULT_PRODUCTION_TYPE_BY_STAGE);
 
 const mapNamedOptions = (items: LookupItem[]) =>
   items
@@ -170,9 +178,11 @@ const ProductionOrderForm = ({
   machines,
   machinesLoading = false,
   initialValues,
+  orderId = null,
   formTitle,
   submitLabel,
   defaultProductionType = DEFAULT_PRODUCTION_TYPE,
+  entryStage = null,
   fixedProductionFacility,
   defaultWorkCenterName,
   initialTab,
@@ -226,9 +236,11 @@ const ProductionOrderForm = ({
   const isCreateMode = !initialValues;
 
   const nextCodeQuery = useQuery({
-    queryKey: ["production-order-next-code"],
+    queryKey: ["production-order-next-code", entryStage ?? "default"],
     queryFn: async () => {
-      const res = await coreApi.get<{ code: string }>("/api/production/production/next-code/");
+      const res = await coreApi.get<{ code: string }>("/api/production/production/next-code/", {
+        params: { stage: entryStage ?? undefined },
+      });
       return res.data.code;
     },
     enabled: isCreateMode,
@@ -241,6 +253,28 @@ const ProductionOrderForm = ({
       form.setValue("production_id", nextCodeQuery.data, { shouldDirty: false });
     }
   }, [isCreateMode, nextCodeQuery.data, form]);
+
+  useEffect(() => {
+    if (!isCreateMode || entryStage === null) {
+      return;
+    }
+
+    if (form.getValues("stage") !== entryStage) {
+      form.setValue("stage", entryStage, {
+        shouldDirty: false,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+    }
+
+    if (form.getValues("next_workflow_stage") !== "-") {
+      form.setValue("next_workflow_stage", "-", {
+        shouldDirty: false,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+    }
+  }, [entryStage, form, isCreateMode]);
 
   useEffect(() => {
     if (!enabledTabs.some((tab) => tab.value === activeTab)) {
@@ -401,6 +435,7 @@ const ProductionOrderForm = ({
             machinesLoading={machinesLoading}
             lookupsLoading={lookupsLoading}
             lookupError={lookupError}
+            lockedStage={entryStage}
           />
         );
       case "materials":
@@ -489,48 +524,51 @@ const ProductionOrderForm = ({
                   </div>
                 </div>
 
-                <div className={`w-full max-w-full ${showSectionNavigation ? "xl:max-w-[290px]" : "xl:max-w-[340px]"}`}>
-                  <div className={productionMetricCardClassName}>
-                    <FormField
-                      control={form.control}
-                      name="production_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="mb-2 flex items-center justify-between gap-3">
-                            <FormLabel className={productionFieldLabelClassName}>Production ID*</FormLabel>
-                            <span className="text-[11px] font-medium text-slate-400">
-                              {productionId?.trim() ? "Live" : "Pending"}
-                            </span>
-                          </div>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                {...field}
-                                placeholder={isCreateMode && nextCodeQuery.isLoading ? "Generating..." : "Enter production order ID"}
-                                className={productionCompactInputClassName}
-                                disabled={isCreateMode && nextCodeQuery.isLoading}
-                              />
-
-                              {isCreateMode ? (
-                                <button
-                                  type="button"
-                                  title="Regenerate ID"
-                                  className="absolute inset-y-0 right-2 flex items-center text-slate-400 transition-colors hover:text-slate-700"
-                                  onClick={() => {
-                                    nextCodeQuery.refetch().then((result) => {
-                                      if (result.data) form.setValue("production_id", result.data, { shouldDirty: true });
-                                    });
-                                  }}
-                                >
-                                  <RefreshCw className={`h-3.5 w-3.5 ${nextCodeQuery.isLoading ? "animate-spin" : ""}`} />
-                                </button>
-                              ) : null}
+                <div className={`w-full max-w-full ${showSectionNavigation ? "xl:max-w-[340px]" : "xl:max-w-[380px]"}`}>
+                  <div className="space-y-3">
+                    <div className={productionMetricCardClassName}>
+                      <FormField
+                        control={form.control}
+                        name="production_id"
+                        render={({ field }) => (
+                          <FormItem>
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <FormLabel className={productionFieldLabelClassName}>Production ID*</FormLabel>
+                              <span className="text-[11px] font-medium text-slate-400">
+                                {productionId?.trim() ? "Generated" : "Pending"}
+                              </span>
                             </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  {...field}
+                                  placeholder={isCreateMode && nextCodeQuery.isLoading ? "Generating..." : "Generated production order ID"}
+                                  className={productionCompactInputClassName}
+                                  disabled
+                                  readOnly
+                                />
+
+                                {isCreateMode ? (
+                                  <button
+                                    type="button"
+                                    title="Regenerate ID"
+                                    className="absolute inset-y-0 right-2 flex items-center text-slate-400 transition-colors hover:text-slate-700"
+                                    onClick={() => {
+                                      nextCodeQuery.refetch().then((result) => {
+                                        if (result.data) form.setValue("production_id", result.data, { shouldDirty: true });
+                                      });
+                                    }}
+                                  >
+                                    <RefreshCw className={`h-3.5 w-3.5 ${nextCodeQuery.isLoading ? "animate-spin" : ""}`} />
+                                  </button>
+                                ) : null}
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

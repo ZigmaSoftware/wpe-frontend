@@ -7,6 +7,7 @@ import {
   PRODUCTION_AD_WEIGHTAGE_ROUTE,
   PRODUCTION_BL_BLENDING_ROUTE,
   PRODUCTION_GL_GRANULATION_ROUTE,
+  PRODUCTION_PR_PRODUCTION_ROUTE,
   PRODUCTION_ROUTE,
 } from "@/features/production/utils/routes";
 import { coreApi } from "@/lib/api";
@@ -25,6 +26,13 @@ type ProductionNewOrderLocationState = {
   defaultWorkCenterName?: string;
 };
 
+const DEFAULT_PRODUCTION_TYPE_BY_STAGE = {
+  AD: "WPE Additive Production",
+  BL: "WPE Blend Production",
+  GL: "WPE Granulated Blend Production",
+  PR: "WPE Production Line",
+} as const;
+
 const ProductionNewOrderPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,18 +43,22 @@ const ProductionNewOrderPage = () => {
     : PRODUCTION_ROUTE;
   const isBlEntry = locationState?.entryStage === "BL" || backRoute === PRODUCTION_BL_BLENDING_ROUTE;
   const isGlEntry = locationState?.entryStage === "GL" || backRoute === PRODUCTION_GL_GRANULATION_ROUTE;
+  const isPrEntry = locationState?.entryStage === "PR" || backRoute === PRODUCTION_PR_PRODUCTION_ROUTE;
   const isAdEntry =
     locationState?.entryStage === "AD" ||
-    (!isBlEntry && !isGlEntry && (backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE || location.pathname === "/app/production/neworder"));
-  const backLabel = isAdEntry ? "Back to AD list" : isBlEntry ? "Back to BL List" : isGlEntry ? "Back to GL List" : undefined;
+    (!isBlEntry && !isGlEntry && !isPrEntry && (backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE || location.pathname === "/app/production/neworder"));
+  const entryStage = isAdEntry ? "AD" : isBlEntry ? "BL" : isGlEntry ? "GL" : isPrEntry ? "PR" : "AD";
+  const backLabel = isAdEntry ? "Back to AD list" : isBlEntry ? "Back to BL List" : isGlEntry ? "Back to GL List" : isPrEntry ? "Back to PR List" : undefined;
   const formTitle = isAdEntry
     ? "New Additive Creation"
     : isBlEntry
       ? "Blending Creation"
       : isGlEntry
         ? "New GL Creation"
-        : "New Production Order";
-  const submitLabel = isAdEntry ? "Create Additive" : "Create Production Order";
+        : isPrEntry
+          ? "New PR Creation"
+          : "New Production Order";
+  const submitLabel = isAdEntry ? "Create Additive" : isBlEntry ? "Create Blending" : isGlEntry ? "Create Granulation" : isPrEntry ? "Create Production" : "Create Production Order";
 
   const machinesQ = useQuery({
     queryKey: ["production-machines"],
@@ -82,6 +94,8 @@ const ProductionNewOrderPage = () => {
         machinesLoading={machinesQ.isLoading}
         formTitle={formTitle}
         submitLabel={submitLabel}
+        defaultProductionType={DEFAULT_PRODUCTION_TYPE_BY_STAGE[entryStage]}
+        entryStage={entryStage}
         fixedProductionFacility={isAdEntry ? ADDITIVE_PRODUCTION_FACILITY : undefined}
         defaultWorkCenterName={isAdEntry ? locationState?.defaultWorkCenterName ?? "New Line Additive Work Center WIP" : undefined}
       />

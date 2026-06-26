@@ -1201,6 +1201,11 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
         open={Boolean(previewRequest)}
         request={previewRequest}
         requestLabel="Store Request"
+        quantityField="requested_qty"
+        quantityLabel="Requested Qty (units)"
+        secondaryQuantityField="approved_qty"
+        secondaryQuantityLabel="Processed Qty (units)"
+        showAvailableQty={false}
         onOpenChange={(open) => {
           if (!open) {
             setPreviewRequest(null);

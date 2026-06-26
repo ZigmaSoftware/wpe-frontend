@@ -148,6 +148,7 @@ const ProductionEditOrderPage = () => {
         machines={machines}
         machinesLoading={machinesQ.isLoading}
         initialValues={initialValues}
+        orderId={Number(id)}
         formTitle={formTitle}
         submitLabel="Save Changes"
         showFooterActions={!(outputOnlyStage === "AD" || outputOnlyStage === "BL" || outputOnlyStage === "GL" || outputOnlyStage === "PR")}

@@ -28,6 +28,7 @@ import {
 import {
   BLENDING_INVENTORY_ROUTE,
   INVENTORY_ROUTE,
+  PRODUCTION_INVENTORY_DETAIL_ROUTE,
   PRODUCTION_INVENTORY_ROUTE,
   STORE_INVENTORY_ROUTE,
   WAREHOUSE_INVENTORY_ROUTE,
@@ -154,6 +155,7 @@ const TaxesPage = lazy(() => import("@/features/common-master/pages/TaxesPage"))
 const GRNPage = lazy(() => import("@/pages/GRNPage"));
 const ItemsPage = lazy(() => import("@/pages/ItemsPage"));
 const ProductionInventoryPage = lazy(() => import("@/pages/ProductionInventoryPage"));
+const ProductionInventoryDetailPage = lazy(() => import("@/pages/ProductionInventoryDetailPage"));
 const WarehouseInventoryPage = lazy(() => import("@/pages/WarehouseInventoryPage"));
 const RequestsPage = lazy(() => import("@/pages/RequestsPage"));
 const StorePage = lazy(() => import("@/pages/StorePage"));
@@ -256,6 +258,7 @@ const App = () => (
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.productionInventory} />}>
                     <Route path={PRODUCTION_INVENTORY_ROUTE} element={<ProductionInventoryPage />} />
+                    <Route path={PRODUCTION_INVENTORY_DETAIL_ROUTE} element={<ProductionInventoryDetailPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.blendingWorkspace} />}>
