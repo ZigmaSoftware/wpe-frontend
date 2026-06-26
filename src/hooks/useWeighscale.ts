@@ -22,6 +22,10 @@ export interface WeightReading {
 
 const MAX_LOG = 50;
 const WS_PATH = `${BACKEND_WS}/ws/weighscale/`;
+const WEIGHSCALE_API_BASE = "/api/weighscale";
+const WEIGHSCALE_PORTS_PATH = `${WEIGHSCALE_API_BASE}/ports/`;
+const WEIGHSCALE_CONNECT_PATH = `${WEIGHSCALE_API_BASE}/connect/`;
+const WEIGHSCALE_DISCONNECT_PATH = `${WEIGHSCALE_API_BASE}/disconnect/`;
 
 function buildWsUrl(): string {
   return WS_PATH;
@@ -146,7 +150,7 @@ export function useWeighscale() {
 
   const refreshPorts = useCallback(async () => {
     try {
-      const res = await coreApi.get<{ ports: SerialPort[] }>("/api/weighscale/ports/");
+      const res = await coreApi.get<{ ports: SerialPort[] }>(WEIGHSCALE_PORTS_PATH);
       setPorts(res.data.ports ?? []);
     } catch {
       setPorts([]);
@@ -167,7 +171,7 @@ export function useWeighscale() {
     setErrorMessage("");
 
     try {
-      await coreApi.post("/api/weighscale/connect/", {
+      await coreApi.post(WEIGHSCALE_CONNECT_PATH, {
         port: selectedPort,
         baud_rate: baudRate,
       });
@@ -197,7 +201,7 @@ export function useWeighscale() {
     }
 
     try {
-      await coreApi.post("/api/weighscale/disconnect/");
+      await coreApi.post(WEIGHSCALE_DISCONNECT_PATH);
     } catch {
       // ignore if already disconnected
     }

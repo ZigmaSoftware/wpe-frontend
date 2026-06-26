@@ -65,6 +65,7 @@ const STATUS_LABELS: Record<ScaleConnectionStatus, string> = {
 const CLIENT_STABLE_STATUSES = new Set<ScaleConnectionStatus>(["connected", "stable", "unstable", "overload"]);
 const CLIENT_STABILITY_EPSILON = 0.01;
 const CLIENT_STABILITY_WINDOW_MS = 1200;
+const BRIDGE_DEMAND_HEARTBEAT_MS = 4000;
 
 export function useWeightStream({
   deviceId,
@@ -107,6 +108,37 @@ export function useWeightStream({
 
   // ── Bridge mode: HTTP polling ────────────────────────────────────────────
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
+
+  useEffect(() => {
+    if (!isBridgeMode || !isActive || !bridgeDemandEnabled) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const heartbeat = async () => {
+      try {
+        await coreApi.post("/api/scale/bridge/demand/activate/");
+      } catch {
+        if (!cancelled) {
+          // Best-effort heartbeat; polling handles visible errors separately.
+        }
+      }
+    };
+
+    void heartbeat();
+    const heartbeatId = setInterval(() => {
+      void heartbeat();
+    }, BRIDGE_DEMAND_HEARTBEAT_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(heartbeatId);
+      void coreApi.delete("/api/scale/bridge/demand/activate/").catch(() => {
+        // Ignore cleanup failures when unmounting or switching sources.
+      });
+    };
+  }, [bridgeDemandEnabled, isActive, isBridgeMode]);
 
   useEffect(() => {
     if (!isBridgeMode || !isActive) {
