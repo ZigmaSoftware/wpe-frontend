@@ -12,7 +12,6 @@ import type { LookupOption } from "@/features/admin-master/types";
 import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import { coreApi } from "@/lib/api";
 import type { ProductionBatch, ProductionMachine } from "@/lib/types";
-import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
 import type { LookupItem } from "@/features/wpe-masters/types";
 import GeneralTab from "./GeneralTab";
 import ProductionTabs from "./ProductionTabs";

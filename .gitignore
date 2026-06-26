@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+docs
+e2e
 
 # Environment variables - NEVER commit real .env files
 .env

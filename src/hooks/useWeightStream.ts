@@ -62,6 +62,10 @@ const STATUS_LABELS: Record<ScaleConnectionStatus, string> = {
   bridge_not_reporting: "Bridge Not Reporting",
 };
 
+const CLIENT_STABLE_STATUSES = new Set<ScaleConnectionStatus>(["connected", "stable", "unstable", "overload"]);
+const CLIENT_STABILITY_EPSILON = 0.01;
+const CLIENT_STABILITY_WINDOW_MS = 1200;
+
 export function useWeightStream({
   deviceId,
   enabled = true,
@@ -77,6 +81,7 @@ export function useWeightStream({
   const [status, setStatus]         = useState<ScaleConnectionStatus>("disconnected");
   const [source, setSource]         = useState<string | null>(null);
   const [lastSeenAt, setLastSeenAt] = useState<Date | null>(null);
+  const [detectedPort, setDetectedPort] = useState<string | null>(null);
   const [resolvedDeviceId, setResolvedDeviceId]             = useState<string | null>(null);
   const [resolvedWorkstationId, setResolvedWorkstationId]   = useState<string | null>(null);
   const [isDocumentVisible, setIsDocumentVisible] = useState(
@@ -95,6 +100,10 @@ export function useWeightStream({
   }, []);
 
   const isActive = enabled && isDocumentVisible;
+  const stabilityTrackerRef = useRef<{ value: number | null; stableSinceMs: number | null }>({
+    value: null,
+    stableSinceMs: null,
+  });
 
   // ── Bridge mode: HTTP polling ────────────────────────────────────────────
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
