@@ -116,6 +116,7 @@ export type CapturedOutputRecord = {
   isOutwarded: boolean;
   deviceId?: string;
   workstationId?: string;
+  bridgeClientId?: string;
   weightSource?: string;
   sourceBatchId?: number | null;
   sequence?: number | null;
@@ -266,6 +267,7 @@ export const buildCapturedOutputRecord = ({
   isOutwarded: false,
   deviceId: undefined,
   workstationId: undefined,
+  bridgeClientId: undefined,
   weightSource: "server_serial",
   componentColumns: requiredComponents.map((component) => ({
       id: component.id,
@@ -318,6 +320,7 @@ export const mapPersistedOutputCaptureRecord = (capture: ProductionOutputCapture
   isOutwarded: Boolean(capture.is_outwarded),
   deviceId: capture.device_id,
   workstationId: capture.workstation_id,
+  bridgeClientId: capture.bridge_client_id,
   weightSource: capture.weight_source,
   sourceBatchId: typeof capture.source_batch === "number" ? capture.source_batch : null,
   sequence: Number(capture.sequence ?? 0),
