@@ -10,6 +10,7 @@ import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
 import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
 import { BATCH_STATUS_CLASSES, StatusBadge } from "@/pages/productionShared";
+import { useAuth } from "@/providers/AuthProvider";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
   areAllRequiredOutputComponentsCaptured,
@@ -31,6 +32,7 @@ import { useBomComponents } from "./useBomComponents";
 import QRLabelPreviewModal, { type QRLabelContext } from "./QRLabelPreviewModal";
 
 const TOLERANCE_PERCENT = 0.5;
+const BRIDGE_DEMAND_HEARTBEAT_MS = 4000;
 type DemoMaterial = {
   client_id: string;
   item_code: string;
@@ -76,13 +78,16 @@ const normalizeComparableToken = (value?: string | null) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
-const buildScaleOptionKey = (deviceId: string, workstationId: string) => `bridge:${deviceId}:${workstationId}`;
-const SERVER_SCALE_KEY = "server:serial";
+const buildScaleOptionKey = (deviceId: string, workstationId: string, bridgeClientId: string) =>
+  `bridge:${deviceId}:${workstationId}:${bridgeClientId}`;
 const SCALE_SELECTION_STORAGE_KEY = "production-output-scale-selection";
+
+const BRIDGE_CONNECTED_STATUSES = new Set(["connected", "stable", "unstable"]);
 
 type ScaleBridgeDevice = {
   device_id: string;
   workstation_id: string;
+  bridge_client_id?: string | null;
   status: string;
   weight: string;
   unit: string;
@@ -99,6 +104,7 @@ type ScaleSelectOption = {
   source: string;
   deviceId: string | null;
   workstationId: string | null;
+  bridgeClientId: string | null;
 };
 
 const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCaptureComponent) => {
@@ -121,8 +127,25 @@ const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCapture
   );
 };
 
+const buildScaleSelectionStorageKey = (userId?: number | string | null, username?: string | null) => {
+  const scope = userId ?? username ?? "anonymous";
+  return `${SCALE_SELECTION_STORAGE_KEY}:${scope}`;
+};
+
+const formatBridgeClientId = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "unknown-client";
+  }
+  if (normalized.length <= 18) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 8)}...${normalized.slice(-6)}`;
+};
+
 const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutputTabProps) => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { id: orderIdParam } = useParams<{ id?: string }>();
   const watchedFormMaterials = useWatch({ control: form.control, name: "materials.rows" });
   const formMaterials = useMemo(
@@ -172,15 +195,43 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const [isSyncingCapture, setIsSyncingCapture] = useState(false);
   const [isFinalizingCapture, setIsFinalizingCapture] = useState(false);
   const [outwardingRecordId, setOutwardingRecordId] = useState<string | null>(null);
-  const [selectedScaleKey, setSelectedScaleKey] = useState<string>(() => {
-    if (typeof window === "undefined") {
-      return SERVER_SCALE_KEY;
-    }
-    return window.localStorage.getItem(SCALE_SELECTION_STORAGE_KEY) ?? SERVER_SCALE_KEY;
-  });
+  const [selectedScaleKey, setSelectedScaleKey] = useState<string>("");
   const capturedSessionKeysRef = useRef(new Set<string>());
   const activeBatchIdRef = useRef<number | null>(null);
+  const loadedScaleSelectionScopeRef = useRef<string | null>(null);
   const { processScan } = useScannerInput();
+  const scaleSelectionStorageKey = useMemo(
+    () => buildScaleSelectionStorageKey(user?.id, user?.username),
+    [user?.id, user?.username],
+  );
+
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const heartbeat = async () => {
+      try {
+        await coreApi.post("/api/scale/bridge/demand/activate/");
+      } catch {
+        if (!cancelled) {
+          // Discovery is best-effort; the scale device list handles empty states.
+        }
+      }
+    };
+
+    void heartbeat();
+    const heartbeatId = setInterval(() => {
+      void heartbeat();
+    }, BRIDGE_DEMAND_HEARTBEAT_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(heartbeatId);
+    };
+  }, [isActive]);
 
   const stageBatchesQuery = useQuery({
     queryKey: ["production-output-batches", persistedOrderId, outputStage],
@@ -226,6 +277,21 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       return response.data.devices ?? [];
     },
   });
+  const bridgeDevices = useMemo(
+    () =>
+      [...(scaleDevicesQuery.data ?? [])].sort((left, right) => {
+        const rightConnected = BRIDGE_CONNECTED_STATUSES.has(right.status) ? 1 : 0;
+        const leftConnected = BRIDGE_CONNECTED_STATUSES.has(left.status) ? 1 : 0;
+        if (rightConnected !== leftConnected) {
+          return rightConnected - leftConnected;
+        }
+
+        const rightSeen = right.last_seen_at ? Date.parse(right.last_seen_at) : 0;
+        const leftSeen = left.last_seen_at ? Date.parse(left.last_seen_at) : 0;
+        return rightSeen - leftSeen;
+      }),
+    [scaleDevicesQuery.data],
+  );
   const capturedStageBatchIds = useMemo(
     () => new Set(persistedCapturedOutputs.map((record) => record.sourceBatchId).filter((value): value is number => typeof value === "number")),
     [persistedCapturedOutputs],
@@ -475,27 +541,21 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     });
   }, [activeBatch?.batch_no, activeBatch?.display_batch_no, form]);
   const scaleOptions = useMemo<ScaleSelectOption[]>(() => {
-    const bridgeOptions = (scaleDevicesQuery.data ?? []).map((device) => ({
-      key: buildScaleOptionKey(device.device_id, device.workstation_id),
-      label: `${device.device_id} - ${device.workstation_id}`,
+    return bridgeDevices.map((device) => ({
+      key: buildScaleOptionKey(
+        device.device_id,
+        device.workstation_id,
+        device.bridge_client_id || "legacy-client",
+      ),
+      label: `${device.device_id} - ${device.workstation_id} - ${formatBridgeClientId(device.bridge_client_id)}`,
       source: device.source || "local_bridge",
       deviceId: device.device_id,
       workstationId: device.workstation_id,
+      bridgeClientId: device.bridge_client_id || null,
     }));
-
-    return [
-      {
-        key: SERVER_SCALE_KEY,
-        label: "Server-connected scale",
-        source: "server_serial",
-        deviceId: null,
-        workstationId: null,
-      },
-      ...bridgeOptions,
-    ];
-  }, [scaleDevicesQuery.data]);
+  }, [bridgeDevices]);
   const selectedScaleOption = useMemo(
-    () => scaleOptions.find((option) => option.key === selectedScaleKey) ?? scaleOptions[0],
+    () => scaleOptions.find((option) => option.key === selectedScaleKey) ?? null,
     [scaleOptions, selectedScaleKey],
   );
 
@@ -505,35 +565,73 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     }
 
     if (selectedScaleKey.startsWith("bridge:")) {
-      const legacyDeviceId = selectedScaleKey.slice("bridge:".length);
-      const migratedOption = scaleOptions.find((option) => option.deviceId === legacyDeviceId);
-      if (migratedOption) {
-        setSelectedScaleKey(migratedOption.key);
-        return;
+      const legacyTokens = selectedScaleKey.slice("bridge:".length).split(":");
+      if (legacyTokens.length >= 2) {
+        const [legacyDeviceId, legacyWorkstationId] = legacyTokens;
+        const matchingOptions = scaleOptions.filter(
+          (option) =>
+            option.deviceId === legacyDeviceId &&
+            option.workstationId === legacyWorkstationId,
+        );
+        if (matchingOptions.length === 1) {
+          setSelectedScaleKey(matchingOptions[0].key);
+          return;
+        }
       }
     }
 
-    setSelectedScaleKey(scaleOptions[0]?.key ?? SERVER_SCALE_KEY);
+    if (!selectedScaleKey && scaleOptions.length === 1) {
+      setSelectedScaleKey(scaleOptions[0].key);
+      return;
+    }
+
+    if (selectedScaleKey) {
+      setSelectedScaleKey("");
+    }
   }, [scaleOptions, selectedScaleKey]);
 
   const selectedBridgeDevice = useMemo(
     () =>
-      selectedScaleOption?.deviceId && selectedScaleOption?.workstationId
-        ? (scaleDevicesQuery.data ?? []).find(
+      selectedScaleOption?.deviceId &&
+      selectedScaleOption?.workstationId &&
+      selectedScaleOption?.bridgeClientId
+        ? bridgeDevices.find(
             (device) =>
               device.device_id === selectedScaleOption.deviceId &&
-              device.workstation_id === selectedScaleOption.workstationId,
+              device.workstation_id === selectedScaleOption.workstationId &&
+              (device.bridge_client_id || null) === selectedScaleOption.bridgeClientId,
           ) ?? null
         : null,
-    [scaleDevicesQuery.data, selectedScaleOption?.deviceId, selectedScaleOption?.workstationId],
+    [
+      bridgeDevices,
+      selectedScaleOption?.bridgeClientId,
+      selectedScaleOption?.deviceId,
+      selectedScaleOption?.workstationId,
+    ],
   );
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(SCALE_SELECTION_STORAGE_KEY, selectedScaleKey);
-  }, [selectedScaleKey]);
+    if (loadedScaleSelectionScopeRef.current === scaleSelectionStorageKey) {
+        return;
+      }
+    loadedScaleSelectionScopeRef.current = scaleSelectionStorageKey;
+    const storedValue = window.localStorage.getItem(scaleSelectionStorageKey) ?? "";
+    setSelectedScaleKey(storedValue === "server:serial" ? "" : storedValue);
+  }, [scaleSelectionStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (selectedScaleKey) {
+      window.localStorage.setItem(scaleSelectionStorageKey, selectedScaleKey);
+      return;
+    }
+    window.localStorage.removeItem(scaleSelectionStorageKey);
+  }, [scaleSelectionStorageKey, selectedScaleKey]);
 
   const stdWeight = activeComponent?.plannedWeightKg ?? 0;
   const displayStdWeight = Math.abs(stdWeight);
@@ -565,31 +663,34 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     detectedPort,
     error: scaleError,
     lastSeenAt,
+    resolvedBridgeClientId,
     resolvedDeviceId,
     resolvedWorkstationId,
-    source: scaleSource,
     status,
     statusLabel,
     tare,
   } = useWeightStream({
     deviceId: "output-scale-1",
     preferBridge: true,
-    bridgeDemandEnabled: isActive,
     tolerancePercent: TOLERANCE_PERCENT,
-    enabled: isActive,
+    enabled: isActive && selectedBridgeDevice !== null,
     scaleDeviceId: selectedBridgeDevice?.device_id ?? null,
+    bridgeClientId: selectedBridgeDevice?.bridge_client_id ?? null,
     workstationId: selectedBridgeDevice?.workstation_id ?? null,
   });
 
+  const activeScaleBridgeClientId =
+    selectedBridgeDevice?.bridge_client_id ?? resolvedBridgeClientId ?? null;
   const activeScaleDeviceId = selectedBridgeDevice?.device_id ?? resolvedDeviceId ?? null;
   const activeScaleWorkstationId = selectedBridgeDevice?.workstation_id ?? resolvedWorkstationId ?? null;
   const scaleCapturePayload = useMemo(
     () => ({
       device_id: activeScaleDeviceId ?? undefined,
+      bridge_client_id: activeScaleBridgeClientId ?? undefined,
       workstation_id: activeScaleWorkstationId ?? undefined,
-      source: selectedBridgeDevice ? "local_bridge" : (scaleSource ?? "server_serial"),
+      source: "local_bridge",
     }),
-    [activeScaleDeviceId, activeScaleWorkstationId, scaleSource, selectedBridgeDevice],
+    [activeScaleBridgeClientId, activeScaleDeviceId, activeScaleWorkstationId],
   );
   const scaleStatusClassName =
     status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading"
@@ -603,14 +704,19 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       : connected
         ? "bg-emerald-400 animate-pulse"
         : "bg-red-500";
-  const scaleSecondaryNote =
-    selectedBridgeDevice
-      ? detectedPort
-        ? `${activeScaleWorkstationId ?? "Bridge workstation"} • ${detectedPort}`
-        : activeScaleWorkstationId ?? "Bridge workstation"
-      : detectedPort
-        ? `Server serial fallback • ${detectedPort}`
-        : "Bridge auto-detect";
+  const selectedScaleLabel = selectedBridgeDevice
+    ? `${selectedBridgeDevice.device_id} - ${formatBridgeClientId(selectedBridgeDevice.bridge_client_id)}`
+    : "Select local bridge client";
+  const scaleWorkstationLabel = activeScaleWorkstationId ?? "No workstation";
+  const scaleClientLabel = activeScaleBridgeClientId
+    ? formatBridgeClientId(activeScaleBridgeClientId)
+    : "No client id";
+  const scalePortLabel = detectedPort ?? "USB scale not detected";
+  const scaleHelpText = selectedBridgeDevice
+    ? scaleError
+    : bridgeDevices.length === 0
+      ? "Start bridge.py on this PC to receive live weight."
+      : "Select the exact bridge client for this browser session.";
   const scaleLastSeenLabel = lastSeenAt
     ? lastSeenAt.toLocaleTimeString("en-IN", {
         hour: "2-digit",
@@ -1192,7 +1298,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px]">
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-700">
-              Bridge Auto Detect
+              Bridge Client Scale
             </span>
             <label className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-mono text-slate-700">
               <span className="sr-only">Select scale source</span>
@@ -1201,6 +1307,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                 onChange={(event) => setSelectedScaleKey(event.target.value)}
                 className="bg-transparent outline-none"
               >
+                <option value="">Select bridge client</option>
                 {scaleOptions.map((option) => (
                   <option key={option.key} value={option.key}>
                     {option.label}
@@ -1211,13 +1318,17 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             <span className={`rounded-full border px-2.5 py-1 font-mono font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-red-200 bg-red-50 text-red-700"}`}>
               {statusLabel}
             </span>
-            {activeScaleDeviceId ? (
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
-                {activeScaleDeviceId}
-              </span>
-            ) : null}
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
-              {scaleSecondaryNote}
+              {selectedScaleLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
+              {scaleWorkstationLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
+              client {scaleClientLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
+              {scalePortLabel}
             </span>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-500">
               last seen {scaleLastSeenLabel}
@@ -1469,8 +1580,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               <span className="font-mono text-[11px] text-slate-500">
                 {capturedWeights.size}/{requiredComponents.length} captured
               </span>
-              {scaleError ? (
-                <span className="font-mono text-[11px] text-amber-400">{scaleError}</span>
+              {scaleHelpText ? (
+                <span className="font-mono text-[11px] text-amber-400">{scaleHelpText}</span>
               ) : null}
             </div>
 

@@ -16,6 +16,7 @@ interface UseWeightStreamOptions {
   preferBridge?: boolean;
   bridgeDemandEnabled?: boolean;
   scaleDeviceId?: string | null;
+  bridgeClientId?: string | null;
   tolerancePercent?: number;
   workstationId?: string | null;
 }
@@ -44,6 +45,7 @@ interface ScaleApiResponse {
   platform:        string;
   source?:         string | null;
   workstation_id?: string | null;
+  bridge_client_id?: string | null;
 }
 
 const CONNECTED_STATUSES = new Set<ScaleConnectionStatus>([
@@ -73,6 +75,7 @@ export function useWeightStream({
   preferBridge = false,
   bridgeDemandEnabled = false,
   scaleDeviceId = null,
+  bridgeClientId = null,
   tolerancePercent = 0.5,
   workstationId = null,
 }: UseWeightStreamOptions) {
@@ -85,11 +88,12 @@ export function useWeightStream({
   const [detectedPort, setDetectedPort] = useState<string | null>(null);
   const [resolvedDeviceId, setResolvedDeviceId]             = useState<string | null>(null);
   const [resolvedWorkstationId, setResolvedWorkstationId]   = useState<string | null>(null);
+  const [resolvedBridgeClientId, setResolvedBridgeClientId] = useState<string | null>(null);
   const [isDocumentVisible, setIsDocumentVisible] = useState(
     () => typeof document === "undefined" || document.visibilityState === "visible",
   );
 
-  const isBridgeMode = !!(scaleDeviceId || workstationId);
+  const isBridgeMode = !!(scaleDeviceId || workstationId || bridgeClientId);
 
   // ── Visibility tracking ──────────────────────────────────────────────────
   useEffect(() => {
@@ -134,9 +138,6 @@ export function useWeightStream({
     return () => {
       cancelled = true;
       clearInterval(heartbeatId);
-      void coreApi.delete("/api/scale/bridge/demand/activate/").catch(() => {
-        // Ignore cleanup failures when unmounting or switching sources.
-      });
     };
   }, [bridgeDemandEnabled, isActive, isBridgeMode]);
 
@@ -157,6 +158,7 @@ export function useWeightStream({
         const res = await coreApi.get<ScaleApiResponse>("/api/scale/weight/latest/", {
           params: {
             device_id:      scaleDeviceId || undefined,
+            bridge_client_id: bridgeClientId || undefined,
             workstation_id: workstationId || undefined,
           },
         });
@@ -171,6 +173,7 @@ export function useWeightStream({
         setSource(d.source ?? null);
         setDetectedPort(d.detected_port ?? null);
         setResolvedDeviceId(d.device_id ?? scaleDeviceId ?? null);
+        setResolvedBridgeClientId(d.bridge_client_id ?? bridgeClientId ?? null);
         setResolvedWorkstationId(d.workstation_id ?? workstationId ?? null);
         setLastSeenAt(
           d.last_seen_at ? new Date(d.last_seen_at) : d.timestamp ? new Date(d.timestamp) : null,
@@ -221,6 +224,7 @@ export function useWeightStream({
         setWeight(null);
         setError(err instanceof Error ? err.message : "Scale endpoint unreachable");
         setDetectedPort(null);
+        setResolvedBridgeClientId(null);
         stabilityTrackerRef.current = { value: null, stableSinceMs: null };
       }
     };
@@ -233,7 +237,7 @@ export function useWeightStream({
       if (intervalRef.current) clearInterval(intervalRef.current);
       setConnected(false);
     };
-  }, [isBridgeMode, isActive, scaleDeviceId, workstationId, deviceId]);
+  }, [bridgeClientId, deviceId, isActive, isBridgeMode, scaleDeviceId, workstationId]);
 
   // ── Direct mode: WebSocket subscription ─────────────────────────────────
   const wsRef = useRef<WebSocket | null>(null);
@@ -348,6 +352,7 @@ export function useWeightStream({
     lastSeenAt,
     detectedPort,
     resolvedDeviceId,
+    resolvedBridgeClientId,
     resolvedWorkstationId,
     checkTolerance,
     tare,

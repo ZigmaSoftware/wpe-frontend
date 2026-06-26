@@ -6,6 +6,7 @@ interface LiveWeightDisplayProps {
   preferBridge?: boolean;
   bridgeDemandEnabled?: boolean;
   scaleDeviceId?: string | null;
+  bridgeClientId?: string | null;
   workstationId?: string | null;
   expectedWeight?: number;
   tolerancePercent?: number;
@@ -19,6 +20,7 @@ const LiveWeightDisplay = ({
   preferBridge = false,
   bridgeDemandEnabled = false,
   scaleDeviceId = null,
+  bridgeClientId = null,
   workstationId = null,
   expectedWeight,
   tolerancePercent = 0.5,
@@ -31,6 +33,7 @@ const LiveWeightDisplay = ({
     preferBridge,
     bridgeDemandEnabled,
     scaleDeviceId,
+    bridgeClientId,
     workstationId,
     tolerancePercent,
   });

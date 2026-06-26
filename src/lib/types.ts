@@ -546,6 +546,7 @@ export type ProductionOutputCapture = {
   session_key: string;
   device_id?: string;
   workstation_id?: string;
+  bridge_client_id?: string;
   weight_source?: string;
   captured_at: string;
   component_columns: ProductionOutputCaptureColumn[];
