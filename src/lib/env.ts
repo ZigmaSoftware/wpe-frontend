@@ -49,3 +49,11 @@ export const GRN_API_URL = trimTrailingSlash(
     ? (import.meta.env.VITE_GRN_API_SERVER ?? CORE_API_URL)
     : (import.meta.env.VITE_GRN_API_LOCAL  ?? CORE_API_URL),
 );
+
+export const BACKEND_WS = trimTrailingSlash(
+  ENV === "prod"
+    ? (import.meta.env.VITE_BACKEND_WS_PROD   ?? "ws://115.245.93.26:7904")
+    : ENV === "server"
+    ? (import.meta.env.VITE_BACKEND_WS_SERVER ?? "ws://192.168.5.19:8000")
+    : (import.meta.env.VITE_BACKEND_WS_LOCAL  ?? "ws://127.0.0.1:8000"),
+);

@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, ErrorState } from "@/components/QueryState";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { itemsInventoryApi } from "@/features/items/api/inventoryApi";
-import type { WarehouseInventoryRow } from "@/features/items/types";
+import type { WarehouseInventoryItemLine, WarehouseInventoryRow } from "@/features/items/types";
 import StoreTablePagination from "@/features/store/components/StoreTablePagination";
 import StoreTableToolbar, { type StoreExportFormat, type StorePageSizeValue } from "@/features/store/components/StoreTableToolbar";
 import { exportTableData, type StoreExportColumn } from "@/features/store/utils/export";
@@ -24,6 +25,13 @@ type WarehouseTabState = {
   page: number;
   pageSize: number;
   search: string;
+};
+
+type WarehouseItemPreviewState = {
+  tabKey: WarehouseTabKey;
+  title: string;
+  description: string;
+  rows: WarehouseInventoryItemLine[];
 };
 
 const WAREHOUSE_TABS: WarehouseTabDefinition[] = [
@@ -46,12 +54,53 @@ const getToolbarPageSizeValue = (pageSize: number): StorePageSizeValue =>
     ? (String(pageSize) as StorePageSizeValue)
     : "20";
 
+const getWarehouseInventoryItemLines = (row: WarehouseInventoryRow) =>
+  Array.isArray(row.item_lines) ? row.item_lines.filter((item) => item && item.item_name) : [];
+
+const getWarehouseInventoryItemSummary = (row: WarehouseInventoryRow) => {
+  const items = getWarehouseInventoryItemLines(row);
+  if (!items.length) {
+    return {
+      title: row.items || "-",
+      subtitle: null as string | null,
+      extra: null as string | null,
+    };
+  }
+
+  const [firstItem, ...restItems] = items;
+  return {
+    title: firstItem.item_name || firstItem.item_code || firstItem.item_id || "-",
+    subtitle: firstItem.item_code || firstItem.item_id || null,
+    extra: restItems.length ? `+${restItems.length} more` : null,
+  };
+};
+
+const getWarehouseInventoryPreviewColumns = (tabKey: WarehouseTabKey) =>
+  tabKey === "REJECTION_WAREHOUSE"
+    ? [
+        { key: "serial", label: "S.No", align: "center" as const },
+        { key: "item", label: "Item" },
+        { key: "code", label: "Code" },
+        { key: "sentQty", label: "Send Qty", align: "right" as const },
+        { key: "receivedQty", label: "Received Qty", align: "right" as const },
+        { key: "acceptedQty", label: "Accepted Qty", align: "right" as const },
+        { key: "rejectedQty", label: "Rejected Qty", align: "right" as const },
+      ]
+    : [
+        { key: "serial", label: "S.No", align: "center" as const },
+        { key: "item", label: "Item" },
+        { key: "code", label: "Code" },
+        { key: "sentQty", label: "Send Qty", align: "right" as const },
+        { key: "receivedQty", label: "Received Qty", align: "right" as const },
+      ];
+
 const WarehouseInventoryPage = () => {
   const [activeTab, setActiveTab] = useState<WarehouseTabKey>("QC_PENDING_WAREHOUSE");
   const [tabStates, setTabStates] = useState<Record<WarehouseTabKey, WarehouseTabState>>({
     QC_PENDING_WAREHOUSE: createTabState(),
     REJECTION_WAREHOUSE: createTabState(),
   });
+  const [itemPreviewState, setItemPreviewState] = useState<WarehouseItemPreviewState | null>(null);
 
   const activeTabDefinition = WAREHOUSE_TABS.find((tab) => tab.key === activeTab) ?? WAREHOUSE_TABS[0];
   const activeState = tabStates[activeTab];
@@ -188,13 +237,38 @@ const WarehouseInventoryPage = () => {
                 <TableBody>
                   {rows.map((row, index) => {
                     const serialNumber = (activeState.page - 1) * activeState.pageSize + index + 1;
+                    const itemSummary = getWarehouseInventoryItemSummary(row);
+                    const itemLines = getWarehouseInventoryItemLines(row);
                     return (
                       <TableRow key={`${tab.key}-${row.qcr_id}-${row.grn_id}`}>
                         <TableCell>{serialNumber}</TableCell>
                         <TableCell className="font-medium text-card-foreground">{row.grn_reference_no || row.grn_no || "-"}</TableCell>
                         <TableCell>{row.supplier || "-"}</TableCell>
                         <TableCell>{row.po_no || "-"}</TableCell>
-                        <TableCell className="max-w-[24rem] whitespace-normal">{row.items || "-"}</TableCell>
+                        <TableCell className="max-w-[24rem] whitespace-normal">
+                          <div className="space-y-1">
+                            <div className="font-medium text-card-foreground">{itemSummary.title}</div>
+                            {itemSummary.subtitle ? (
+                              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{itemSummary.subtitle}</div>
+                            ) : null}
+                            {itemSummary.extra && itemLines.length > 1 ? (
+                              <button
+                                type="button"
+                                className="text-xs font-semibold text-primary transition hover:text-primary/80"
+                              onClick={() =>
+                                setItemPreviewState({
+                                  tabKey: tab.key,
+                                  title: `Items for ${row.grn_reference_no || row.grn_no || "warehouse entry"}`,
+                                  description: "All items available for the selected warehouse record.",
+                                  rows: itemLines,
+                                  })
+                                }
+                              >
+                                {itemSummary.extra}
+                              </button>
+                            ) : null}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right">{formatDecimal(row.inward_qty)}</TableCell>
                         {isRejectedWarehouse ? (
                           <TableCell className="max-w-[24rem] whitespace-normal">{row.reason || "-"}</TableCell>
@@ -251,6 +325,62 @@ const WarehouseInventoryPage = () => {
           </TabsContent>
         ))}
       </Tabs>
+
+      <Dialog open={Boolean(itemPreviewState)} onOpenChange={(open) => !open && setItemPreviewState(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{itemPreviewState?.title || "Warehouse Items"}</DialogTitle>
+            <DialogDescription>{itemPreviewState?.description || "All items for the selected warehouse record."}</DialogDescription>
+          </DialogHeader>
+          {itemPreviewState ? (
+            <div className="overflow-hidden rounded-2xl border border-border">
+              <div className="max-h-[24rem] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
+                    <TableRow className="hover:bg-card">
+                      {getWarehouseInventoryPreviewColumns(itemPreviewState.tabKey).map((column) => (
+                        <TableHead
+                          key={column.key}
+                          className={
+                            column.align === "center"
+                              ? "text-center"
+                              : column.align === "right"
+                                ? "text-right"
+                                : undefined
+                          }
+                        >
+                          {column.label}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {itemPreviewState.rows.map((item, index) => (
+                      <TableRow key={`${item.item_id || item.item_code || item.item_name}-${index}`}>
+                        <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium text-card-foreground">{item.item_name || "-"}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{item.item_code || "-"}</TableCell>
+                        <TableCell className="text-right">{formatDecimal(item.sent_qty)}</TableCell>
+                        <TableCell className="text-right">{formatDecimal(item.received_qty ?? item.accepted_qty)}</TableCell>
+                        {itemPreviewState.tabKey === "REJECTION_WAREHOUSE" ? (
+                          <>
+                            <TableCell className="text-right">{formatDecimal(item.accepted_qty)}</TableCell>
+                            <TableCell className="text-right">{formatDecimal(item.rejected_qty)}</TableCell>
+                          </>
+                        ) : null}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
