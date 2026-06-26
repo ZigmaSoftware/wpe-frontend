@@ -103,7 +103,7 @@ const normalizeComparableToken = (value?: string | null) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
-const buildScaleOptionKey = (deviceId: string) => `bridge:${deviceId}`;
+const buildScaleOptionKey = (deviceId: string, workstationId: string) => `bridge:${deviceId}:${workstationId}`;
 
 const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCaptureComponent) => {
   if (component.bomComponentId) {
@@ -474,7 +474,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   }, [activeBatch?.batch_no, activeBatch?.display_batch_no, form]);
   const scaleOptions = useMemo<ScaleSelectOption[]>(() => {
     const bridgeOptions = (scaleDevicesQuery.data ?? []).map((device) => ({
-      key: buildScaleOptionKey(device.device_id),
+      key: buildScaleOptionKey(device.device_id, device.workstation_id),
       label: `${device.device_id} - ${device.workstation_id}`,
       source: device.source || "local_bridge",
       deviceId: device.device_id,
@@ -496,12 +496,34 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     () => scaleOptions.find((option) => option.key === selectedScaleKey) ?? scaleOptions[0],
     [scaleOptions, selectedScaleKey],
   );
+
+  useEffect(() => {
+    if (scaleOptions.some((option) => option.key === selectedScaleKey)) {
+      return;
+    }
+
+    if (selectedScaleKey.startsWith("bridge:")) {
+      const legacyDeviceId = selectedScaleKey.slice("bridge:".length);
+      const migratedOption = scaleOptions.find((option) => option.deviceId === legacyDeviceId);
+      if (migratedOption) {
+        setSelectedScaleKey(migratedOption.key);
+        return;
+      }
+    }
+
+    setSelectedScaleKey(scaleOptions[0]?.key ?? SERVER_SCALE_KEY);
+  }, [scaleOptions, selectedScaleKey]);
+
   const selectedBridgeDevice = useMemo(
     () =>
-      selectedScaleOption?.deviceId
-        ? (scaleDevicesQuery.data ?? []).find((device) => device.device_id === selectedScaleOption.deviceId) ?? null
+      selectedScaleOption?.deviceId && selectedScaleOption?.workstationId
+        ? (scaleDevicesQuery.data ?? []).find(
+            (device) =>
+              device.device_id === selectedScaleOption.deviceId &&
+              device.workstation_id === selectedScaleOption.workstationId,
+          ) ?? null
         : null,
-    [scaleDevicesQuery.data, selectedScaleOption?.deviceId],
+    [scaleDevicesQuery.data, selectedScaleOption?.deviceId, selectedScaleOption?.workstationId],
   );
 
   useEffect(() => {
@@ -514,7 +536,9 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     if (selectedScaleKey !== SERVER_SCALE_KEY) {
       return;
     }
-    setSelectedScaleKey(buildScaleOptionKey(scaleDevicesQuery.data![0].device_id));
+    setSelectedScaleKey(
+      buildScaleOptionKey(scaleDevicesQuery.data![0].device_id, scaleDevicesQuery.data![0].workstation_id),
+    );
   }, [scaleDevicesQuery.data, selectedScaleKey]);
 
   useEffect(() => {

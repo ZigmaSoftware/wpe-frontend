@@ -135,7 +135,7 @@ export function useWeightStream({
             setWeight({
               value,
               unit:      (d.unit === "g" ? "g" : "kg") as "kg" | "g",
-              stable:    d.status === "stable",
+              stable:    d.status === "stable" || d.status === "connected",
               timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
               deviceId,
             });
