@@ -76,6 +76,8 @@ const normalizeComparableToken = (value?: string | null) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
+const buildScaleOptionKey = (deviceId: string, workstationId: string) => `bridge:${deviceId}:${workstationId}`;
+
 const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCaptureComponent) => {
   if (component.bomComponentId) {
     const matchedByComponentId = batch.weight_entries.find((entry) => entry.bom_component === component.bomComponentId);
@@ -436,6 +438,81 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       shouldValidate: false,
     });
   }, [activeBatch?.batch_no, activeBatch?.display_batch_no, form]);
+  const scaleOptions = useMemo<ScaleSelectOption[]>(() => {
+    const bridgeOptions = (scaleDevicesQuery.data ?? []).map((device) => ({
+      key: buildScaleOptionKey(device.device_id, device.workstation_id),
+      label: `${device.device_id} - ${device.workstation_id}`,
+      source: device.source || "local_bridge",
+      deviceId: device.device_id,
+      workstationId: device.workstation_id,
+    }));
+
+    return [
+      {
+        key: SERVER_SCALE_KEY,
+        label: "Server-connected scale",
+        source: "server_serial",
+        deviceId: null,
+        workstationId: null,
+      },
+      ...bridgeOptions,
+    ];
+  }, [scaleDevicesQuery.data]);
+  const selectedScaleOption = useMemo(
+    () => scaleOptions.find((option) => option.key === selectedScaleKey) ?? scaleOptions[0],
+    [scaleOptions, selectedScaleKey],
+  );
+
+  useEffect(() => {
+    if (scaleOptions.some((option) => option.key === selectedScaleKey)) {
+      return;
+    }
+
+    if (selectedScaleKey.startsWith("bridge:")) {
+      const legacyDeviceId = selectedScaleKey.slice("bridge:".length);
+      const migratedOption = scaleOptions.find((option) => option.deviceId === legacyDeviceId);
+      if (migratedOption) {
+        setSelectedScaleKey(migratedOption.key);
+        return;
+      }
+    }
+
+    setSelectedScaleKey(scaleOptions[0]?.key ?? SERVER_SCALE_KEY);
+  }, [scaleOptions, selectedScaleKey]);
+
+  const selectedBridgeDevice = useMemo(
+    () =>
+      selectedScaleOption?.deviceId && selectedScaleOption?.workstationId
+        ? (scaleDevicesQuery.data ?? []).find(
+            (device) =>
+              device.device_id === selectedScaleOption.deviceId &&
+              device.workstation_id === selectedScaleOption.workstationId,
+          ) ?? null
+        : null,
+    [scaleDevicesQuery.data, selectedScaleOption?.deviceId, selectedScaleOption?.workstationId],
+  );
+
+  useEffect(() => {
+    if (initialScaleSelectionRef.current !== null) {
+      return;
+    }
+    if ((scaleDevicesQuery.data?.length ?? 0) === 0) {
+      return;
+    }
+    if (selectedScaleKey !== SERVER_SCALE_KEY) {
+      return;
+    }
+    setSelectedScaleKey(
+      buildScaleOptionKey(scaleDevicesQuery.data![0].device_id, scaleDevicesQuery.data![0].workstation_id),
+    );
+  }, [scaleDevicesQuery.data, selectedScaleKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(SCALE_SELECTION_STORAGE_KEY, selectedScaleKey);
+  }, [selectedScaleKey]);
 
   const stdWeight = activeComponent?.plannedWeightKg ?? 0;
   const displayStdWeight = Math.abs(stdWeight);
