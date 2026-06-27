@@ -69,6 +69,7 @@ type OutputMaterialRow = ProductionOrderFormValues["materials"]["rows"][number] 
 type ScaleDeviceSummary = {
   device_id: string;
   workstation_id: string;
+  bridge_client_id?: string | null;
   status: string;
   weight: string;
   unit: string;
@@ -83,6 +84,7 @@ type LocalBridgeIdentity = {
   ok: boolean;
   device_id: string;
   workstation_id: string;
+  bridge_client_id: string;
   serial_port?: string | null;
   serial_baud_rate?: number | null;
   server_url?: string | null;
@@ -94,6 +96,7 @@ type ScaleSelectOption = {
   source: string;
   deviceId: string | null;
   workstationId: string | null;
+  bridgeClientId: string | null;
   disabled?: boolean;
 };
 
@@ -118,7 +121,10 @@ const normalizeComparableToken = (value?: string | null) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
-const buildScaleOptionKey = (deviceId: string, workstationId: string) => `bridge:${deviceId}:${workstationId}`;
+const BRIDGE_CONNECTED_STATUSES = new Set(["connected", "stable", "unstable", "overload"]);
+
+const buildScaleOptionKey = (deviceId: string, workstationId: string, bridgeClientId: string) =>
+  `bridge:${deviceId}:${workstationId}:${bridgeClientId}`;
 
 const fetchLocalBridgeIdentity = async (): Promise<LocalBridgeIdentity> => {
   const controller = new AbortController();
@@ -136,14 +142,15 @@ const fetchLocalBridgeIdentity = async (): Promise<LocalBridgeIdentity> => {
     }
 
     const data = (await response.json()) as LocalBridgeIdentity;
-    if (!data.ok || !data.device_id?.trim() || !data.workstation_id?.trim()) {
-      throw new Error("Local bridge identity response is missing device/workstation.");
+    if (!data.ok || !data.device_id?.trim() || !data.workstation_id?.trim() || !data.bridge_client_id?.trim()) {
+      throw new Error("Local bridge identity response is missing device/workstation/client.");
     }
 
     return {
       ...data,
       device_id: data.device_id.trim(),
       workstation_id: data.workstation_id.trim(),
+      bridge_client_id: data.bridge_client_id.trim(),
     };
   } finally {
     window.clearTimeout(timeoutId);
@@ -300,15 +307,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     const records = outputCapturesQuery.data ?? [];
     return records.filter((record) => record.sourceBatchId != null && stageBatchIds.has(record.sourceBatchId));
   }, [outputCapturesQuery.data, stageBatchIds]);
-  const scaleDevicesQuery = useQuery({
-    queryKey: ["scale-bridge-devices"],
-    enabled: queriesEnabled,
-    refetchInterval: queriesEnabled ? 3000 : false,
-    queryFn: async () => {
-      const response = await coreApi.get<{ devices?: ScaleBridgeDevice[] }>("/api/scale/devices/");
-      return response.data.devices ?? [];
-    },
-  });
   const bridgeDevices = useMemo(
     () =>
       [...(scaleDevicesQuery.data ?? [])].sort((left, right) => {
@@ -574,7 +572,11 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   }, [activeBatch?.batch_no, activeBatch?.display_batch_no, form]);
   const localBridgeIdentity = localBridgeIdentityQuery.data ?? null;
   const localBridgeScaleKey = localBridgeIdentity
-    ? buildScaleOptionKey(localBridgeIdentity.device_id, localBridgeIdentity.workstation_id)
+    ? buildScaleOptionKey(
+        localBridgeIdentity.device_id,
+        localBridgeIdentity.workstation_id,
+        localBridgeIdentity.bridge_client_id,
+      )
     : null;
   const scaleOptions = useMemo<ScaleSelectOption[]>(() => {
     if (!localBridgeIdentity) {
@@ -585,6 +587,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
           source: "local_bridge",
           deviceId: null,
           workstationId: null,
+          bridgeClientId: null,
           disabled: true,
         },
       ];
@@ -593,16 +596,22 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     const matchedDevice = (scaleDevicesQuery.data ?? []).find(
       (device) =>
         device.device_id === localBridgeIdentity.device_id &&
-        device.workstation_id === localBridgeIdentity.workstation_id,
+        device.workstation_id === localBridgeIdentity.workstation_id &&
+        (device.bridge_client_id || null) === localBridgeIdentity.bridge_client_id,
     );
 
     return [
       {
-        key: buildScaleOptionKey(localBridgeIdentity.device_id, localBridgeIdentity.workstation_id),
+        key: buildScaleOptionKey(
+          localBridgeIdentity.device_id,
+          localBridgeIdentity.workstation_id,
+          localBridgeIdentity.bridge_client_id,
+        ),
         label: `${localBridgeIdentity.device_id} - ${localBridgeIdentity.workstation_id}`,
         source: matchedDevice?.source || "local_bridge",
         deviceId: localBridgeIdentity.device_id,
         workstationId: localBridgeIdentity.workstation_id,
+        bridgeClientId: localBridgeIdentity.bridge_client_id,
       },
     ];
   }, [localBridgeIdentity, localBridgeIdentityQuery.isLoading, scaleDevicesQuery.data]);
@@ -688,23 +697,32 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     resolvedBridgeClientId,
     resolvedDeviceId,
     resolvedWorkstationId,
+    source: scaleSource,
     status,
     statusLabel,
     tare,
   } = useWeightStream({
     deviceId: "output-scale-1",
     preferBridge: true,
+    bridgeClientId: selectedScaleOption?.bridgeClientId ?? null,
+    bridgeDemandEnabled: true,
+    scaleDeviceId: selectedScaleOption?.deviceId ?? null,
     tolerancePercent: TOLERANCE_PERCENT,
-    enabled: isActive && Boolean(selectedScaleOption?.deviceId && selectedScaleOption?.workstationId),
+    enabled: isActive && Boolean(
+      selectedScaleOption?.deviceId &&
+      selectedScaleOption?.workstationId &&
+      selectedScaleOption?.bridgeClientId,
+    ),
     workstationId: selectedScaleOption?.workstationId ?? null,
   });
   const scaleCapturePayload = useMemo(
     () => ({
       device_id: resolvedDeviceId ?? selectedScaleOption?.deviceId ?? undefined,
       workstation_id: resolvedWorkstationId ?? selectedScaleOption?.workstationId ?? undefined,
+      bridge_client_id: resolvedBridgeClientId ?? selectedScaleOption?.bridgeClientId ?? undefined,
       source: scaleSource ?? selectedScaleOption?.source ?? "local_bridge",
     }),
-    [activeScaleBridgeClientId, activeScaleDeviceId, activeScaleWorkstationId],
+    [resolvedBridgeClientId, resolvedDeviceId, resolvedWorkstationId, scaleSource, selectedScaleOption],
   );
   const scaleStatusClassName =
     status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading"
@@ -725,6 +743,12 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     : localBridgeIdentityQuery.isLoading
       ? "Detecting local bridge"
       : "Local bridge identity unavailable";
+  const selectedScaleLabel = selectedScaleOption?.deviceId
+    ? selectedScaleOption.deviceId
+    : "No local bridge";
+  const scaleWorkstationLabel = selectedScaleOption?.workstationId ?? "Workstation unavailable";
+  const scaleClientLabel = selectedScaleOption?.bridgeClientId ?? "unavailable";
+  const scalePortLabel = detectedPort || selectedBridgeDevice?.detected_port || scaleSecondaryNote;
   const scaleLastSeenLabel = lastSeenAt
     ? lastSeenAt.toLocaleTimeString("en-IN", {
         hour: "2-digit",
@@ -1315,10 +1339,10 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                 {scaleOptions.map((option) => (
                   <SelectItem key={option.key} value={option.key} disabled={option.disabled}>
                     {option.label}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-            </label>
+              </SelectContent>
+            </Select>
             <span className={`rounded-full border px-2.5 py-1 font-mono font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-red-200 bg-red-50 text-red-700"}`}>
               {statusLabel}
             </span>
