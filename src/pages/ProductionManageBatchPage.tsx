@@ -315,17 +315,10 @@ const ProductionManageBatchPage = () => {
   const confirmBatchMutation = useMutation({
     mutationFn: (batch: ProductionBatchExt) =>
       coreApi.post(`/api/production/orders/${orderId}/batches/${batch.id}/confirm/`),
-    onSuccess: (_, batch) => {
+    onSuccess: () => {
       toast.success("Batch confirmed and completed.");
       setWeightEntryOpen(false);
       invalidateProductionContext();
-      if (batch.stage === "AD") {
-        navigate(getProductionManageBatchRoute(orderId, "BL"));
-      } else if (batch.stage === "BL") {
-        navigate(getProductionManageBatchRoute(orderId, "GL"));
-      } else if (batch.stage === "GL") {
-        navigate(getProductionManageBatchRoute(orderId, "PR"));
-      }
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Failed to confirm batch.")),
   });
@@ -521,7 +514,7 @@ const ProductionManageBatchPage = () => {
                     {order ? <StatusBadge status={order.status} classes={ORDER_STATUS_CLASSES} /> : null}
                   </div>
                   <p className="max-w-3xl text-[12px] leading-5 text-slate-500">
-                    Create, weigh, confirm, and track AD → BL → GL batches for the selected production order.
+                    Create, weigh, confirm, and track batches for this production order within the selected stage only.
                   </p>
 
                   {order ? (
@@ -670,10 +663,10 @@ const ProductionManageBatchPage = () => {
                               currentManageStage === "AD"
                                 ? "Create a new batch to start the production workflow."
                                 : currentManageStage === "BL"
-                                  ? "Blend WIP stock is ready. Use Bin Assign to create the BL stage batch and capture the final weight."
+                                  ? "Create a BL batch for this order, capture the final weight, and store it in Blend Store."
                                   : currentManageStage === "GL"
-                                    ? "Granulation Work Center stock is ready. Use Bag Assign to create the GL stage batch and capture the final weight."
-                                    : "Connection to Line stock is ready. Use Line Assign to create the PR stage batch and capture the final weight."
+                                    ? "Create a GL batch for this order, capture the final weight, and store it in Granulation Store."
+                                    : "Create a PR batch for this order and capture the final line weight."
                             }
                           />
                         </div>

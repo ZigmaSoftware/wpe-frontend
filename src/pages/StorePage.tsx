@@ -114,10 +114,30 @@ const getProcessQtyError = (value: string, requestedQty: string) => {
   return undefined;
 };
 
+const formatQuantityWithUnit = (quantity: string | null | undefined, unit: string | null | undefined) => {
+  const formattedQuantity = formatDecimal(quantity ?? null);
+  if (formattedQuantity === "-") {
+    return formattedQuantity;
+  }
+  return `${formattedQuantity}${unit ? ` ${unit}` : ""}`;
+};
+
 const getRequestQuantity = (row: StoreStockRequest) => {
   const quantity = row.total_requested_qty ?? row.quantity;
   const unit = row.unit || row.items?.[0]?.unit || "";
-  return `${formatDecimal(quantity)}${unit ? ` ${unit}` : ""}`;
+  return formatQuantityWithUnit(quantity, unit);
+};
+
+const getProcessedQuantityWithUnit = (row: StoreStockRequest) => {
+  const quantity = row.total_approved_qty ?? row.quantity;
+  const unit = row.unit || row.items?.[0]?.unit || "";
+  return formatQuantityWithUnit(quantity, unit);
+};
+
+const getReleasedQuantityWithUnit = (row: StoreStockRequest) => {
+  const quantity = row.total_issued_qty ?? row.quantity;
+  const unit = row.unit || row.items?.[0]?.unit || "";
+  return formatQuantityWithUnit(quantity, unit);
 };
 
 const getRequestItemNames = (row: StoreStockRequest) =>
@@ -254,6 +274,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
   const [requestReviewItems, setRequestReviewItems] = useState<RequestReviewLine[]>([]);
   const [requestReviewErrors, setRequestReviewErrors] = useState<Record<number, RequestReviewError>>({});
   const [releaseConfirmation, setReleaseConfirmation] = useState<{ request: StoreStockRequest; action: ReleaseAction } | null>(null);
+  const [processRejectConfirmation, setProcessRejectConfirmation] = useState<StoreStockRequest | null>(null);
+  const [processApproveConfirmation, setProcessApproveConfirmation] = useState<{ request: StoreStockRequest; items: RequestReviewLine[] } | null>(null);
 
   const deferredStockSearch = useDeferredValue(stockSearch.trim());
   const deferredRequestSearch = useDeferredValue(requestSearch.trim());
@@ -600,7 +622,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                   <TableHead>Request</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Items</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Process Qty</TableHead>
                   <TableHead className="hidden lg:table-cell">Approved By</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -647,7 +669,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                           {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
                         </button>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                      <TableCell className="text-right font-medium">{getProcessedQuantityWithUnit(row)}</TableCell>
                       <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -690,7 +712,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                   <TableHead>Request</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Items</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Process Qty</TableHead>
                   <TableHead className="hidden lg:table-cell">Approved By</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -722,7 +744,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                           {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
                         </button>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                      <TableCell className="text-right font-medium">{getProcessedQuantityWithUnit(row)}</TableCell>
                       <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -767,15 +789,15 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         <div className="max-h-[calc(100vh-21rem)] overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
-              <TableRow className="hover:bg-card">
-                <TableHead className="w-16 text-center">S.No</TableHead>
-                <TableHead>Request</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead>Released By</TableHead>
-              </TableRow>
-            </TableHeader>
+                <TableRow className="hover:bg-card">
+                  <TableHead className="w-16 text-center">S.No</TableHead>
+                  <TableHead>Request</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead className="text-right">Released Qty</TableHead>
+                  <TableHead>Released By</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {paginatedRequestRows.map((row, index) => {
                 const summary = getRequestItemSummary(row);
@@ -803,7 +825,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                         {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
                       </button>
                     </TableCell>
-                    <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
+                    <TableCell className="text-right font-medium">{getReleasedQuantityWithUnit(row)}</TableCell>
                     <TableCell>
                       <div className="space-y-1">
                         <div>{row.released_by_username || "-"}</div>
@@ -1005,8 +1027,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                         <SelectContent>
                           <SelectItem value="all">All departments</SelectItem>
                           {departmentOptions.map((option) => (
-                            <SelectItem key={option.value} value={String(option.label)}>
-                              {option.label}
+                            <SelectItem key={option.id} value={String(option.name)}>
+                              {option.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1106,8 +1128,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                     <SelectContent>
                       <SelectItem value="all">All departments</SelectItem>
                       {departmentOptions.map((option) => (
-                        <SelectItem key={option.value} value={String(option.label)}>
-                          {option.label}
+                        <SelectItem key={option.id} value={String(option.name)}>
+                          {option.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1147,6 +1169,20 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
         open={Boolean(previewRequest)}
         request={previewRequest}
         requestLabel="Request Approval"
+        quantityField={
+          requestQueueModule === "release-stock"
+            ? "approved_qty"
+            : requestQueueModule === "closed-won"
+              ? "issued_qty"
+              : "requested_qty"
+        }
+        quantityLabel={
+          requestQueueModule === "release-stock"
+            ? "Process Qty"
+            : requestQueueModule === "closed-won"
+              ? "Released Qty"
+              : "Requested Qty"
+        }
         onOpenChange={(open) => {
           if (!open) {
             setPreviewRequest(null);
@@ -1267,12 +1303,44 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
             <Button
               type="button"
               variant="destructive"
-              onClick={() => requestReviewTarget && rejectRequestMutation.mutate(requestReviewTarget.id)}
+              onClick={() => {
+                if (requestReviewTarget) {
+                  setProcessRejectConfirmation(requestReviewTarget);
+                  setRequestReviewTarget(null);
+                }
+              }}
               disabled={processRequestMutation.isPending || rejectRequestMutation.isPending}
             >
               Reject
             </Button>
-            <Button type="button" onClick={submitRequestProcess} disabled={!isRequestReviewReady || processRequestMutation.isPending || rejectRequestMutation.isPending}>
+            <Button
+              type="button"
+              onClick={() => {
+                if (!requestReviewTarget) return;
+                const nextErrors: Record<number, RequestReviewError> = {};
+                let hasErrors = false;
+                let hasPositiveQuantity = false;
+                requestReviewItems.forEach((item, index) => {
+                  const processQtyError = getProcessQtyError(item.processQty, item.requestedQty);
+                  if (processQtyError) {
+                    nextErrors[index] = { processQty: processQtyError };
+                    hasErrors = true;
+                  }
+                  if (Number(item.processQty) > 0) hasPositiveQuantity = true;
+                });
+                if (!hasPositiveQuantity) {
+                  toast.error("At least one item must have Process Qty greater than zero.");
+                  return;
+                }
+                if (hasErrors) {
+                  setRequestReviewErrors(nextErrors);
+                  return;
+                }
+                setProcessApproveConfirmation({ request: requestReviewTarget, items: requestReviewItems });
+                setRequestReviewTarget(null);
+              }}
+              disabled={!isRequestReviewReady || processRequestMutation.isPending || rejectRequestMutation.isPending}
+            >
               Process
             </Button>
           </DialogFooter>
@@ -1303,6 +1371,56 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
             requestId: releaseConfirmation.request.id,
             action: releaseConfirmation.action,
           });
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(processApproveConfirmation)}
+        onOpenChange={(open) => {
+          if (!open && !processRequestMutation.isPending) {
+            if (processApproveConfirmation) {
+              setRequestReviewTarget(processApproveConfirmation.request);
+              setRequestReviewItems(processApproveConfirmation.items);
+            }
+            setProcessApproveConfirmation(null);
+          }
+        }}
+        title="Process request"
+        description="Are you sure you want to process this request?"
+        cancelLabel="Cancel"
+        confirmLabel="Process"
+        onConfirm={() => {
+          if (!processApproveConfirmation) return;
+          processRequestMutation.mutate({
+            requestId: processApproveConfirmation.request.id,
+            items: processApproveConfirmation.items.map((item) => ({
+              item: item.itemId,
+              provided_qty: item.processQty,
+              remarks: item.reason.trim() || undefined,
+            })),
+          });
+          setProcessApproveConfirmation(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(processRejectConfirmation)}
+        onOpenChange={(open) => {
+          if (!open && !rejectRequestMutation.isPending) {
+            setRequestReviewTarget(processRejectConfirmation);
+            setProcessRejectConfirmation(null);
+          }
+        }}
+        title="Reject request"
+        description="Are you sure you want to reject this request?"
+        cancelLabel="Cancel"
+        confirmLabel="Reject"
+        onConfirm={() => {
+          if (!processRejectConfirmation) {
+            return;
+          }
+          rejectRequestMutation.mutate(processRejectConfirmation.id);
+          setProcessRejectConfirmation(null);
         }}
       />
     </div>

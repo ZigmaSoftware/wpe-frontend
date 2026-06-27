@@ -15,6 +15,7 @@ import {
   type ProductionItemOption,
   type ProductionTypeOption,
   type ProductionOrderFormValues,
+  type WorkflowStageValue,
 } from "./productionOrderForm";
 import {
   productionFieldLabelClassName,
@@ -35,6 +36,7 @@ type ProductionGeneralTabProps = {
   machinesLoading?: boolean;
   lookupsLoading?: boolean;
   lookupError?: string | null;
+  lockedStage?: WorkflowStageValue | null;
 };
 
 const ProductionGeneralTab = ({
@@ -48,6 +50,7 @@ const ProductionGeneralTab = ({
   machinesLoading = false,
   lookupsLoading = false,
   lookupError,
+  lockedStage = null,
 }: ProductionGeneralTabProps) => {
   const finishedGoods = useWatch({ control: form.control, name: "finished_goods" });
   const showDeferredSections = useDeferredMount();
@@ -133,7 +136,7 @@ const ProductionGeneralTab = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className={productionFieldLabelClassName}>Stage</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select value={field.value} onValueChange={field.onChange} disabled={lockedStage !== null}>
                     <FormControl>
                       <SelectTrigger className={productionInputClassName}>
                         <SelectValue placeholder="-" />
@@ -158,7 +161,7 @@ const ProductionGeneralTab = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className={productionFieldLabelClassName}>Next Workflow Stage</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select value={field.value} onValueChange={field.onChange} disabled={lockedStage !== null}>
                     <FormControl>
                       <SelectTrigger className={productionInputClassName}>
                         <SelectValue placeholder="-" />

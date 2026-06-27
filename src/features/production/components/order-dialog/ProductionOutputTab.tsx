@@ -8,9 +8,9 @@ import { useScannerInput } from "@/hooks/useScannerInput";
 import { useWeightStream } from "@/hooks/useWeightStream";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
 import { BATCH_STATUS_CLASSES, StatusBadge } from "@/pages/productionShared";
+import { useAuth } from "@/providers/AuthProvider";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
   areAllRequiredOutputComponentsCaptured,
@@ -61,6 +61,8 @@ const DEMO_MATERIALS: DemoMaterial[] = [
   { client_id: "demo-7", item_code: "ANT:2005", item_name: "Antioxidant Agent", per_unit_quantity: "0.140", sequence: 7 },
   { client_id: "demo-8", item_code: "REG:2025", item_name: "Regrind Material - LDPE", per_unit_quantity: "9.200", sequence: 8 },
 ];
+
+const EMPTY_FORM_MATERIAL_ROWS: ProductionOrderFormValues["materials"]["rows"] = [];
 
 type OutputMaterialRow = ProductionOrderFormValues["materials"]["rows"][number] | DemoMaterial;
 
@@ -168,10 +170,31 @@ const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCapture
   );
 };
 
+const buildScaleSelectionStorageKey = (userId?: number | string | null, username?: string | null) => {
+  const scope = userId ?? username ?? "anonymous";
+  return `${SCALE_SELECTION_STORAGE_KEY}:${scope}`;
+};
+
+const formatBridgeClientId = (value?: string | null) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "unknown-client";
+  }
+  if (normalized.length <= 18) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 8)}...${normalized.slice(-6)}`;
+};
+
 const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutputTabProps) => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { id: orderIdParam } = useParams<{ id?: string }>();
-  const formMaterials = useWatch({ control: form.control, name: "materials.rows" }) ?? [];
+  const watchedFormMaterials = useWatch({ control: form.control, name: "materials.rows" });
+  const formMaterials = useMemo(
+    () => watchedFormMaterials ?? EMPTY_FORM_MATERIAL_ROWS,
+    [watchedFormMaterials],
+  );
   const selectedBomVariantId = useWatch({ control: form.control, name: "materials.selected_bom_variant_id" }) ?? "";
   const productionId = useWatch({ control: form.control, name: "production_id" }) ?? "";
   const productionFor = useWatch({ control: form.control, name: "production_for" }) ?? "";
@@ -223,6 +246,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   );
   const capturedSessionKeysRef = useRef(new Set<string>());
   const activeBatchIdRef = useRef<number | null>(null);
+  const loadedScaleSelectionScopeRef = useRef<string | null>(null);
   const { processScan } = useScannerInput();
   const scaleDevicesQuery = useQuery({
     queryKey: ["scale-bridge-devices"],
@@ -276,6 +300,30 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     const records = outputCapturesQuery.data ?? [];
     return records.filter((record) => record.sourceBatchId != null && stageBatchIds.has(record.sourceBatchId));
   }, [outputCapturesQuery.data, stageBatchIds]);
+  const scaleDevicesQuery = useQuery({
+    queryKey: ["scale-bridge-devices"],
+    enabled: queriesEnabled,
+    refetchInterval: queriesEnabled ? 3000 : false,
+    queryFn: async () => {
+      const response = await coreApi.get<{ devices?: ScaleBridgeDevice[] }>("/api/scale/devices/");
+      return response.data.devices ?? [];
+    },
+  });
+  const bridgeDevices = useMemo(
+    () =>
+      [...(scaleDevicesQuery.data ?? [])].sort((left, right) => {
+        const rightConnected = BRIDGE_CONNECTED_STATUSES.has(right.status) ? 1 : 0;
+        const leftConnected = BRIDGE_CONNECTED_STATUSES.has(left.status) ? 1 : 0;
+        if (rightConnected !== leftConnected) {
+          return rightConnected - leftConnected;
+        }
+
+        const rightSeen = right.last_seen_at ? Date.parse(right.last_seen_at) : 0;
+        const leftSeen = left.last_seen_at ? Date.parse(left.last_seen_at) : 0;
+        return rightSeen - leftSeen;
+      }),
+    [scaleDevicesQuery.data],
+  );
   const capturedStageBatchIds = useMemo(
     () => new Set(persistedCapturedOutputs.map((record) => record.sourceBatchId).filter((value): value is number => typeof value === "number")),
     [persistedCapturedOutputs],
@@ -559,7 +607,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     ];
   }, [localBridgeIdentity, localBridgeIdentityQuery.isLoading, scaleDevicesQuery.data]);
   const selectedScaleOption = useMemo(
-    () => scaleOptions.find((option) => option.key === selectedScaleKey) ?? scaleOptions[0],
+    () => scaleOptions.find((option) => option.key === selectedScaleKey) ?? null,
     [scaleOptions, selectedScaleKey],
   );
 
@@ -578,22 +626,34 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
 
   const selectedBridgeDevice = useMemo(
     () =>
-      selectedScaleOption?.deviceId && selectedScaleOption?.workstationId
-        ? (scaleDevicesQuery.data ?? []).find(
+      selectedScaleOption?.deviceId &&
+      selectedScaleOption?.workstationId &&
+      selectedScaleOption?.bridgeClientId
+        ? bridgeDevices.find(
             (device) =>
               device.device_id === selectedScaleOption.deviceId &&
-              device.workstation_id === selectedScaleOption.workstationId,
+              device.workstation_id === selectedScaleOption.workstationId &&
+              (device.bridge_client_id || null) === selectedScaleOption.bridgeClientId,
           ) ?? null
         : null,
-    [scaleDevicesQuery.data, selectedScaleOption?.deviceId, selectedScaleOption?.workstationId],
+    [
+      bridgeDevices,
+      selectedScaleOption?.bridgeClientId,
+      selectedScaleOption?.deviceId,
+      selectedScaleOption?.workstationId,
+    ],
   );
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(SCALE_SELECTION_STORAGE_KEY, selectedScaleKey);
-  }, [selectedScaleKey]);
+    if (selectedScaleKey) {
+      window.localStorage.setItem(scaleSelectionStorageKey, selectedScaleKey);
+      return;
+    }
+    window.localStorage.removeItem(scaleSelectionStorageKey);
+  }, [scaleSelectionStorageKey, selectedScaleKey]);
 
   const stdWeight = activeComponent?.plannedWeightKg ?? 0;
   const displayStdWeight = Math.abs(stdWeight);
@@ -622,17 +682,18 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const {
     weight,
     connected,
+    detectedPort,
     error: scaleError,
     lastSeenAt,
+    resolvedBridgeClientId,
     resolvedDeviceId,
     resolvedWorkstationId,
-    source: scaleSource,
     status,
     statusLabel,
     tare,
   } = useWeightStream({
     deviceId: "output-scale-1",
-    scaleDeviceId: selectedScaleOption?.deviceId ?? null,
+    preferBridge: true,
     tolerancePercent: TOLERANCE_PERCENT,
     enabled: isActive && Boolean(selectedScaleOption?.deviceId && selectedScaleOption?.workstationId),
     workstationId: selectedScaleOption?.workstationId ?? null,
@@ -643,7 +704,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       workstation_id: resolvedWorkstationId ?? selectedScaleOption?.workstationId ?? undefined,
       source: scaleSource ?? selectedScaleOption?.source ?? "local_bridge",
     }),
-    [resolvedDeviceId, resolvedWorkstationId, scaleSource, selectedScaleOption],
+    [activeScaleBridgeClientId, activeScaleDeviceId, activeScaleWorkstationId],
   );
   const scaleStatusClassName =
     status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading"
@@ -965,7 +1026,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     const finalizeCapture = async () => {
       let capturedAt = new Date();
       let resolvedBatchNo = binlotValue;
-      let nextBatchAutoValue = DEFAULT_BATCH_AUTO_VALUE;
       let persistedRecord: CapturedOutputRecord | null = null;
 
       if (persistedOrderId !== null) {
@@ -986,9 +1046,9 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             if (ensuredStageBatch.status === "COMPLETED") {
               throw new Error(
                 isBlMode
-                  ? "This BL batch is already moved to GL."
+                  ? "This BL batch is already completed."
                   : isGlMode
-                    ? "This GL batch is already moved to PR."
+                    ? "This GL batch is already completed."
                     : "This PR batch is already completed.",
               );
             }
@@ -1007,9 +1067,9 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             if (existingCaptureRecord) {
               throw new Error(
                 isBlMode
-                  ? "This BL batch already has a captured output row. Use OutWard to move it to GL."
+                  ? "This BL batch already has a captured output row. Complete the batch to finish this BL order."
                   : isGlMode
-                    ? "This GL batch already has a captured output row. Use OutWard to move it to PR."
+                    ? "This GL batch already has a captured output row. Complete the batch to finish this GL order."
                     : "This PR batch already has a captured output row.",
               );
             }
@@ -1037,19 +1097,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             persistedRecord =
               refreshedOutputCaptures.data?.find((record) => record.sourceBatchId === startedBatch.id) ??
               persistedRecord;
-            if (isBlMode) {
-              form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_BL, {
-                shouldDirty: false,
-                shouldTouch: false,
-                shouldValidate: false,
-              });
-            } else if (isGlMode) {
-              form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_GL, {
-                shouldDirty: false,
-                shouldTouch: false,
-                shouldValidate: false,
-              });
-            }
           } else {
             const batchToConfirm = await ensureAdBatchForFinalCapture();
             if (!batchToConfirm) {
@@ -1073,33 +1120,12 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             }
 
             setAdOutputBatchId(activeBatchId);
-            const nextBatchResponse = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
-              params: { stage: "BL" },
-            });
-            const nextBlBatch = normalizeListResponse<ProductionBatch>(nextBatchResponse.data)
-              .sort((left, right) => right.id - left.id)
-              .find((batch) => batch.status !== "COMPLETED");
-            const nextBatchDisplayNo = nextBlBatch?.display_batch_no?.trim() || nextBlBatch?.batch_no?.trim();
-            if (nextBatchDisplayNo) {
-              nextBatchAutoValue = nextBatchDisplayNo;
-            }
-
             invalidateBatchQueries();
             const refreshedOutputCaptures = await outputCapturesQuery.refetch();
             persistedRecord =
               refreshedOutputCaptures.data?.find((record) => record.sourceBatchId === activeBatchId) ??
               refreshedOutputCaptures.data?.[0] ??
               null;
-            form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_AD, {
-              shouldDirty: false,
-              shouldTouch: false,
-              shouldValidate: false,
-            });
-            form.setValue("details.batch_auto", nextBatchAutoValue, {
-              shouldDirty: false,
-              shouldTouch: false,
-              shouldValidate: false,
-            });
           }
         } catch (error) {
           toast.error(
@@ -1151,12 +1177,12 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       toast.success(
         persistedOrderId !== null
           ? isBlMode
-            ? "BL captured output recorded and moved to Blend Store."
+            ? "BL captured output recorded in Blend Store."
             : isGlMode
-              ? "GL captured output recorded and moved to Granulation Store."
+              ? "GL captured output recorded in Granulation Store."
               : isPrMode
                 ? "PR captured output recorded."
-              : "Captured output recorded, AD batch completed, and stock moved to Blend WIP."
+              : "Captured output recorded, AD batch completed, and stock stored in Additive Work Center."
           : "Captured output recorded.",
       );
     };
@@ -1170,7 +1196,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     ensureAdBatchForFinalCapture,
     ensureSingleCaptureStageBatch,
     existingSingleCapture,
-    form,
     invalidateBatchQueries,
     isBlMode,
     isGlMode,
@@ -1187,6 +1212,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     recipeNo,
     requireFinalCaptureConfirmation,
     requiredComponents.length,
+    scaleCapturePayload,
     startBatchIfPending,
     syncCapturedWeightsToBatch,
     outputCapturesQuery,
@@ -1211,46 +1237,27 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
           `/api/production/orders/${persistedOrderId}/batches/${record.sourceBatchId}/confirm/`,
         );
 
-        let nextBatchDisplayNo: string | undefined;
-        if (isBlMode) {
-          const nextBatchResponse = await coreApi.get<unknown>(`/api/production/orders/${persistedOrderId}/batches/`, {
-            params: { stage: "GL" },
-          });
-          const nextGlBatch = normalizeListResponse<ProductionBatch>(nextBatchResponse.data)
-            .sort((left, right) => right.id - left.id)
-            .find((batch) => batch.status !== "COMPLETED");
-          nextBatchDisplayNo = nextGlBatch?.display_batch_no?.trim() || nextGlBatch?.batch_no?.trim();
-        }
-
         invalidateBatchQueries();
         await outputCapturesQuery.refetch();
-
-        if (isBlMode) {
-          form.setValue("production_type", NEXT_PRODUCTION_TYPE_AFTER_BL, {
-            shouldDirty: false,
-            shouldTouch: false,
-            shouldValidate: false,
-          });
-          if (nextBatchDisplayNo) {
-            form.setValue("details.batch_auto", nextBatchDisplayNo, {
-              shouldDirty: false,
-              shouldTouch: false,
-              shouldValidate: false,
-            });
-          }
-        }
         toast.success(
           isBlMode
-            ? "BL batch moved to Granulation Work Center and the assigned bin was released."
-            : "GL batch moved to Connection to Line and the assigned bag was released.",
+            ? "BL stock moved from Blend Store to Granulation Work Center and the assigned bin was released."
+            : "GL stock moved from Granulation Store to Connection to Line and the assigned bag was released.",
         );
       } catch (error) {
-        toast.error(getApiErrorMessage(error, isBlMode ? "Failed to outward the BL batch." : "Failed to outward the GL batch."));
+        toast.error(
+          getApiErrorMessage(
+            error,
+            isBlMode
+              ? "Failed to move BL stock into Granulation Work Center."
+              : "Failed to move GL stock into Connection to Line.",
+          ),
+        );
       } finally {
         setOutwardingRecordId(null);
       }
     },
-    [form, invalidateBatchQueries, isBlMode, isGlMode, outputCapturesQuery, outwardingRecordId, persistedOrderId],
+    [invalidateBatchQueries, isBlMode, isGlMode, outputCapturesQuery, outwardingRecordId, persistedOrderId],
   );
 
   const netWeightColor = isSingleCaptureMode
@@ -1308,17 +1315,24 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                 {scaleOptions.map((option) => (
                   <SelectItem key={option.key} value={option.key} disabled={option.disabled}>
                     {option.label}
-                  </SelectItem>
+                  </option>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              </select>
+            </label>
             <span className={`rounded-full border px-2.5 py-1 font-mono font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-red-200 bg-red-50 text-red-700"}`}>
               {statusLabel}
             </span>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
-              {scaleSecondaryNote}
+              {selectedScaleLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
+              {scaleWorkstationLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
+              client {scaleClientLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-600">
+              {scalePortLabel}
             </span>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-500">
               last seen {scaleLastSeenLabel}
@@ -1576,8 +1590,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               <span className="font-mono text-[11px] text-slate-500">
                 {capturedWeights.size}/{requiredComponents.length} captured
               </span>
-              {scaleError ? (
-                <span className="font-mono text-[11px] text-amber-400">{scaleError}</span>
+              {scaleHelpText ? (
+                <span className="font-mono text-[11px] text-amber-400">{scaleHelpText}</span>
               ) : null}
             </div>
 
@@ -1617,11 +1631,11 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               <p className="mt-1 text-[11px] text-slate-500">
                 {persistedOrderId !== null
                   ? isBlMode
-                    ? "Captured BL outputs are saved for the selected batch in Blend Store. OutWard moves the stock to Granulation Work Center and releases the assigned bin."
+                    ? "Captured BL outputs are saved for the selected batch in Blend Store. Out moves the stock into Granulation Work Center and releases the assigned bin."
                     : isGlMode
-                      ? "Captured GL outputs are saved for the selected batch in Granulation Store. OutWard moves the stock to Connection to Line and releases the assigned bag."
+                      ? "Captured GL outputs are saved for the selected batch in Granulation Store. Out moves the stock into Connection to Line and releases the assigned bag."
                       : isPrMode
-                        ? "Captured PR outputs are saved for the selected batch from Connection to Line stock."
+                        ? "Captured PR outputs are saved for the selected batch. Confirm completes the move from Connection to Line into Line Work Center."
                       : "Final-captured recipe outputs are saved for this production order and reload when you reopen it."
                   : "Final-captured recipe outputs stay listed below the weightage panel until this order is saved."}
               </p>
@@ -1645,7 +1659,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                   <th className="px-3 py-3 text-right">Weight (kg)</th>
                   <th className="px-4 py-3 text-right">{isAdMode ? "Batch ID" : isGlMode ? "Baglot" : isPrMode ? "Batch ID" : "Binlot"}</th>
                   {isAdMode ? <th className="px-4 py-3 text-right">Production Status</th> : null}
-                  {isBlMode || isGlMode ? <th className="px-4 py-3 text-right">OutWard</th> : null}
+                  {isBlMode || isGlMode ? <th className="px-4 py-3 text-right">Out</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -1656,8 +1670,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                         ? "Save the stable BL batch weight, then use Final Capture to create the output list in Blend Store."
                         : isGlMode
                           ? "Save the stable GL batch weight, then use Final Capture to create the output list in Granulation Store."
-                          : isPrMode
-                            ? "Save the stable PR batch weight, then use Final Capture to create the output list from Connection to Line."
+                        : isPrMode
+                            ? "Save the stable PR batch weight, then use Final Capture to create the output list for the PR batch."
                           : "Capture each recipe component, then use Final Capture to create the output list."}
                     </td>
                   </tr>
@@ -1713,7 +1727,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                             <td className="px-4 py-3 text-right">
                               {record.isOutwarded ? (
                                 <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
-                                  Moved
+                                  Completed
                                 </span>
                               ) : (
                                 <button
