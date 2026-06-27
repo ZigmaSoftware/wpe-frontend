@@ -1,0 +1,473 @@
+.
+├── components.json
+├── docs
+│   └── zigma-redesign-plan.md
+├── e2e
+│   └── store-request-workflow.spec.ts
+├── eslint.config.js
+├── folder_structure.txt
+├── index.html
+├── package.json
+├── package-lock.json
+├── playwright.config.ts
+├── playwright-fixture.ts
+├── postcss.config.js
+├── public
+│   ├── favicon.ico
+│   ├── item-import-sample.xlsx
+│   ├── logo.png
+│   ├── placeholder.svg
+│   ├── production-ad-weightage.xls
+│   ├── robots.txt
+│   ├── Soft_Skills_Gap_Analysis_Report.docx
+│   ├── Soft_Skills_Supplementary_Report.docx
+│   └── zigma.png
+├── README.md
+├── src
+│   ├── App.css
+│   ├── App.tsx
+│   ├── components
+│   │   ├── AdditiveItemAutocomplete.tsx
+│   │   ├── AppLayout.tsx
+│   │   ├── AuthGuard.tsx
+│   │   ├── BinVisualizer.tsx
+│   │   ├── ConfirmDialog.tsx
+│   │   ├── DeviceStatusIndicator.tsx
+│   │   ├── ErrorBoundary.tsx
+│   │   ├── LiveWeightDisplay.tsx
+│   │   ├── ModuleFormFieldsReference.tsx
+│   │   ├── NavLink.tsx
+│   │   ├── PageHeader.tsx
+│   │   ├── PermissionRouteGuard.tsx
+│   │   ├── ProductionTracker.tsx
+│   │   ├── QRScannerComponent.tsx
+│   │   ├── QueryState.tsx
+│   │   ├── StatCard.tsx
+│   │   ├── TablePagination.tsx
+│   │   └── ui
+│   │       ├── accordion.tsx
+│   │       ├── alert-dialog.tsx
+│   │       ├── alert.tsx
+│   │       ├── aspect-ratio.tsx
+│   │       ├── avatar.tsx
+│   │       ├── badge.tsx
+│   │       ├── breadcrumb.tsx
+│   │       ├── button.tsx
+│   │       ├── calendar.tsx
+│   │       ├── card.tsx
+│   │       ├── carousel.tsx
+│   │       ├── chart.tsx
+│   │       ├── checkbox.tsx
+│   │       ├── collapsible.tsx
+│   │       ├── command.tsx
+│   │       ├── context-menu.tsx
+│   │       ├── dialog.tsx
+│   │       ├── drawer.tsx
+│   │       ├── dropdown-menu.tsx
+│   │       ├── form.tsx
+│   │       ├── hover-card.tsx
+│   │       ├── input-otp.tsx
+│   │       ├── input.tsx
+│   │       ├── label.tsx
+│   │       ├── menubar.tsx
+│   │       ├── navigation-menu.tsx
+│   │       ├── pagination.tsx
+│   │       ├── popover.tsx
+│   │       ├── progress.tsx
+│   │       ├── radio-group.tsx
+│   │       ├── resizable.tsx
+│   │       ├── scroll-area.tsx
+│   │       ├── select.tsx
+│   │       ├── separator.tsx
+│   │       ├── sheet.tsx
+│   │       ├── sidebar.tsx
+│   │       ├── skeleton.tsx
+│   │       ├── slider.tsx
+│   │       ├── sonner.tsx
+│   │       ├── switch.tsx
+│   │       ├── table.tsx
+│   │       ├── tabs.tsx
+│   │       ├── textarea.tsx
+│   │       ├── toaster.tsx
+│   │       ├── toast.tsx
+│   │       ├── toggle-group.tsx
+│   │       ├── toggle.tsx
+│   │       ├── tooltip.tsx
+│   │       └── use-toast.ts
+│   ├── data
+│   │   └── zigmaModuleFormFields.ts
+│   ├── features
+│   │   ├── admin-master
+│   │   │   ├── api
+│   │   │   │   ├── adminMasterApi.ts
+│   │   │   │   └── queryKeys.ts
+│   │   │   ├── components
+│   │   │   │   ├── ActionPermissionsField.tsx
+│   │   │   │   └── AdminRouteGuard.tsx
+│   │   │   ├── hooks
+│   │   │   │   ├── useAdminLookups.ts
+│   │   │   │   ├── useAdminMutations.ts
+│   │   │   │   └── useAdminTableSearchParams.ts
+│   │   │   ├── pages
+│   │   │   │   ├── AdminMastersLandingPage.tsx
+│   │   │   │   ├── MainScreensPage.tsx
+│   │   │   │   ├── ScreenSectionsPage.tsx
+│   │   │   │   ├── StaffCreationPage.tsx
+│   │   │   │   ├── UserCreationPage.tsx
+│   │   │   │   ├── UserScreenPermissionAssignmentPage.tsx
+│   │   │   │   ├── UserScreenPermissionPage.tsx
+│   │   │   │   ├── UserScreensPage.tsx
+│   │   │   │   └── UserTypesPage.tsx
+│   │   │   ├── schemas
+│   │   │   │   └── index.ts
+│   │   │   ├── types
+│   │   │   │   └── index.ts
+│   │   │   └── utils
+│   │   │       ├── permissions.ts
+│   │   │       └── routes.ts
+│   │   ├── blending
+│   │   │   ├── api
+│   │   │   │   └── blendingApi.ts
+│   │   │   └── utils
+│   │   │       ├── printSR.ts
+│   │   │       ├── requestStatus.ts
+│   │   │       └── routes.ts
+│   │   ├── common-master
+│   │   │   ├── api
+│   │   │   │   ├── commonMasterApi.ts
+│   │   │   │   └── queryKeys.ts
+│   │   │   ├── components
+│   │   │   │   ├── FileField.tsx
+│   │   │   │   ├── MasterFormDialog.tsx
+│   │   │   │   ├── MasterPagination.tsx
+│   │   │   │   ├── MasterStatusBadge.tsx
+│   │   │   │   ├── MasterTable.tsx
+│   │   │   │   ├── MasterToolbar.tsx
+│   │   │   │   ├── PageSection.tsx
+│   │   │   │   └── RowActions.tsx
+│   │   │   ├── hooks
+│   │   │   │   ├── useCommonMasterMutations.ts
+│   │   │   │   ├── useDebouncedValue.ts
+│   │   │   │   ├── useFormErrorMapper.ts
+│   │   │   │   ├── useLookupOptions.ts
+│   │   │   │   └── useTableSearchParams.ts
+│   │   │   ├── pages
+│   │   │   │   ├── CitiesPage.tsx
+│   │   │   │   ├── CommonMastersLandingPage.tsx
+│   │   │   │   ├── CompaniesPage.tsx
+│   │   │   │   ├── ContinentsPage.tsx
+│   │   │   │   ├── CountriesPage.tsx
+│   │   │   │   ├── CurrenciesPage.tsx
+│   │   │   │   ├── CustomerDetailPage.tsx
+│   │   │   │   ├── CustomersPage.tsx
+│   │   │   │   ├── ProjectsPage.tsx
+│   │   │   │   ├── StatesPage.tsx
+│   │   │   │   ├── SupplierDetailPage.tsx
+│   │   │   │   ├── SuppliersPage.tsx
+│   │   │   │   └── TaxesPage.tsx
+│   │   │   ├── schemas
+│   │   │   │   └── index.ts
+│   │   │   ├── types
+│   │   │   │   └── index.ts
+│   │   │   └── utils
+│   │   │       └── routes.ts
+│   │   ├── device-label-masters
+│   │   │   ├── api
+│   │   │   │   └── deviceLabelMastersApi.ts
+│   │   │   ├── components
+│   │   │   │   └── DeviceLabelEnumBadge.tsx
+│   │   │   ├── pages
+│   │   │   │   ├── DeviceLabelMastersLandingPage.tsx
+│   │   │   │   ├── PrinterCreationPage.tsx
+│   │   │   │   ├── QRLabelTemplatePage.tsx
+│   │   │   │   ├── SerialPortConfigurationPage.tsx
+│   │   │   │   └── WeighmentScaleCreationPage.tsx
+│   │   │   ├── schemas
+│   │   │   │   └── index.ts
+│   │   │   ├── types
+│   │   │   │   └── index.ts
+│   │   │   └── utils
+│   │   │       └── routes.ts
+│   │   ├── grn
+│   │   │   ├── components
+│   │   │   │   ├── GrnPageLayout.tsx
+│   │   │   │   ├── grnPageStyles.ts
+│   │   │   │   ├── GrnRecordForm.tsx
+│   │   │   │   ├── GrnSectionCard.tsx
+│   │   │   │   └── GrnTabs.tsx
+│   │   │   ├── grnShared.ts
+│   │   │   └── utils
+│   │   │       └── routes.ts
+│   │   ├── items
+│   │   │   ├── api
+│   │   │   │   ├── inventoryApi.ts
+│   │   │   │   ├── productionInventoryApi.ts
+│   │   │   │   └── queryKeys.ts
+│   │   │   ├── components
+│   │   │   │   ├── InventoryHistorySheet.tsx
+│   │   │   │   ├── InventoryStockItemPageContent.tsx
+│   │   │   │   ├── InventoryStockTable.tsx
+│   │   │   │   ├── InventorySummarySkeleton.tsx
+│   │   │   │   └── InventorySummaryTable.tsx
+│   │   │   ├── types.ts
+│   │   │   └── utils
+│   │   │       └── routes.ts
+│   │   ├── production
+│   │   │   ├── api
+│   │   │   │   ├── productionApi.ts
+│   │   │   │   ├── productionWorkspaceApi.ts
+│   │   │   │   └── queryKeys.ts
+│   │   │   ├── components
+│   │   │   │   ├── bom-variants
+│   │   │   │   │   ├── ComponentAutocompleteDropdown.tsx
+│   │   │   │   │   ├── ComponentRow.tsx
+│   │   │   │   │   ├── ComponentSearchInput.tsx
+│   │   │   │   │   ├── EmptyComponentState.tsx
+│   │   │   │   │   ├── SelectedComponentTable.tsx
+│   │   │   │   │   └── types.ts
+│   │   │   │   ├── GeneralTab.tsx
+│   │   │   │   ├── MaterialMovementTab.tsx
+│   │   │   │   ├── order-dialog
+│   │   │   │   │   ├── BomVariantSelector.tsx
+│   │   │   │   │   ├── CostTab.tsx
+│   │   │   │   │   ├── FinishedGoodsAutocomplete.tsx
+│   │   │   │   │   ├── GeneralTabDeferredSections.tsx
+│   │   │   │   │   ├── GeneralTab.tsx
+│   │   │   │   │   ├── MaterialComponentRow.tsx
+│   │   │   │   │   ├── MaterialComponentsTable.tsx
+│   │   │   │   │   ├── MaterialItemSearch.tsx
+│   │   │   │   │   ├── MaterialsCalculationSummary.tsx
+│   │   │   │   │   ├── MaterialsEmptyState.tsx
+│   │   │   │   │   ├── MaterialsSummaryPanel.tsx
+│   │   │   │   │   ├── MaterialsTab.tsx
+│   │   │   │   │   ├── MaterialVariantSelect.tsx
+│   │   │   │   │   ├── OutputTab.tsx
+│   │   │   │   │   ├── ProductionBaseOrderSection.tsx
+│   │   │   │   │   ├── ProductionDetailsSection.tsx
+│   │   │   │   │   ├── ProductionGeneralTab.tsx
+│   │   │   │   │   ├── ProductionMaterialsTab.tsx
+│   │   │   │   │   ├── ProductionNotesSection.tsx
+│   │   │   │   │   ├── ProductionOrderDialog.tsx
+│   │   │   │   │   ├── productionOrderFormStyles.ts
+│   │   │   │   │   ├── productionOrderForm.test.ts
+│   │   │   │   │   ├── productionOrderForm.ts
+│   │   │   │   │   ├── ProductionOrderForm.tsx
+│   │   │   │   │   ├── ProductionOrderForm.ui.test.tsx
+│   │   │   │   │   ├── ProductionOrderPageLayout.tsx
+│   │   │   │   │   ├── productionOutputCapture.test.ts
+│   │   │   │   │   ├── productionOutputCapture.ts
+│   │   │   │   │   ├── ProductionOutputTab.tsx
+│   │   │   │   │   ├── ProductionPlaceholderTab.tsx
+│   │   │   │   │   ├── ProductionPlanTable.tsx
+│   │   │   │   │   ├── ProductionResourcesSection.tsx
+│   │   │   │   │   ├── ProductionSectionCard.tsx
+│   │   │   │   │   ├── ProductionShiftSelector.tsx
+│   │   │   │   │   ├── ProductionSpecsSection.tsx
+│   │   │   │   │   ├── ProductionTabs.tsx
+│   │   │   │   │   ├── QRLabelPreviewModal.tsx
+│   │   │   │   │   ├── ResourcesTab.tsx
+│   │   │   │   │   ├── ScrapTab.tsx
+│   │   │   │   │   ├── StagesTab.tsx
+│   │   │   │   │   ├── useBomComponents.ts
+│   │   │   │   │   ├── useBomVariants.ts
+│   │   │   │   │   ├── useDebouncedItemSearch.ts
+│   │   │   │   │   └── useMaterialCalculations.ts
+│   │   │   │   ├── productionListShared.tsx
+│   │   │   │   ├── ProductionStageListResults.tsx
+│   │   │   │   ├── ProductionStageList.tsx
+│   │   │   │   ├── ProductionTransactionTab.tsx
+│   │   │   │   ├── RecordOutputTab.tsx
+│   │   │   │   └── SummaryTab.tsx
+│   │   │   ├── hooks
+│   │   │   │   └── useProduction.ts
+│   │   │   ├── index.ts
+│   │   │   ├── pages
+│   │   │   │   ├── ProductionListPage.tsx
+│   │   │   │   └── ProductionPage.tsx
+│   │   │   ├── types
+│   │   │   ├── types.ts
+│   │   │   └── utils
+│   │   │       └── routes.ts
+│   │   ├── production-masters
+│   │   │   ├── api
+│   │   │   │   └── productionMastersApi.ts
+│   │   │   ├── components
+│   │   │   │   ├── ProductionEnumBadge.tsx
+│   │   │   │   └── ProfileImageField.tsx
+│   │   │   ├── pages
+│   │   │   │   ├── BagCreationPage.tsx
+│   │   │   │   ├── BinCreationPage.tsx
+│   │   │   │   ├── ColorCreationsPage.tsx
+│   │   │   │   ├── MachineCreationsPage.tsx
+│   │   │   │   ├── PackingMaterialPage.tsx
+│   │   │   │   ├── PackingTypePage.tsx
+│   │   │   │   ├── ProductionLinePage.tsx
+│   │   │   │   ├── ProductionMastersLandingPage.tsx
+│   │   │   │   ├── ProfileCreationsPage.tsx
+│   │   │   │   ├── ProfileSizesPage.tsx
+│   │   │   │   └── WorkCentreCreationsPage.tsx
+│   │   │   ├── schemas
+│   │   │   │   └── index.ts
+│   │   │   ├── types
+│   │   │   │   └── index.ts
+│   │   │   └── utils
+│   │   │       └── routes.ts
+│   │   ├── recipe-bom-masters
+│   │   │   ├── api
+│   │   │   │   └── recipeBomMastersApi.ts
+│   │   │   ├── pages
+│   │   │   │   ├── BOMCreationPage.tsx
+│   │   │   │   ├── BOMItemCreationPage.tsx
+│   │   │   │   ├── RecipeBomMastersLandingPage.tsx
+│   │   │   │   ├── RecipeCreationPage.tsx
+│   │   │   │   └── RecipeItemCreationPage.tsx
+│   │   │   ├── schemas
+│   │   │   │   └── index.ts
+│   │   │   ├── types
+│   │   │   │   └── index.ts
+│   │   │   └── utils
+│   │   │       └── routes.ts
+│   │   ├── requests
+│   │   │   ├── components
+│   │   │   │   └── RequestItemsPreviewDialog.tsx
+│   │   │   └── utils
+│   │   │       └── routes.ts
+│   │   ├── store
+│   │   │   ├── api
+│   │   │   │   └── storeApi.ts
+│   │   │   ├── components
+│   │   │   │   ├── StoreTablePagination.tsx
+│   │   │   │   └── StoreTableToolbar.tsx
+│   │   │   └── utils
+│   │   │       ├── export.ts
+│   │   │       ├── routes.ts
+│   │   │       └── table.ts
+│   │   └── wpe-masters
+│   │       ├── api
+│   │       │   └── wpeMastersApi.ts
+│   │       ├── components
+│   │       │   ├── CodeMasterPage.tsx
+│   │       │   ├── ItemVariantForm.tsx
+│   │       │   ├── ProductTypeCategoryForm.tsx
+│   │       │   ├── product-types
+│   │       │   │   ├── ProductCategoryList.tsx
+│   │       │   │   ├── ProductSubtypePanel.tsx
+│   │       │   │   ├── ProductTypeRowActions.tsx
+│   │       │   │   ├── ProductTypesStats.tsx
+│   │       │   │   └── ProductTypesTableSkeleton.tsx
+│   │       │   └── ProductTypeSubtypeForm.tsx
+│   │       ├── constants.ts
+│   │       ├── hooks
+│   │       │   └── useProductTypes.ts
+│   │       ├── pages
+│   │       │   ├── BranchMasterPage.tsx
+│   │       │   ├── DepartmentMasterPage.tsx
+│   │       │   ├── DesignationMasterPage.tsx
+│   │       │   ├── InventoryStoreMastersLandingPage.tsx
+│   │       │   ├── ItemCreationsPage.tsx
+│   │       │   ├── ItemHierarchyPage.tsx
+│   │       │   ├── ItemVariantsPage.tsx
+│   │       │   ├── LocationMasterPage.tsx
+│   │       │   ├── PriceBookMasterPage.tsx
+│   │       │   ├── ProductionTypeMasterPage.tsx
+│   │       │   ├── ProductSubtypesPage.tsx
+│   │       │   ├── ProductTypesPage.tsx
+│   │       │   ├── PurchaseTypeMasterPage.tsx
+│   │       │   ├── RoleMasterPage.tsx
+│   │       │   ├── SaleTypeMasterPage.tsx
+│   │       │   ├── SimpleMasterPage.tsx
+│   │       │   ├── StoreMasterPage.tsx
+│   │       │   ├── UnitMasterPage.tsx
+│   │       │   └── WarehouseMasterPage.tsx
+│   │       ├── schemas
+│   │       │   ├── masters.ts
+│   │       │   └── productTypes.ts
+│   │       ├── types
+│   │       │   └── index.ts
+│   │       └── utils
+│   │           └── routes.ts
+│   ├── hooks
+│   │   ├── useDeferredMount.ts
+│   │   ├── useDeviceStatus.ts
+│   │   ├── use-mobile.tsx
+│   │   ├── useScannerInput.ts
+│   │   ├── use-toast.ts
+│   │   ├── useWeighscale.ts
+│   │   └── useWeightStream.ts
+│   ├── index.css
+│   ├── lib
+│   │   ├── api-helpers.ts
+│   │   ├── api.ts
+│   │   ├── appNavigation.ts
+│   │   ├── auth.ts
+│   │   ├── env.ts
+│   │   ├── routePermissions.ts
+│   │   ├── token-storage.ts
+│   │   ├── types.ts
+│   │   └── utils.ts
+│   ├── main.tsx
+│   ├── pages
+│   │   ├── BinTrackingPage.tsx
+│   │   ├── BlendingHeadApprovalPage.tsx
+│   │   ├── BlendingPage.tsx
+│   │   ├── BlendingStockItemPage.tsx
+│   │   ├── BlendingTransactionPage.tsx
+│   │   ├── BOMVariantPage.tsx
+│   │   ├── ContactFormPage.tsx
+│   │   ├── ContactsPage.tsx
+│   │   ├── DashboardPage.tsx
+│   │   ├── DeviceStatusPage.tsx
+│   │   ├── DispatchPage.tsx
+│   │   ├── ExtrusionPage.tsx
+│   │   ├── GranulationPage.tsx
+│   │   ├── GRNCreatePage.tsx
+│   │   ├── GRNDetailPage.tsx
+│   │   ├── GRNEditPage.tsx
+│   │   ├── GRNPage.tsx
+│   │   ├── IndentsPage.tsx
+│   │   ├── Index.tsx
+│   │   ├── ItemsPage.tsx
+│   │   ├── LiveWeightPage.tsx
+│   │   ├── LoginPage.tsx
+│   │   ├── MachineMasterPage.tsx
+│   │   ├── NotFound.tsx
+│   │   ├── PackingPage.tsx
+│   │   ├── PaymentsPage.tsx
+│   │   ├── ProductionEditOrderPage.tsx
+│   │   ├── ProductionInventoryPage.tsx
+│   │   ├── ProductionManageBatchPage.tsx
+│   │   ├── ProductionMonitorPage.tsx
+│   │   ├── ProductionNewOrderPage.tsx
+│   │   ├── ProductionPage.tsx
+│   │   ├── productionShared.tsx
+│   │   ├── ProductionStagePage.tsx
+│   │   ├── PurchasesInwardsPage.tsx
+│   │   ├── QCPage.tsx
+│   │   ├── QCRPage.tsx
+│   │   ├── QRScannerPage.tsx
+│   │   ├── RegrindPage.tsx
+│   │   ├── ReportsPage.tsx
+│   │   ├── RequestsPage.tsx
+│   │   ├── SalesOutwardsPage.tsx
+│   │   ├── StorePage.tsx
+│   │   ├── StoreStockItemPage.tsx
+│   │   ├── WarehouseInventoryPage.tsx
+│   │   └── WarehousePage.tsx
+│   ├── providers
+│   │   └── AuthProvider.tsx
+│   ├── store-request-workflow.spec.ts
+│   ├── test
+│   │   ├── example.test.ts
+│   │   └── setup.ts
+│   ├── vendor
+│   │   └── axios.ts
+│   └── vite-env.d.ts
+├── tailwind.config.ts
+├── test.txt
+├── tsconfig.app.json
+├── tsconfig.json
+├── tsconfig.node.json
+├── vite.config.ts
+└── vitest.config.ts
+
+86 directories, 385 files
