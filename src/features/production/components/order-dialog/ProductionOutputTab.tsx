@@ -40,6 +40,7 @@ import QRLabelPreviewModal, { type QRLabelContext } from "./QRLabelPreviewModal"
 
 const TOLERANCE_PERCENT = 0.5;
 const LOCAL_BRIDGE_STATUS_POLL_MS = 2000;
+const BACKEND_BRIDGE_RECENT_MS = 30000;
 const OUTPUT_BRIDGE_SELECTION_STORAGE_KEY = "wpe.outputScaleBridgeIdentity";
 type DemoMaterial = {
   client_id: string;
@@ -151,6 +152,19 @@ const fetchBackendBridgeDevices = async () => {
 
 const buildBridgeIdentityKey = (identity: BridgeIdentity) =>
   [identity.deviceId ?? "", identity.workstationId, identity.bridgeClientId].join("|");
+
+const isBackendBridgeDeviceCurrent = (device: BackendBridgeDevice) => {
+  if (device.status && device.status !== "disconnected") {
+    return true;
+  }
+
+  if (!device.last_seen_at) {
+    return false;
+  }
+
+  const lastSeenAt = new Date(device.last_seen_at).getTime();
+  return Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt <= BACKEND_BRIDGE_RECENT_MS;
+};
 
 const normalizeBridgeIdentity = (
   bridgeClientId?: string | null,
@@ -630,10 +644,14 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       ),
     [localBridgeStatus],
   );
+  const currentBackendBridgeDevices = useMemo(
+    () => (backendBridgeDevicesQuery.data ?? []).filter(isBackendBridgeDeviceCurrent),
+    [backendBridgeDevicesQuery.data],
+  );
   const backendBridgeIdentityOptions = useMemo(() => {
     const identityMap = new Map<string, BridgeIdentity>();
 
-    for (const device of backendBridgeDevicesQuery.data ?? []) {
+    for (const device of currentBackendBridgeDevices) {
       const identity = normalizeBridgeIdentity(
         device.bridge_client_id,
         device.workstation_id,
@@ -649,7 +667,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       key,
       identity,
     }));
-  }, [backendBridgeDevicesQuery.data]);
+  }, [currentBackendBridgeDevices]);
   const selectedBackendBridgeIdentity = useMemo(
     () =>
       backendBridgeIdentityOptions.find((option) => option.key === selectedBackendBridgeKey)
@@ -657,8 +675,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     [backendBridgeIdentityOptions, selectedBackendBridgeKey],
   );
   const backendBridgeIdentity = useMemo(
-    () => selectedBackendBridgeIdentity ?? resolveBackendBridgeIdentity(backendBridgeDevicesQuery.data ?? []),
-    [backendBridgeDevicesQuery.data, selectedBackendBridgeIdentity],
+    () => selectedBackendBridgeIdentity ?? resolveBackendBridgeIdentity(currentBackendBridgeDevices),
+    [currentBackendBridgeDevices, selectedBackendBridgeIdentity],
   );
   const activeBridgeIdentity = localBridgeIdentity ?? backendBridgeIdentity;
   useEffect(() => {
@@ -691,14 +709,14 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     }
 
     return (
-      (backendBridgeDevicesQuery.data ?? []).find(
+      currentBackendBridgeDevices.find(
         (device) =>
           device.bridge_client_id?.trim() === activeBridgeIdentity.bridgeClientId &&
           device.workstation_id?.trim() === activeBridgeIdentity.workstationId &&
           (device.device_id?.trim() || null) === activeBridgeIdentity.deviceId,
       ) ?? null
     );
-  }, [activeBridgeIdentity, backendBridgeDevicesQuery.data]);
+  }, [activeBridgeIdentity, currentBackendBridgeDevices]);
 
   const {
     weight,
@@ -780,7 +798,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
           ? "Unable to load scale bridge registration from the server."
           : backendBridgeIdentityOptions.length > 1
             ? "Select the scale bridge client for this workstation."
-            : "No registered scale bridge is available from the server yet."
+            : "No active scale bridge is available from the server yet."
       : !localBridgeRunning
         ? "Local scale bridge is not running on this PC. Start bridge.py and try again."
         : !localScaleConnected
@@ -1379,19 +1397,16 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                 <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${scaleStatusDotClassName}`} />
                 <span>{scaleHelpText}</span>
               </div>
-              {!CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS && backendBridgeIdentityOptions.length > 0 ? (
+              {!CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS && backendBridgeIdentityOptions.length > 1 ? (
                 <div className="mt-3 max-w-md">
                   <Select
-                    value={selectedBackendBridgeKey || "auto"}
-                    onValueChange={(value) => setSelectedBackendBridgeKey(value === "auto" ? "" : value)}
+                    value={selectedBackendBridgeKey}
+                    onValueChange={setSelectedBackendBridgeKey}
                   >
                     <SelectTrigger className="h-9 border-slate-200 bg-white font-mono text-[11px]">
                       <SelectValue placeholder="Select scale bridge" />
                     </SelectTrigger>
                     <SelectContent>
-                      {backendBridgeIdentityOptions.length === 1 ? (
-                        <SelectItem value="auto">Auto select registered bridge</SelectItem>
-                      ) : null}
                       {backendBridgeIdentityOptions.map(({ key, identity }) => (
                         <SelectItem key={key} value={key}>
                           {formatBridgeIdentityOptionLabel(identity)}
