@@ -65,3 +65,5 @@ export const SCALE_BRIDGE_LOCAL_STATUS_URL = trimTrailingSlash(
   import.meta.env.VITE_SCALE_BRIDGE_STATUS_URL ??
     `http://${SCALE_BRIDGE_STATUS_HOST}:${SCALE_BRIDGE_STATUS_PORT}`,
 );
+
+export const CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS = isLocalFrontendHost();
