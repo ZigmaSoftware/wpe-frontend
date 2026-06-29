@@ -33,6 +33,7 @@ import QRLabelPreviewModal, { type QRLabelContext } from "./QRLabelPreviewModal"
 
 const TOLERANCE_PERCENT = 0.5;
 const LOCAL_BRIDGE_STATUS_POLL_MS = 2000;
+const LOCAL_BRIDGE_DEMAND_HEARTBEAT_MS = 4000;
 type DemoMaterial = {
   client_id: string;
   item_code: string;
@@ -93,6 +94,27 @@ type LocalBridgeStatus = {
   unit?: string | null;
   last_seen?: string | null;
   error?: string | null;
+};
+
+const fetchLocalBridgeStatus = async () => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 1500);
+
+  try {
+    const response = await fetch(`${SCALE_BRIDGE_LOCAL_STATUS_URL}/status`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Local bridge status request failed with ${response.status}`);
+    }
+
+    return (await response.json()) as LocalBridgeStatus;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 };
 
 const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCaptureComponent) => {
@@ -203,12 +225,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     enabled: queriesEnabled,
     refetchInterval: queriesEnabled ? LOCAL_BRIDGE_STATUS_POLL_MS : false,
     retry: false,
-    queryFn: async () => {
-      const response = await coreApi.get<LocalBridgeStatus>(`${SCALE_BRIDGE_LOCAL_STATUS_URL}/status`, {
-        timeout: 1500,
-      });
-      return response.data;
-    },
+    queryFn: fetchLocalBridgeStatus,
   });
 
   const stageBatchesQuery = useQuery({
@@ -557,6 +574,42 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       deviceId,
     };
   }, [localBridgeStatus]);
+
+  useEffect(() => {
+    if (!isActive || !localBridgeIdentity) {
+      return;
+    }
+
+    let disposed = false;
+    const demandPayload = {
+      device_id: localBridgeIdentity.deviceId ?? undefined,
+      bridge_client_id: localBridgeIdentity.bridgeClientId,
+      workstation_id: localBridgeIdentity.workstationId,
+    };
+
+    const activateDemand = async () => {
+      try {
+        await coreApi.post("/api/scale/bridge/demand/activate/", demandPayload);
+      } catch {
+        if (!disposed) {
+          // Best-effort heartbeat. The weight polling path surfaces visible errors.
+        }
+      }
+    };
+
+    void activateDemand();
+    const heartbeatId = window.setInterval(() => {
+      void activateDemand();
+    }, LOCAL_BRIDGE_DEMAND_HEARTBEAT_MS);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(heartbeatId);
+      void coreApi.delete("/api/scale/bridge/demand/activate/", { data: demandPayload }).catch(() => {
+        // Best-effort cleanup when leaving the output tab.
+      });
+    };
+  }, [isActive, localBridgeIdentity]);
 
   const activeScaleBridgeClientId =
     localBridgeIdentity?.bridgeClientId ?? resolvedBridgeClientId ?? null;

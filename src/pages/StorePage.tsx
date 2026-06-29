@@ -122,20 +122,51 @@ const formatQuantityWithUnit = (quantity: string | null | undefined, unit: strin
   return `${formattedQuantity}${unit ? ` ${unit}` : ""}`;
 };
 
+const sumRequestItemQuantity = (
+  items: StoreStockRequest["items"] | undefined,
+  field: "requested_qty" | "approved_qty" | "issued_qty",
+) => {
+  if (!items?.length) {
+    return null;
+  }
+
+  const total = items.reduce((sum, item) => sum + Number(item[field] ?? 0), 0);
+  return total.toFixed(3);
+};
+
+const pickRequestedSummaryQuantity = (row: StoreStockRequest) => {
+  const itemTotal = sumRequestItemQuantity(row.items, "requested_qty");
+  if (itemTotal !== null) {
+    return itemTotal;
+  }
+
+  const totalRequestedQty = Number(row.total_requested_qty ?? Number.NaN);
+  if (Number.isFinite(totalRequestedQty) && totalRequestedQty > 0) {
+    return row.total_requested_qty;
+  }
+
+  const fallbackQuantity = Number(row.quantity ?? Number.NaN);
+  if (Number.isFinite(fallbackQuantity) && fallbackQuantity > 0) {
+    return row.quantity;
+  }
+
+  return row.total_requested_qty ?? row.quantity;
+};
+
 const getRequestQuantity = (row: StoreStockRequest) => {
-  const quantity = row.total_requested_qty ?? row.quantity;
+  const quantity = pickRequestedSummaryQuantity(row);
   const unit = row.unit || row.items?.[0]?.unit || "";
   return formatQuantityWithUnit(quantity, unit);
 };
 
 const getProcessedQuantityWithUnit = (row: StoreStockRequest) => {
-  const quantity = row.total_approved_qty ?? row.quantity;
+  const quantity = sumRequestItemQuantity(row.items, "approved_qty") ?? row.total_approved_qty ?? row.quantity;
   const unit = row.unit || row.items?.[0]?.unit || "";
   return formatQuantityWithUnit(quantity, unit);
 };
 
 const getReleasedQuantityWithUnit = (row: StoreStockRequest) => {
-  const quantity = row.total_issued_qty ?? row.quantity;
+  const quantity = sumRequestItemQuantity(row.items, "issued_qty") ?? row.total_issued_qty ?? row.quantity;
   const unit = row.unit || row.items?.[0]?.unit || "";
   return formatQuantityWithUnit(quantity, unit);
 };
@@ -622,7 +653,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                   <TableHead>Request</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Items</TableHead>
-                  <TableHead className="text-right">Process Qty</TableHead>
+                  <TableHead className="text-right">Total Qty</TableHead>
                   <TableHead className="hidden lg:table-cell">Approved By</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -669,7 +700,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                           {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
                         </button>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{getProcessedQuantityWithUnit(row)}</TableCell>
+                      <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
                       <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
                       <TableCell className="text-right">
                         <Button
