@@ -108,7 +108,8 @@ export function useWeightStream({
     return () => document.removeEventListener("visibilitychange", sync);
   }, []);
 
-  const isActive = enabled && isDocumentVisible;
+  const isBridgeActive = enabled;
+  const isDirectModeActive = enabled && isDocumentVisible;
   const stabilityTrackerRef = useRef<{ value: number | null; stableSinceMs: number | null }>({
     value: null,
     stableSinceMs: null,
@@ -118,7 +119,7 @@ export function useWeightStream({
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
 
   useEffect(() => {
-    if (!isBridgeMode || !isActive || !bridgeDemandEnabled || !hasBridgeIdentity) {
+    if (!isBridgeMode || !isBridgeActive || !bridgeDemandEnabled || !hasBridgeIdentity) {
       return;
     }
 
@@ -151,10 +152,10 @@ export function useWeightStream({
         // Best-effort cleanup.
       });
     };
-  }, [bridgeClientId, bridgeDemandEnabled, hasBridgeIdentity, isActive, isBridgeMode, scaleDeviceId, workstationId]);
+  }, [bridgeClientId, bridgeDemandEnabled, hasBridgeIdentity, isBridgeActive, isBridgeMode, scaleDeviceId, workstationId]);
 
   useEffect(() => {
-    if (!isBridgeMode || !isActive || !hasBridgeIdentity) {
+    if (!isBridgeMode || !isBridgeActive || !hasBridgeIdentity) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (!isBridgeMode) return;
       setConnected(false);
@@ -260,13 +261,13 @@ export function useWeightStream({
       if (intervalRef.current) clearInterval(intervalRef.current);
       setConnected(false);
     };
-  }, [bridgeClientId, deviceId, hasBridgeIdentity, isActive, isBridgeMode, scaleDeviceId, workstationId]);
+  }, [bridgeClientId, deviceId, hasBridgeIdentity, isBridgeActive, isBridgeMode, scaleDeviceId, workstationId]);
 
   // ── Direct mode: WebSocket subscription ─────────────────────────────────
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (isBridgeMode || !isActive) {
+    if (isBridgeMode || !isDirectModeActive) {
       if (wsRef.current) {
         wsRef.current.onclose = null;
         wsRef.current.close();
@@ -344,7 +345,7 @@ export function useWeightStream({
       setConnected(false);
       stabilityTrackerRef.current = { value: null, stableSinceMs: null };
     };
-  }, [isBridgeMode, isActive, deviceId]);
+  }, [isBridgeMode, isDirectModeActive, deviceId]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const checkTolerance = useCallback(

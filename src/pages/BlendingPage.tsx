@@ -973,7 +973,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
       {module === "transactions" ? renderTransactionView() : null}
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingRequest ? "Edit Store Request" : "Create Store Request"}</DialogTitle>
             <DialogDescription>
@@ -1013,7 +1013,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                 ) : null}
 
                 {itemsFieldArray.fields.length ? (
-                  <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="max-h-80 overflow-auto rounded-lg border border-border">
                     <Table>
                       <TableHeader>
                         <TableRow>
