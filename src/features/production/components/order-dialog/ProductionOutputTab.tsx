@@ -3,12 +3,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { CheckCircle2, ChevronDown, ChevronRight, PackageCheck, QrCode, Scale } from "lucide-react";
 import { useParams } from "react-router-dom";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { useScannerInput } from "@/hooks/useScannerInput";
 import { useWeightStream } from "@/hooks/useWeightStream";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
-import { SCALE_BRIDGE_LOCAL_STATUS_URL } from "@/lib/env";
+import { CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS, SCALE_BRIDGE_LOCAL_STATUS_URL } from "@/lib/env";
 import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
 import { BATCH_STATUS_CLASSES, StatusBadge } from "@/pages/productionShared";
 import ProductionSectionCard from "./ProductionSectionCard";
@@ -33,7 +40,7 @@ import QRLabelPreviewModal, { type QRLabelContext } from "./QRLabelPreviewModal"
 
 const TOLERANCE_PERCENT = 0.5;
 const LOCAL_BRIDGE_STATUS_POLL_MS = 2000;
-const LOCAL_BRIDGE_DEMAND_HEARTBEAT_MS = 4000;
+const OUTPUT_BRIDGE_SELECTION_STORAGE_KEY = "wpe.outputScaleBridgeIdentity";
 type DemoMaterial = {
   client_id: string;
   item_code: string;
@@ -96,6 +103,26 @@ type LocalBridgeStatus = {
   error?: string | null;
 };
 
+type BackendBridgeDevice = {
+  device_id?: string | null;
+  workstation_id?: string | null;
+  bridge_client_id?: string | null;
+  status?: string | null;
+  weight?: string | null;
+  unit?: string | null;
+  source?: string | null;
+  detected_port?: string | null;
+  error?: string | null;
+  last_seen_at?: string | null;
+  captured_at?: string | null;
+};
+
+type BridgeIdentity = {
+  bridgeClientId: string;
+  workstationId: string;
+  deviceId: string | null;
+};
+
 const fetchLocalBridgeStatus = async () => {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 1500);
@@ -115,6 +142,48 @@ const fetchLocalBridgeStatus = async () => {
   } finally {
     window.clearTimeout(timeoutId);
   }
+};
+
+const fetchBackendBridgeDevices = async () => {
+  const response = await coreApi.get<{ devices?: BackendBridgeDevice[] }>("/api/scale/devices/");
+  return response.data.devices ?? [];
+};
+
+const buildBridgeIdentityKey = (identity: BridgeIdentity) =>
+  [identity.deviceId ?? "", identity.workstationId, identity.bridgeClientId].join("|");
+
+const normalizeBridgeIdentity = (
+  bridgeClientId?: string | null,
+  workstationId?: string | null,
+  deviceId?: string | null,
+): BridgeIdentity | null => {
+  const normalizedBridgeClientId = bridgeClientId?.trim() || null;
+  const normalizedWorkstationId = workstationId?.trim() || null;
+  const normalizedDeviceId = deviceId?.trim() || null;
+
+  if (!normalizedBridgeClientId || !normalizedWorkstationId) {
+    return null;
+  }
+
+  return {
+    bridgeClientId: normalizedBridgeClientId,
+    workstationId: normalizedWorkstationId,
+    deviceId: normalizedDeviceId,
+  };
+};
+
+const resolveBackendBridgeIdentity = (devices: BackendBridgeDevice[]): BridgeIdentity | null => {
+  const candidates = devices
+    .map((device) =>
+      normalizeBridgeIdentity(device.bridge_client_id, device.workstation_id, device.device_id),
+    )
+    .filter((device): device is BridgeIdentity => device !== null);
+
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  return null;
 };
 
 const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCaptureComponent) => {
@@ -165,6 +234,9 @@ const formatScaleSeenTime = (value?: string | Date | null) => {
     hour12: true,
   }).toLowerCase();
 };
+
+const formatBridgeIdentityOptionLabel = (identity: BridgeIdentity) =>
+  `${identity.workstationId} / ${identity.bridgeClientId}${identity.deviceId ? ` / ${identity.deviceId}` : ""}`;
 
 const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutputTabProps) => {
   const queryClient = useQueryClient();
@@ -222,10 +294,23 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const { processScan } = useScannerInput();
   const localBridgeStatusQuery = useQuery({
     queryKey: ["local-scale-bridge-status", SCALE_BRIDGE_LOCAL_STATUS_URL],
-    enabled: queriesEnabled,
+    enabled: queriesEnabled && CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS,
     refetchInterval: queriesEnabled ? LOCAL_BRIDGE_STATUS_POLL_MS : false,
     retry: false,
     queryFn: fetchLocalBridgeStatus,
+  });
+  const backendBridgeDevicesQuery = useQuery({
+    queryKey: ["scale-bridge-devices"],
+    enabled: queriesEnabled && !CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS,
+    refetchInterval: queriesEnabled ? LOCAL_BRIDGE_STATUS_POLL_MS : false,
+    retry: false,
+    queryFn: fetchBackendBridgeDevices,
+  });
+  const [selectedBackendBridgeKey, setSelectedBackendBridgeKey] = useState(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+    return window.localStorage.getItem(OUTPUT_BRIDGE_SELECTION_STORAGE_KEY) ?? "";
   });
 
   const stageBatchesQuery = useQuery({
@@ -535,6 +620,86 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       ? activeComponent.maxWeightKg
       : fallbackMaxWeight;
 
+  const localBridgeStatus = localBridgeStatusQuery.data ?? null;
+  const localBridgeIdentity = useMemo(
+    () =>
+      normalizeBridgeIdentity(
+        localBridgeStatus?.bridge_client_id,
+        localBridgeStatus?.workstation_id,
+        localBridgeStatus?.device_id,
+      ),
+    [localBridgeStatus],
+  );
+  const backendBridgeIdentityOptions = useMemo(() => {
+    const identityMap = new Map<string, BridgeIdentity>();
+
+    for (const device of backendBridgeDevicesQuery.data ?? []) {
+      const identity = normalizeBridgeIdentity(
+        device.bridge_client_id,
+        device.workstation_id,
+        device.device_id,
+      );
+      if (!identity) {
+        continue;
+      }
+      identityMap.set(buildBridgeIdentityKey(identity), identity);
+    }
+
+    return Array.from(identityMap.entries()).map(([key, identity]) => ({
+      key,
+      identity,
+    }));
+  }, [backendBridgeDevicesQuery.data]);
+  const selectedBackendBridgeIdentity = useMemo(
+    () =>
+      backendBridgeIdentityOptions.find((option) => option.key === selectedBackendBridgeKey)
+        ?.identity ?? null,
+    [backendBridgeIdentityOptions, selectedBackendBridgeKey],
+  );
+  const backendBridgeIdentity = useMemo(
+    () => selectedBackendBridgeIdentity ?? resolveBackendBridgeIdentity(backendBridgeDevicesQuery.data ?? []),
+    [backendBridgeDevicesQuery.data, selectedBackendBridgeIdentity],
+  );
+  const activeBridgeIdentity = localBridgeIdentity ?? backendBridgeIdentity;
+  useEffect(() => {
+    if (typeof window === "undefined" || CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS) {
+      return;
+    }
+
+    if (selectedBackendBridgeKey) {
+      window.localStorage.setItem(OUTPUT_BRIDGE_SELECTION_STORAGE_KEY, selectedBackendBridgeKey);
+    } else {
+      window.localStorage.removeItem(OUTPUT_BRIDGE_SELECTION_STORAGE_KEY);
+    }
+  }, [selectedBackendBridgeKey]);
+
+  useEffect(() => {
+    if (CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS || !selectedBackendBridgeKey) {
+      return;
+    }
+
+    const selectionStillExists = backendBridgeIdentityOptions.some(
+      (option) => option.key === selectedBackendBridgeKey,
+    );
+    if (backendBridgeIdentityOptions.length > 0 && !selectionStillExists) {
+      setSelectedBackendBridgeKey("");
+    }
+  }, [backendBridgeIdentityOptions, selectedBackendBridgeKey]);
+  const backendBridgeDevice = useMemo(() => {
+    if (!activeBridgeIdentity) {
+      return null;
+    }
+
+    return (
+      (backendBridgeDevicesQuery.data ?? []).find(
+        (device) =>
+          device.bridge_client_id?.trim() === activeBridgeIdentity.bridgeClientId &&
+          device.workstation_id?.trim() === activeBridgeIdentity.workstationId &&
+          (device.device_id?.trim() || null) === activeBridgeIdentity.deviceId,
+      ) ?? null
+    );
+  }, [activeBridgeIdentity, backendBridgeDevicesQuery.data]);
+
   const {
     weight,
     connected,
@@ -552,69 +717,16 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     preferBridge: true,
     bridgeDemandEnabled: isActive,
     tolerancePercent: TOLERANCE_PERCENT,
-    enabled: isActive && localBridgeStatusQuery.isSuccess,
-    scaleDeviceId: localBridgeStatusQuery.data?.device_id ?? null,
-    bridgeClientId: localBridgeStatusQuery.data?.bridge_client_id ?? null,
-    workstationId: localBridgeStatusQuery.data?.workstation_id ?? null,
+    enabled: isActive && activeBridgeIdentity !== null,
+    scaleDeviceId: activeBridgeIdentity?.deviceId ?? null,
+    bridgeClientId: activeBridgeIdentity?.bridgeClientId ?? null,
+    workstationId: activeBridgeIdentity?.workstationId ?? null,
   });
 
-  const localBridgeStatus = localBridgeStatusQuery.data ?? null;
-  const localBridgeIdentity = useMemo(() => {
-    const bridgeClientId = localBridgeStatus?.bridge_client_id?.trim() || null;
-    const workstationId = localBridgeStatus?.workstation_id?.trim() || null;
-    const deviceId = localBridgeStatus?.device_id?.trim() || null;
-
-    if (!bridgeClientId || !workstationId) {
-      return null;
-    }
-
-    return {
-      bridgeClientId,
-      workstationId,
-      deviceId,
-    };
-  }, [localBridgeStatus]);
-
-  useEffect(() => {
-    if (!isActive || !localBridgeIdentity) {
-      return;
-    }
-
-    let disposed = false;
-    const demandPayload = {
-      device_id: localBridgeIdentity.deviceId ?? undefined,
-      bridge_client_id: localBridgeIdentity.bridgeClientId,
-      workstation_id: localBridgeIdentity.workstationId,
-    };
-
-    const activateDemand = async () => {
-      try {
-        await coreApi.post("/api/scale/bridge/demand/activate/", demandPayload);
-      } catch {
-        if (!disposed) {
-          // Best-effort heartbeat. The weight polling path surfaces visible errors.
-        }
-      }
-    };
-
-    void activateDemand();
-    const heartbeatId = window.setInterval(() => {
-      void activateDemand();
-    }, LOCAL_BRIDGE_DEMAND_HEARTBEAT_MS);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(heartbeatId);
-      void coreApi.delete("/api/scale/bridge/demand/activate/", { data: demandPayload }).catch(() => {
-        // Best-effort cleanup when leaving the output tab.
-      });
-    };
-  }, [isActive, localBridgeIdentity]);
-
   const activeScaleBridgeClientId =
-    localBridgeIdentity?.bridgeClientId ?? resolvedBridgeClientId ?? null;
-  const activeScaleDeviceId = localBridgeIdentity?.deviceId ?? resolvedDeviceId ?? null;
-  const activeScaleWorkstationId = localBridgeIdentity?.workstationId ?? resolvedWorkstationId ?? null;
+    activeBridgeIdentity?.bridgeClientId ?? resolvedBridgeClientId ?? null;
+  const activeScaleDeviceId = activeBridgeIdentity?.deviceId ?? resolvedDeviceId ?? null;
+  const activeScaleWorkstationId = activeBridgeIdentity?.workstationId ?? resolvedWorkstationId ?? null;
   const scaleCapturePayload = useMemo(
     () => ({
       device_id: activeScaleDeviceId ?? undefined,
@@ -624,8 +736,14 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     }),
     [activeScaleBridgeClientId, activeScaleDeviceId, activeScaleWorkstationId],
   );
-  const localBridgeRunning = localBridgeStatusQuery.isSuccess && localBridgeStatus?.status === "running";
-  const localScaleConnected = Boolean(localBridgeStatus?.scale_connected);
+  const localBridgeRunning =
+    CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS
+      ? localBridgeStatusQuery.isSuccess && localBridgeStatus?.status === "running"
+      : activeBridgeIdentity !== null;
+  const localScaleConnected =
+    CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS
+      ? Boolean(localBridgeStatus?.scale_connected)
+      : connected || (backendBridgeDevice?.status != null && backendBridgeDevice.status !== "disconnected");
   const localBridgeStatusText =
     connected || status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading"
       ? statusLabel
@@ -648,17 +766,34 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     : "No client id";
   const scaleDeviceLabel = activeScaleDeviceId ?? "No device";
   const scalePortLabel =
-    detectedPort ?? localBridgeStatus?.device_port ?? localBridgeStatus?.serial_port ?? "USB scale not detected";
-  const scaleHelpText = localBridgeStatusQuery.isError
+    detectedPort ??
+    localBridgeStatus?.device_port ??
+    localBridgeStatus?.serial_port ??
+    backendBridgeDevice?.detected_port ??
+    "USB scale not detected";
+  const scaleHelpText = CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS && localBridgeStatusQuery.isError
     ? "Local scale bridge is not running on this PC. Start bridge.py and try again."
-    : !localBridgeIdentity
-      ? "Local bridge identity is unavailable on this PC."
+    : !activeBridgeIdentity
+      ? CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS
+        ? "Local bridge identity is unavailable on this PC."
+        : backendBridgeDevicesQuery.isError
+          ? "Unable to load scale bridge registration from the server."
+          : backendBridgeIdentityOptions.length > 1
+            ? "Select the scale bridge client for this workstation."
+            : "No registered scale bridge is available from the server yet."
       : !localBridgeRunning
         ? "Local scale bridge is not running on this PC. Start bridge.py and try again."
         : !localScaleConnected
-          ? (localBridgeStatus?.error?.trim() || "USB scale is not connected for this PC.")
+          ? (
+              localBridgeStatus?.error?.trim() ||
+              backendBridgeDevice?.error?.trim() ||
+              scaleError ||
+              "USB scale is not connected for this PC."
+            )
           : scaleError || "This page is locked to the local bridge client configured on this PC.";
-  const scaleLastSeenLabel = formatScaleSeenTime(lastSeenAt ?? localBridgeStatus?.last_seen ?? null);
+  const scaleLastSeenLabel = formatScaleSeenTime(
+    lastSeenAt ?? localBridgeStatus?.last_seen ?? backendBridgeDevice?.last_seen_at ?? null,
+  );
 
   const tolerance =
     !isSingleCaptureMode && displayStdWeight > 0 && weight
@@ -1244,6 +1379,28 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                 <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${scaleStatusDotClassName}`} />
                 <span>{scaleHelpText}</span>
               </div>
+              {!CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS && backendBridgeIdentityOptions.length > 0 ? (
+                <div className="mt-3 max-w-md">
+                  <Select
+                    value={selectedBackendBridgeKey || "auto"}
+                    onValueChange={(value) => setSelectedBackendBridgeKey(value === "auto" ? "" : value)}
+                  >
+                    <SelectTrigger className="h-9 border-slate-200 bg-white font-mono text-[11px]">
+                      <SelectValue placeholder="Select scale bridge" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {backendBridgeIdentityOptions.length === 1 ? (
+                        <SelectItem value="auto">Auto select registered bridge</SelectItem>
+                      ) : null}
+                      {backendBridgeIdentityOptions.map(({ key, identity }) => (
+                        <SelectItem key={key} value={key}>
+                          {formatBridgeIdentityOptionLabel(identity)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid flex-1 gap-2 text-[11px] sm:grid-cols-2 xl:grid-cols-3">
