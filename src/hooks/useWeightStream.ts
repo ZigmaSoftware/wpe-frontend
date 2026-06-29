@@ -36,10 +36,13 @@ interface ScaleApiResponse {
   weight:          string;
   unit:            string;
   status:          ScaleConnectionStatus;
+  is_stable?:      boolean;
   timestamp:       string | null;
   last_seen_at?:   string | null;
   raw_data:        string;
+  message?:        string | null;
   error:           string | null;
+  device_port?:    string | null;
   detected_port:   string | null;
   device_id?:      string | null;
   platform:        string;
@@ -94,6 +97,7 @@ export function useWeightStream({
   );
 
   const isBridgeMode = !!(scaleDeviceId || workstationId || bridgeClientId);
+  const hasBridgeIdentity = !!(bridgeClientId && workstationId);
 
   // ── Visibility tracking ──────────────────────────────────────────────────
   useEffect(() => {
@@ -114,15 +118,20 @@ export function useWeightStream({
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
 
   useEffect(() => {
-    if (!isBridgeMode || !isActive || !bridgeDemandEnabled) {
+    if (!isBridgeMode || !isActive || !bridgeDemandEnabled || !hasBridgeIdentity) {
       return;
     }
 
     let cancelled = false;
+    const demandPayload = {
+      device_id: scaleDeviceId || undefined,
+      bridge_client_id: bridgeClientId || undefined,
+      workstation_id: workstationId || undefined,
+    };
 
     const heartbeat = async () => {
       try {
-        await coreApi.post("/api/scale/bridge/demand/activate/");
+        await coreApi.post("/api/scale/bridge/demand/activate/", demandPayload);
       } catch {
         if (!cancelled) {
           // Best-effort heartbeat; polling handles visible errors separately.
@@ -138,15 +147,26 @@ export function useWeightStream({
     return () => {
       cancelled = true;
       clearInterval(heartbeatId);
+      void coreApi.delete("/api/scale/bridge/demand/activate/", { data: demandPayload }).catch(() => {
+        // Best-effort cleanup.
+      });
     };
-  }, [bridgeDemandEnabled, isActive, isBridgeMode]);
+  }, [bridgeClientId, bridgeDemandEnabled, hasBridgeIdentity, isActive, isBridgeMode, scaleDeviceId, workstationId]);
 
   useEffect(() => {
-    if (!isBridgeMode || !isActive) {
+    if (!isBridgeMode || !isActive || !hasBridgeIdentity) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (!isBridgeMode) return;
       setConnected(false);
       setStatus("disconnected");
+      setWeight(null);
+      setError(null);
+      setSource(null);
+      setDetectedPort(null);
+      setResolvedDeviceId(null);
+      setResolvedBridgeClientId(null);
+      setResolvedWorkstationId(null);
+      setLastSeenAt(null);
       stabilityTrackerRef.current = { value: null, stableSinceMs: null };
       return;
     }
@@ -169,9 +189,9 @@ export function useWeightStream({
         const isConnected = CONNECTED_STATUSES.has(nextStatus);
         setStatus(nextStatus);
         setConnected(isConnected);
-        setError(d.error ?? null);
+        setError(d.error ?? d.message ?? null);
         setSource(d.source ?? null);
-        setDetectedPort(d.detected_port ?? null);
+        setDetectedPort(d.device_port ?? d.detected_port ?? null);
         setResolvedDeviceId(d.device_id ?? scaleDeviceId ?? null);
         setResolvedBridgeClientId(d.bridge_client_id ?? bridgeClientId ?? null);
         setResolvedWorkstationId(d.workstation_id ?? workstationId ?? null);
@@ -184,7 +204,7 @@ export function useWeightStream({
           if (!isNaN(value)) {
             const normalizedValue = Number(value.toFixed(3));
             const tracker = stabilityTrackerRef.current;
-            let isStable = d.status === "stable";
+            let isStable = typeof d.is_stable === "boolean" ? d.is_stable : d.status === "stable";
 
             if (!isStable) {
               if (
@@ -224,7 +244,10 @@ export function useWeightStream({
         setWeight(null);
         setError(err instanceof Error ? err.message : "Scale endpoint unreachable");
         setDetectedPort(null);
+        setResolvedDeviceId(null);
         setResolvedBridgeClientId(null);
+        setResolvedWorkstationId(null);
+        setLastSeenAt(null);
         stabilityTrackerRef.current = { value: null, stableSinceMs: null };
       }
     };
@@ -237,7 +260,7 @@ export function useWeightStream({
       if (intervalRef.current) clearInterval(intervalRef.current);
       setConnected(false);
     };
-  }, [bridgeClientId, deviceId, isActive, isBridgeMode, scaleDeviceId, workstationId]);
+  }, [bridgeClientId, deviceId, hasBridgeIdentity, isActive, isBridgeMode, scaleDeviceId, workstationId]);
 
   // ── Direct mode: WebSocket subscription ─────────────────────────────────
   const wsRef = useRef<WebSocket | null>(null);
