@@ -57,3 +57,11 @@ export const BACKEND_WS = trimTrailingSlash(
     ? (import.meta.env.VITE_BACKEND_WS_SERVER ?? "ws://192.168.5.19:8000")
     : (import.meta.env.VITE_BACKEND_WS_LOCAL  ?? "ws://127.0.0.1:8000"),
 );
+
+const SCALE_BRIDGE_STATUS_HOST = import.meta.env.VITE_SCALE_BRIDGE_HOST ?? "127.0.0.1";
+const SCALE_BRIDGE_STATUS_PORT = import.meta.env.VITE_SCALE_BRIDGE_PORT ?? "8765";
+
+export const SCALE_BRIDGE_LOCAL_STATUS_URL = trimTrailingSlash(
+  import.meta.env.VITE_SCALE_BRIDGE_STATUS_URL ??
+    `http://${SCALE_BRIDGE_STATUS_HOST}:${SCALE_BRIDGE_STATUS_PORT}`,
+);
