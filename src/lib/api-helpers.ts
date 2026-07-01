@@ -106,6 +106,13 @@ export const getApiErrorMessage = (error: unknown, fallback: string) => {
 
     const responseData = isRecord(error.response?.data) ? error.response.data : undefined;
     if (responseData) {
+      if (isRecord(responseData.errors)) {
+        const nestedError = getFirstFieldError(responseData.errors);
+        if (nestedError) {
+          return nestedError;
+        }
+      }
+
       const detail = responseData.detail ?? responseData.message;
 
       if (typeof detail === "string" && detail.trim()) {
@@ -127,12 +134,6 @@ export const getApiErrorMessage = (error: unknown, fallback: string) => {
         return rootFieldError;
       }
 
-      if (isRecord(responseData.errors)) {
-        const nestedError = getFirstFieldError(responseData.errors);
-        if (nestedError) {
-          return nestedError;
-        }
-      }
     }
   }
 
