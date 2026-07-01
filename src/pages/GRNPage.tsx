@@ -3687,7 +3687,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
       />
 
       <Dialog open={Boolean(qcrEntryTarget)} onOpenChange={(open) => !open && closeQcrEntryDialog()}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>QCR Entry</DialogTitle>
             <DialogDescription>
@@ -3717,15 +3717,15 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-border/70 bg-card">
-              <Table className="min-w-[980px]">
+              <Table className="min-w-[860px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16 text-center">S.no</TableHead>
-                    <TableHead>Item Name</TableHead>
-                    <TableHead className="w-40">Sent Qty</TableHead>
-                    <TableHead className="w-48">Accepted Qty</TableHead>
-                    <TableHead className="w-56">Rejected Qty</TableHead>
-                    <TableHead className="w-80">Reason</TableHead>
+                    <TableHead className="w-[280px]">Item Name</TableHead>
+                    <TableHead className="w-32">Sent Qty</TableHead>
+                    <TableHead className="w-44">Accepted Qty</TableHead>
+                    <TableHead className="w-44">Rejected Qty</TableHead>
+                    <TableHead className="w-44">Reason</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -3734,9 +3734,6 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                       <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                       <TableCell>
                         <div className="font-semibold text-foreground">{item.itemName}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {item.itemCode || item.itemId || "-"}{item.unit ? ` | ${item.unit}` : ""}{item.storeInName ? ` | Store In: ${item.storeInName}` : ""}
-                        </div>
                       </TableCell>
                       <TableCell className="font-semibold text-foreground">
                         {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
@@ -3806,9 +3803,8 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                           <Label htmlFor={`qcr-reason-${index}`} className="sr-only">
                             Reason{item.rejectedQty.trim() && Number(item.rejectedQty) > 0 ? " required" : ""}
                           </Label>
-                          <Textarea
+                          <Input
                             id={`qcr-reason-${index}`}
-                            rows={2}
                             value={item.reason}
                             onChange={(event) => {
                               const nextValue = event.target.value;

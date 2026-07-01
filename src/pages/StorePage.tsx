@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
 import RequestItemsPreviewDialog, { getRequestItemSummary } from "@/features/requests/components/RequestItemsPreviewDialog";
@@ -1257,12 +1256,12 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16 text-center">S.No</TableHead>
-                    <TableHead>Item Name</TableHead>
+                    <TableHead className="w-[280px]">Item Name</TableHead>
                     <TableHead className="w-48">Requested Qty</TableHead>
                     <TableHead className="w-56">
                       Process Qty <span className="text-destructive">*</span>
                     </TableHead>
-                    <TableHead className="w-80">Reason</TableHead>
+                    <TableHead className="w-56">Reason</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1271,10 +1270,6 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                       <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                       <TableCell>
                         <div className="font-semibold text-foreground">{item.itemName}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {item.itemCode}
-                          {item.unit ? ` | ${item.unit}` : ""}
-                        </div>
                       </TableCell>
                       <TableCell className="font-semibold text-foreground">
                         {formatDecimal(item.requestedQty)}{item.unit ? ` ${item.unit}` : ""}
@@ -1312,9 +1307,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Textarea
+                        <Input
                           value={item.reason}
-                          rows={3}
                           placeholder="Optional reason"
                           onChange={(event) => {
                             const nextValue = event.target.value;
@@ -1330,10 +1324,11 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
               </Table>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:justify-between">
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
+              className="h-10 min-w-24 border-orange-200 bg-white text-slate-900 hover:bg-orange-500 hover:text-white"
               onClick={() => {
                 if (requestReviewTarget) {
                   setProcessRejectConfirmation(requestReviewTarget);
@@ -1346,6 +1341,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
             </Button>
             <Button
               type="button"
+              variant="outline"
+              className="h-10 min-w-24 border-orange-200 bg-white text-slate-900 hover:bg-orange-500 hover:text-white"
               onClick={() => {
                 if (!requestReviewTarget) return;
                 const nextErrors: Record<number, RequestReviewError> = {};
