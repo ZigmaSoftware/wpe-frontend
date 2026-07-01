@@ -61,7 +61,7 @@ export const BACKEND_WS = trimTrailingSlash(
 const SCALE_BRIDGE_STATUS_HOST = import.meta.env.VITE_SCALE_BRIDGE_HOST ?? "127.0.0.1";
 const SCALE_BRIDGE_STATUS_PORT = import.meta.env.VITE_SCALE_BRIDGE_PORT ?? "8765";
 const ENABLE_LOCAL_SCALE_BRIDGE_STATUS =
-  import.meta.env.VITE_ENABLE_LOCAL_SCALE_BRIDGE_STATUS !== "false";
+  import.meta.env.VITE_ENABLE_LOCAL_SCALE_BRIDGE_STATUS === "true";
 
 export const SCALE_BRIDGE_LOCAL_STATUS_URL = trimTrailingSlash(
   import.meta.env.VITE_SCALE_BRIDGE_STATUS_URL ??
