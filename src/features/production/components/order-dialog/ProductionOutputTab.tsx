@@ -51,14 +51,14 @@ type DemoMaterial = {
 };
 
 const DEMO_MATERIALS: DemoMaterial[] = [
-  { client_id: "demo-1", item_code: "WGO:2001", item_name: "Wood Powder", per_unit_quantity: "-0.40", tolerance_kg: "0.40", sequence: 1 },
-  { client_id: "demo-2", item_code: "HOP:2020", item_name: "HDPE Chips (White)", per_unit_quantity: "22.900", sequence: 2 },
-  { client_id: "demo-3", item_code: "CAL:2001", item_name: "Calcium carbonate", per_unit_quantity: "4.600", sequence: 3 },
-  { client_id: "demo-4", item_code: "COU:2003", item_name: "Coupling agent", per_unit_quantity: "3.500", sequence: 4 },
-  { client_id: "demo-5", item_code: "LUB:2007", item_name: "Lubricant", per_unit_quantity: "1.100", sequence: 5 },
-  { client_id: "demo-6", item_code: "REG:2019", item_name: "Regrind Material - HDPE", per_unit_quantity: "22.900", sequence: 6 },
-  { client_id: "demo-7", item_code: "ANT:2005", item_name: "Antioxidant Agent", per_unit_quantity: "0.140", sequence: 7 },
-  { client_id: "demo-8", item_code: "REG:2025", item_name: "Regrind Material - LDPE", per_unit_quantity: "9.200", sequence: 8 },
+  // { client_id: "demo-1", item_code: "WGO:2001", item_name: "Wood Powder", per_unit_quantity: "-0.40", tolerance_kg: "0.40", sequence: 1 },
+  // { client_id: "demo-2", item_code: "HOP:2020", item_name: "HDPE Chips (White)", per_unit_quantity: "22.900", sequence: 2 },
+  // { client_id: "demo-3", item_code: "CAL:2001", item_name: "Calcium carbonate", per_unit_quantity: "4.600", sequence: 3 },
+  // { client_id: "demo-4", item_code: "COU:2003", item_name: "Coupling agent", per_unit_quantity: "3.500", sequence: 4 },
+  // { client_id: "demo-5", item_code: "LUB:2007", item_name: "Lubricant", per_unit_quantity: "1.100", sequence: 5 },
+  // { client_id: "demo-6", item_code: "REG:2019", item_name: "Regrind Material - HDPE", per_unit_quantity: "22.900", sequence: 6 },
+  // { client_id: "demo-7", item_code: "ANT:2005", item_name: "Antioxidant Agent", per_unit_quantity: "0.140", sequence: 7 },
+  // { client_id: "demo-8", item_code: "REG:2025", item_name: "Regrind Material - LDPE", per_unit_quantity: "9.200", sequence: 8 },
 ];
 
 const EMPTY_FORM_MATERIAL_ROWS: ProductionOrderFormValues["materials"]["rows"] = [];
@@ -749,16 +749,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       : connected
         ? "bg-emerald-400 animate-pulse"
         : "bg-red-500";
-  const scaleWorkstationLabel = activeScaleWorkstationId ?? "No workstation";
-  const scaleClientLabel = activeScaleBridgeClientId
-    ? formatBridgeClientId(activeScaleBridgeClientId)
-    : "No client id";
-  const scaleDeviceLabel = activeScaleDeviceId ?? "No device";
-  const scalePortLabel =
-    detectedPort ??
-    localBridgeStatus?.device_port ??
-    localBridgeStatus?.serial_port ??
-    "USB scale not detected";
   const scaleHelpText = CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS && localBridgeStatusQuery.isError
     ? "Local scale bridge status is unavailable. Using saved browser identity when configured."
     : !activeBridgeIdentity
@@ -772,10 +762,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
               "Scale is offline for this configured PC."
             )
           : scaleError || "This page is locked to the configured bridge client for this browser.";
-  const scaleLastSeenLabel = formatScaleSeenTime(
-    lastSeenAt ?? localBridgeStatus?.last_seen ?? null,
-  );
-
   const tolerance =
     !isSingleCaptureMode && displayStdWeight > 0 && weight
       ? {
@@ -1343,24 +1329,12 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     <ProductionSectionCard title="Output Weight Capture" tone="emerald" icon={Scale}>
       <div className="space-y-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.25)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-xl">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Scale Source
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-700">
-                  Local Bridge Client Scale
-                </span>
-                <span className={`rounded-full border px-2.5 py-1 font-mono font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-red-200 bg-red-50 text-red-700"}`}>
-                  {localBridgeStatusText}
-                </span>
-              </div>
-              <div className={`mt-3 flex items-start gap-2 text-[12px] ${connected ? "text-slate-600" : scaleStatusClassName}`}>
-                <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${scaleStatusDotClassName}`} />
-                <span>{scaleHelpText}</span>
-              </div>
-              <div className="mt-3 grid gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 sm:grid-cols-3">
+          <div className="max-w-none">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Scale Source
+            </div>
+            <div className="mt-3 rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
+              <div className="grid gap-3 lg:grid-cols-[220px_220px_160px_minmax(0,1fr)]">
                 <Input
                   value={bridgeIdentityForm.deviceId}
                   onChange={(event) =>
@@ -1369,7 +1343,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                       deviceId: event.target.value,
                     }))
                   }
-                  className="h-8 bg-white font-mono text-[11px]"
+                  className="h-11 rounded-xl bg-white font-mono text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]"
                   placeholder="Device"
                 />
                 <Input
@@ -1380,7 +1354,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                       workstationId: event.target.value,
                     }))
                   }
-                  className="h-8 bg-white font-mono text-[11px]"
+                  className="h-11 rounded-xl bg-white font-mono text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]"
                   placeholder="Workstation"
                 />
                 <Input
@@ -1391,57 +1365,27 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                       bridgeClientId: event.target.value,
                     }))
                   }
-                  className="h-8 bg-white font-mono text-[11px]"
+                  className="h-11 rounded-xl bg-white font-mono text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]"
                   placeholder="Bridge Client"
                 />
-                <div className="flex gap-2 sm:col-span-3">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-8 bg-slate-900 px-3 text-[11px] font-semibold"
-                    onClick={saveBridgeIdentity}
-                  >
-                    Save Identity
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 px-3 text-[11px] font-semibold"
-                    onClick={clearBridgeIdentity}
-                  >
-                    Clear
-                  </Button>
-                </div>
+                <div aria-hidden="true" className="hidden lg:block" />
               </div>
-            </div>
-
-            <div className="grid flex-1 gap-2 text-[11px] sm:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Workstation</div>
-                <div className="mt-1 font-mono text-slate-700">{scaleWorkstationLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Bridge Client</div>
-                <div className="mt-1 font-mono text-slate-700">{scaleClientLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Device</div>
-                <div className="mt-1 font-mono text-slate-700">{scaleDeviceLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Port</div>
-                <div className="mt-1 font-mono text-slate-700">{scalePortLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Last Seen</div>
-                <div className="mt-1 font-mono text-slate-700">{scaleLastSeenLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Bridge Mode</div>
-                <div className="mt-1 font-mono text-slate-700">
-                  {activeBridgeIdentity ? "Locked to configured client" : "Identity not configured"}
-                </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  className="h-10 rounded-xl bg-slate-900 px-4 text-[12px] font-semibold text-white hover:bg-slate-800"
+                  onClick={saveBridgeIdentity}
+                >
+                  Save Identity
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-xl border-slate-200 bg-white px-4 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={clearBridgeIdentity}
+                >
+                  Clear
+                </Button>
               </div>
             </div>
           </div>

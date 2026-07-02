@@ -16,8 +16,8 @@ type ProductionDetailsSectionProps = {
 
 const ProductionDetailsSection = ({ form }: ProductionDetailsSectionProps) => (
   <ProductionSectionCard
-    title="Tracking"
-    description="System generated tracking information for this order."
+    title="Tracking Information"
+    description="System generated batch and timing fields remain visible here for tracking."
     tone="emerald"
     icon={Zap}
   >

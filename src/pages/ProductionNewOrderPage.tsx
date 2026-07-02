@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import type { CreateProductionOrderPayload, NamedOption } from "@/features/production/components/order-dialog/productionOrderForm";
+import { getProductionStageUi, type ProductionUiStage } from "@/features/production/components/order-dialog/productionStageUi";
 import {
   PRODUCTION_AD_WEIGHTAGE_ROUTE,
   PRODUCTION_BL_BLENDING_ROUTE,
@@ -22,16 +23,9 @@ const ADDITIVE_PRODUCTION_FACILITY: NamedOption = {
 
 type ProductionNewOrderLocationState = {
   backTo?: string;
-  entryStage?: string;
+  entryStage?: ProductionUiStage;
   defaultWorkCenterName?: string;
 };
-
-const DEFAULT_PRODUCTION_TYPE_BY_STAGE = {
-  AD: "WPE Additive Production",
-  BL: "WPE Blend Production",
-  GL: "WPE Granulated Blend Production",
-  PR: "WPE Production Line",
-} as const;
 
 const ProductionNewOrderPage = () => {
   const navigate = useNavigate();
@@ -47,18 +41,8 @@ const ProductionNewOrderPage = () => {
   const isAdEntry =
     locationState?.entryStage === "AD" ||
     (!isBlEntry && !isGlEntry && !isPrEntry && (backRoute === PRODUCTION_AD_WEIGHTAGE_ROUTE || location.pathname === "/app/production/neworder"));
-  const entryStage = isAdEntry ? "AD" : isBlEntry ? "BL" : isGlEntry ? "GL" : isPrEntry ? "PR" : "AD";
-  const backLabel = isAdEntry ? "Back to AD list" : isBlEntry ? "Back to BL List" : isGlEntry ? "Back to GL List" : isPrEntry ? "Back to PR List" : undefined;
-  const formTitle = isAdEntry
-    ? "New Additive Creation"
-    : isBlEntry
-      ? "Blending Creation"
-      : isGlEntry
-        ? "New GL Creation"
-        : isPrEntry
-          ? "New PR Creation"
-          : "New Production Order";
-  const submitLabel = isAdEntry ? "Create Additive" : isBlEntry ? "Create Blending" : isGlEntry ? "Create Granulation" : isPrEntry ? "Create Production" : "Create Production Order";
+  const entryStage: ProductionUiStage = isAdEntry ? "AD" : isBlEntry ? "BL" : isGlEntry ? "GL" : isPrEntry ? "PR" : "AD";
+  const stageUi = getProductionStageUi(entryStage);
 
   const machinesQ = useQuery({
     queryKey: ["production-machines"],
@@ -84,7 +68,7 @@ const ProductionNewOrderPage = () => {
   return (
     <ProductionOrderPageLayout
       onBack={() => navigate(backRoute)}
-      backLabel={backLabel}
+      backLabel={stageUi.backToListLabel}
     >
       <ProductionOrderForm
         onSubmit={(values) => createOrderMutation.mutate(values)}
@@ -92,9 +76,10 @@ const ProductionNewOrderPage = () => {
         isSubmitting={createOrderMutation.isPending}
         machines={machinesQ.data ?? []}
         machinesLoading={machinesQ.isLoading}
-        formTitle={formTitle}
-        submitLabel={submitLabel}
-        defaultProductionType={DEFAULT_PRODUCTION_TYPE_BY_STAGE[entryStage]}
+        formTitle={stageUi.createTitle}
+        formSubtitle={stageUi.createSubtitle}
+        submitLabel={stageUi.createButtonLabel}
+        defaultProductionType={stageUi.defaultProductionType}
         entryStage={entryStage}
         fixedProductionFacility={isAdEntry ? ADDITIVE_PRODUCTION_FACILITY : undefined}
         defaultWorkCenterName={isAdEntry ? locationState?.defaultWorkCenterName ?? "New Line Additive Work Center WIP" : undefined}
