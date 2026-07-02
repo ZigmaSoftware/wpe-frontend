@@ -19,6 +19,7 @@ type BomVariantSelectorProps = {
   loading?: boolean;
   error?: string;
   relatedProductItemId?: number | null;
+  hideHelperText?: boolean;
 };
 
 const BomVariantSelector = ({
@@ -28,6 +29,7 @@ const BomVariantSelector = ({
   loading = false,
   error,
   relatedProductItemId = null,
+  hideHelperText = false,
 }: BomVariantSelectorProps) => {
   const [open, setOpen] = useState(false);
 
@@ -100,11 +102,13 @@ const BomVariantSelector = ({
           </Command>
         </PopoverContent>
       </Popover>
-      {relatedProductItemId === null ? (
-        <div className={productionHelperTextClassName}>Showing all BOM variants. Planned production qty will be processed after selection.</div>
-      ) : (
-        <div className={productionHelperTextClassName}>Related BOM variants are listed first for the selected finished good.</div>
-      )}
+      {!hideHelperText ? (
+        relatedProductItemId === null ? (
+          <div className={productionHelperTextClassName}>Showing all BOM variants. Planned production qty will be processed after selection.</div>
+        ) : (
+          <div className={productionHelperTextClassName}>Related BOM variants are listed first for the selected finished good.</div>
+        )
+      ) : null}
       {error ? <FormMessage>{error}</FormMessage> : null}
     </FormItem>
   );

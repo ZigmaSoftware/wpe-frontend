@@ -12,12 +12,12 @@ type GeneralTabDeferredSectionsProps = {
 
 const GeneralTabDeferredSections = ({ form }: GeneralTabDeferredSectionsProps) => (
   <>
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className="grid gap-4 xl:grid-cols-2">
       <ProductionPlanTable form={form} />
       <ProductionBaseOrderSection
         form={form}
-        title="Base Order Details"
-        description="Link this production order to a base plan, customer, and sales order."
+        title="Base / Mapped Details"
+        description="Review the linked plan, order, customer, and mapped source references."
       />
     </div>
 
