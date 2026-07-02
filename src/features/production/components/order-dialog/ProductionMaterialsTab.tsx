@@ -3,7 +3,7 @@ import { useFieldArray, useWatch, type UseFormReturn } from "react-hook-form";
 import { Boxes, Loader2 } from "lucide-react";
 import { FormField } from "@/components/ui/form";
 import type { ProductTypeSubtypeLookupItem } from "@/features/wpe-masters/types";
-import type { BOMVariant } from "@/lib/types";
+import type { BOMVariant, ProductionBatch } from "@/lib/types";
 import { toast } from "@/components/ui/sonner";
 import BomVariantSelector from "./BomVariantSelector";
 import MaterialComponentsTable from "./MaterialComponentsTable";
@@ -28,6 +28,7 @@ import { productionHelperTextClassName } from "./productionOrderFormStyles";
 type ProductionMaterialsTabProps = {
   form: UseFormReturn<ProductionOrderFormValues>;
   isActive?: boolean;
+  stage?: ProductionBatch["stage"] | null;
 };
 
 const selectedBomVariantFromList = (variants: BOMVariant[], selectedBomVariantId: number | null) =>
@@ -198,9 +199,6 @@ const ProductionMaterialsTab = ({ form, isActive = true }: ProductionMaterialsTa
             productionQty={calculations.productionQty}
             bomMultiplierField={field}
             bomMultiplierError={bomMultiplierError}
-            onRecalculate={() => {
-              void form.trigger(["materials.selected_bom_variant_id", "materials.bom_multiplier", "materials.rows"]);
-            }}
           />
         )}
       />
@@ -212,7 +210,7 @@ const ProductionMaterialsTab = ({ form, isActive = true }: ProductionMaterialsTa
         icon={Boxes}
       >
         <div className="space-y-4">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,620px)_320px_minmax(0,1fr)] xl:items-start">
             <MaterialItemSearch
               onSelect={handleManualItemAdd}
               existingItems={materialsState.rows
@@ -233,6 +231,7 @@ const ProductionMaterialsTab = ({ form, isActive = true }: ProductionMaterialsTa
                 />
               )}
             />
+            <div className="hidden xl:block" />
           </div>
 
           {bomComponentsQuery.isLoading ? (

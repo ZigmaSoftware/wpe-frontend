@@ -20,8 +20,8 @@ const ProductionNotesSection = ({ form }: ProductionNotesSectionProps) => {
 
   return (
     <ProductionSectionCard
-      title="Notes"
-      description="Add context, purpose, or special instructions for this production order."
+      title="Notes & Purpose"
+      description="Capture production purpose, notes, and any special instructions for this order."
       tone="blue"
       icon={NotebookText}
     >

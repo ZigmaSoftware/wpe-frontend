@@ -1,7 +1,6 @@
 import { useMemo, useState, type KeyboardEventHandler } from "react";
-import { useQuery } from "@tanstack/react-query";
 import type { ProductTypeSubtypeLookupItem } from "@/features/wpe-masters/types";
-import { wpeMastersApi } from "@/features/wpe-masters/api/wpeMastersApi";
+import type { ProductionBatch } from "@/lib/types";
 import ComponentAutocompleteDropdown from "@/features/production/components/bom-variants/ComponentAutocompleteDropdown";
 import ComponentSearchInput from "@/features/production/components/bom-variants/ComponentSearchInput";
 import { useDebouncedItemSearch } from "./useDebouncedItemSearch";
@@ -11,28 +10,19 @@ import {
 } from "./productionOrderFormStyles";
 
 const MINIMUM_SEARCH_LENGTH = 2;
-const BLENDING_CATEGORY_NAME = "blending";
 
 type MaterialItemSearchProps = {
   onSelect: (item: ProductTypeSubtypeLookupItem) => void;
+  stage?: ProductionBatch["stage"] | null;
   existingItems: Array<{ product_subtype?: number | null; item_code: string }>;
+  hideLabel?: boolean;
 };
 
-const MaterialItemSearch = ({ onSelect, existingItems }: MaterialItemSearchProps) => {
+const MaterialItemSearch = ({ onSelect, stage, existingItems, hideLabel = false }: MaterialItemSearchProps) => {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const blendingCategoryQuery = useQuery({
-    queryKey: ["production-material-category", BLENDING_CATEGORY_NAME],
-    queryFn: async () => {
-      const categories = await wpeMastersApi.productTypeCategories.lookup();
-      return (
-        categories.find((category) => category.name.trim().toLowerCase() === BLENDING_CATEGORY_NAME)?.id ?? null
-      );
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-  const searchQuery = useDebouncedItemSearch(query, blendingCategoryQuery.data ?? undefined, !blendingCategoryQuery.isLoading);
+  const searchQuery = useDebouncedItemSearch(query);
 
   const existingKeys = useMemo(
     () => new Set(existingItems.map((item) => (item.product_subtype ? `PRODUCT_SUBTYPE:${item.product_subtype}` : `CODE:${item.item_code}`))),
@@ -85,12 +75,12 @@ const MaterialItemSearch = ({ onSelect, existingItems }: MaterialItemSearchProps
 
   return (
     <div className="space-y-1.5">
-      <label className={productionFieldLabelClassName}>Add an Item</label>
+      {!hideLabel ? <label className={productionFieldLabelClassName}>Add an Item</label> : null}
       <div className="relative">
         <ComponentSearchInput
           value={query}
-          isLoading={blendingCategoryQuery.isLoading || searchQuery.isLoading}
-          placeholder="Search Blending subcategory..."
+          isLoading={searchQuery.isLoading}
+          placeholder="Search item by product name, code, color, or category..."
           onChange={(value) => {
             setQuery(value);
             setOpen(true);
@@ -105,14 +95,16 @@ const MaterialItemSearch = ({ onSelect, existingItems }: MaterialItemSearchProps
           query={query}
           options={options}
           highlightedIndex={highlightedIndex}
-          isLoading={blendingCategoryQuery.isLoading || searchQuery.isLoading}
+          isLoading={searchQuery.isLoading}
           minimumCharacters={MINIMUM_SEARCH_LENGTH}
           onSelect={handleSelect}
           onHighlight={setHighlightedIndex}
         />
       </div>
       <div className={productionHelperTextClassName}>
-        Search Item Category → Blending subcategories and append them as manual material rows without saving immediately.
+        {stage
+          ? `Search product subtypes for ${stage} and select one to append it as a manual material row.`
+          : "Search product subtypes and select one to append it as a manual material row."}
       </div>
     </div>
   );

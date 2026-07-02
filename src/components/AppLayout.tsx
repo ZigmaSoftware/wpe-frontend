@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
+  Bell,
   ChevronDown,
   Database,
   LayoutDashboard,
@@ -8,10 +9,17 @@ import {
   LogOut,
   Menu,
   Search,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/AuthProvider";
 import {
@@ -20,7 +28,6 @@ import {
   DASHBOARD_SECTION_LABEL,
   flattenNavigationLinks,
   getTopLevelNavKey,
-  isNavGroupActive,
   isNavItemActive,
   type AppNavGroup,
 } from "@/lib/appNavigation";
@@ -157,7 +164,7 @@ const AppLayout = () => {
         ".wpe-brand",
         ".wpe-nav-item",
         ".wpe-search-shell",
-        ".wpe-session-chip",
+        ".wpe-profile-trigger",
         ".wpe-toolbar-iconbtn",
         ".wpe-avatar",
       ])
@@ -174,8 +181,9 @@ const AppLayout = () => {
     .slice(0, 2)
     .join("");
 
-  const sessionTitle = user?.username ?? "Authenticated user";
-  const sessionSubtitle = user?.email || `${adminMenu.length} permission group${adminMenu.length === 1 ? "" : "s"}`;
+  const sessionTitle =
+    [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() || user?.username || "Authenticated user";
+  const isDashboardRoute = topLevelKey === "dashboard";
   const routeLoadingFallback = <div className="p-6 text-sm text-muted-foreground">Loading page...</div>;
 
   if (isFullscreenFormLayout) {
@@ -317,11 +325,9 @@ const AppLayout = () => {
           </button>
 
           <div className="wpe-topnav-left">
-            <Link className="wpe-brand" to={homePath}>
+            <Link className="wpe-brand wpe-brand--edge" to={homePath}>
               <img src="/zigma.png" alt="Zigma WPE ERP" className="h-9 w-auto object-contain" />
             </Link>
-
-            <span className="wpe-nav-sep wpe-desktop-only" />
           </div>
 
           <nav className="wpe-nav-primary wpe-desktop-only">
@@ -390,7 +396,7 @@ const AppLayout = () => {
                     handleSearchNavigate(searchResults[0].to);
                   }
                 }}
-                placeholder="Search routes, masters, workspaces…"
+                placeholder="Search routes, references, batches, etc..."
               />
               {searchOpen && searchResults.length > 0 ? (
                 <div className="wpe-search-results">
@@ -420,29 +426,39 @@ const AppLayout = () => {
               ) : null}
             </div>
 
-            <div className="wpe-session-chip">
-              <span className="wpe-session-chip-icon">
-                <ShieldCheck className="h-3.5 w-3.5" />
-              </span>
-              <span className="wpe-session-chip-copy">
-                <b>{sessionTitle}</b>
-                <span>{sessionSubtitle}</span>
-              </span>
-            </div>
-
-            <button
-              type="button"
-              className="wpe-toolbar-iconbtn"
-              onClick={handleLogout}
-              disabled={loggingOut}
-              aria-label="Log out"
-            >
-              <LogOut className="h-4 w-4" />
+            <button type="button" className="wpe-toolbar-iconbtn wpe-toolbar-iconbtn--badge" aria-label="Notifications">
+              <Bell className="h-4 w-4" />
+              <span className="wpe-toolbar-badge">12</span>
             </button>
 
-            <div className="wpe-avatar">
-              <span>{initials || "U"}</span>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="wpe-profile-trigger" aria-label="Open session menu">
+                  <div className="wpe-avatar">
+                    <span>{initials || "U"}</span>
+                  </div>
+                  <span className="wpe-profile-copy">
+                    <b>{sessionTitle}</b>
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-white/70" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-xl border-[#e5eaf1] p-2 shadow-xl">
+                <DropdownMenuLabel className="px-3 py-2">
+                  <div className="text-sm font-semibold text-[#111827]">{sessionTitle}</div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-[#edf1f6]" />
+                <DropdownMenuItem
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-[#1f2937] focus:bg-[#fff5ef] focus:text-[#c2410c]"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {loggingOut ? "Signing out..." : "Log out"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
           </div>
         </div>
 
@@ -492,7 +508,7 @@ const AppLayout = () => {
 
       <main className="wpe-app-main">
         <div className="wpe-page">
-          {breadcrumbs.length > 0 ? (
+          {breadcrumbs.length > 0 && !isDashboardRoute ? (
             <div className="wpe-crumbbar">
               <div className="wpe-crumbs">
                 {breadcrumbs.map((item, index) => (
