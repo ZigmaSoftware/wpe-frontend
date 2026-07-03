@@ -1,4 +1,15 @@
 import { coreApi } from "@/lib/api";
+import {
+  createResource,
+  deleteResource,
+  fetchLookup,
+  fetchNextCode,
+  listResource,
+  resourceEntity,
+  toParams,
+  toggleResource,
+  updateResource,
+} from "@/lib/api/resourceHelpers";
 import type {
   CodeMasterRecord,
   CodeMasterWritePayload,
@@ -13,7 +24,6 @@ import type {
   LookupItem,
   MasterRecord,
   MasterWritePayload,
-  PaginatedResponse,
   ProductTypeCategoryRecord,
   ProductTypeCategoryWritePayload,
   ProductTypeSubtypeLookupItem,
@@ -33,80 +43,35 @@ import type {
 } from "@/features/wpe-masters/types";
 
 const BASE = "/api/wpe-masters";
+const listMaster = listResource;
 
-const toParams = ({ page, pageSize, search, ordering, ...rest }: TableParams) => ({
-  page,
-  page_size: pageSize,
-  search: search || undefined,
-  ordering: ordering || undefined,
-  ...rest,
-});
-
-async function listMaster<TRecord extends MasterRecord>(path: string, params: TableParams) {
-  const res = await coreApi.get<PaginatedResponse<TRecord>>(path, { params: toParams(params) });
-  const data = res.data;
-  return {
-    items: Array.isArray(data) ? data : data.results ?? [],
-    total: Array.isArray(data) ? data.length : data.count ?? 0,
-  };
+async function lookupMaster(
+  path: string,
+  params?: Record<string, string | number | boolean | null | undefined>,
+): Promise<LookupItem[]> {
+  return fetchLookup<LookupItem>(path, params);
 }
 
-async function listResource<T>(path: string, params: TableParams) {
-  const res = await coreApi.get<PaginatedResponse<T>>(path, { params: toParams(params) });
-  const data = res.data;
-  return {
-    items: Array.isArray(data) ? data : data.results ?? [],
-    total: Array.isArray(data) ? data.length : data.count ?? 0,
-  };
+async function createMaster<TRecord extends MasterRecord, TPayload extends MasterWritePayload>(
+  path: string,
+  payload: TPayload,
+) {
+  return createResource<TRecord, TPayload>(path, payload);
 }
 
-async function createResource<TResponse, TPayload>(path: string, payload: TPayload) {
-  const res = await coreApi.post<TResponse>(path, payload);
-  return res.data;
-}
-
-async function updateResource<TResponse, TPayload>(path: string, payload: TPayload) {
-  const res = await coreApi.put<TResponse>(path, payload);
-  return res.data;
-}
-
-async function lookupMaster(path: string, params?: Record<string, string | number | boolean | null | undefined>): Promise<LookupItem[]> {
-  const res = await coreApi.get<LookupItem[] | PaginatedResponse<LookupItem> | { data?: LookupItem[] }>(path, { params });
-  const data = res.data;
-  if (Array.isArray(data)) {
-    return data;
-  }
-  if (Array.isArray(data.results)) {
-    return data.results;
-  }
-  if (Array.isArray(data.data)) {
-    return data.data;
-  }
-  return [];
-}
-
-async function fetchNextCode(path: string) {
-  const res = await coreApi.get<{ code: string }>(path);
-  return res.data.code;
-}
-
-async function createMaster<TRecord extends MasterRecord, TPayload extends MasterWritePayload>(path: string, payload: TPayload) {
-  const res = await coreApi.post<TRecord>(path, payload);
-  return res.data;
-}
-
-async function updateMaster<TRecord extends MasterRecord, TPayload extends MasterWritePayload>(path: string, payload: Partial<TPayload>) {
-  const res = await coreApi.put<TRecord>(path, payload);
-  return res.data;
+async function updateMaster<TRecord extends MasterRecord, TPayload extends MasterWritePayload>(
+  path: string,
+  payload: Partial<TPayload>,
+) {
+  return updateResource<TRecord, Partial<TPayload>>(path, payload);
 }
 
 async function deleteMaster(path: string) {
-  await coreApi.delete(path);
+  await deleteResource(path);
 }
 
 async function toggleMaster<TRecord extends MasterRecord>(path: string) {
-  const res = await coreApi.patch<TRecord>(path, {});
-  return res.data;
+  return toggleResource<TRecord>(path);
 }
 
 const master = <TRecord extends MasterRecord = MasterRecord, TPayload extends MasterWritePayload = MasterWritePayload>(resource: string) => ({
@@ -124,17 +89,8 @@ const codeMaster = <TRecord extends CodeMasterRecord, TPayload extends CodeMaste
   nextCode: () => fetchNextCode(`${BASE}/${resource}/next-code/`),
   create: (payload: TPayload) => createResource<TRecord, TPayload>(`${BASE}/${resource}/`, payload),
   update: (id: number, payload: Partial<TPayload>) => updateResource<TRecord, Partial<TPayload>>(`${BASE}/${resource}/${id}/`, payload),
-  delete: (id: number) => coreApi.delete(`${BASE}/${resource}/${id}/`).then(() => undefined),
-  toggle: (id: number) => coreApi.patch<TRecord>(`${BASE}/${resource}/${id}/toggle/`, {}).then((res) => res.data),
-});
-
-const resourceEntity = <TRecord, TPayload>(resource: string) => ({
-  list: (params: TableParams) => listResource<TRecord>(`${BASE}/${resource}/`, params),
-  lookup: (params?: Record<string, string | number | boolean | null | undefined>) => lookupMaster(`${BASE}/${resource}/lookup/`, params),
-  create: (payload: TPayload) => createResource<TRecord, TPayload>(`${BASE}/${resource}/`, payload),
-  update: (id: number, payload: Partial<TPayload>) => updateResource<TRecord, Partial<TPayload>>(`${BASE}/${resource}/${id}/`, payload),
-  delete: (id: number) => coreApi.delete(`${BASE}/${resource}/${id}/`).then(() => undefined),
-  toggle: (id: number) => coreApi.patch<TRecord>(`${BASE}/${resource}/${id}/toggle/`, {}).then((res) => res.data),
+  delete: (id: number) => deleteResource(`${BASE}/${resource}/${id}/`).then(() => undefined),
+  toggle: (id: number) => toggleResource<TRecord>(`${BASE}/${resource}/${id}/toggle/`),
 });
 
 export const wpeMastersApi = {
@@ -147,14 +103,14 @@ export const wpeMastersApi = {
   designations: codeMaster<DesignationMasterRecord, DesignationMasterWritePayload>("designations"),
   roles: codeMaster<RoleMasterRecord, RoleMasterWritePayload>("roles"),
   units: {
-    ...resourceEntity<UnitMasterRecord, UnitMasterWritePayload>("units"),
+    ...resourceEntity<UnitMasterRecord, UnitMasterWritePayload>(BASE, "units"),
   },
   itemCreations: {
-    ...resourceEntity<ItemMasterRecord, ItemMasterWritePayload>("item-creations"),
+    ...resourceEntity<ItemMasterRecord, ItemMasterWritePayload>(BASE, "item-creations"),
     nextCode: () => fetchNextCode(`${BASE}/item-creations/next-code/`),
   },
   itemVariants: {
-    ...resourceEntity<ItemMasterRecord, ItemMasterWritePayload>("item-variants"),
+    ...resourceEntity<ItemMasterRecord, ItemMasterWritePayload>(BASE, "item-variants"),
     nextCode: () => fetchNextCode(`${BASE}/item-creations/next-code/`),
   },
   productTypeCategories: {
@@ -192,29 +148,7 @@ export const wpeMastersApi = {
   purchaseTypes: master("purchase-types"),
 
   users: {
-    list: async (params: TableParams) => {
-      const res = await coreApi.get<PaginatedResponse<WPEUserRecord>>(`${BASE}/users/`, { params: toParams(params) });
-      const data = res.data;
-      return {
-        items: Array.isArray(data) ? data : data.results ?? [],
-        total: Array.isArray(data) ? data.length : data.count ?? 0,
-      };
-    },
-    create: async (payload: WPEUserWritePayload) => {
-      const res = await coreApi.post<WPEUserRecord>(`${BASE}/users/`, payload);
-      return res.data;
-    },
-    update: async (id: number, payload: Partial<WPEUserWritePayload>) => {
-      const res = await coreApi.put<WPEUserRecord>(`${BASE}/users/${id}/`, payload);
-      return res.data;
-    },
-    delete: async (id: number) => {
-      await coreApi.delete(`${BASE}/users/${id}/`);
-    },
-    toggle: async (id: number) => {
-      const res = await coreApi.patch<WPEUserRecord>(`${BASE}/users/${id}/toggle/`, {});
-      return res.data;
-    },
+    ...resourceEntity<WPEUserRecord, WPEUserWritePayload>(BASE, "users"),
     lookup: () => lookupMaster(`${BASE}/users/lookup/`),
   },
 };

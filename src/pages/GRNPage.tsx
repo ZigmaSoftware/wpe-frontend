@@ -361,7 +361,7 @@ const defaultValues: GrnFormValues = {
 };
 
 const grnTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr", "next-grn", "rejected"];
-const processTabs: GrnTabValue[] = ["active", "grn-pending", "moved-to-qcr", "next-grn"];
+const processTabs: GrnTabValue[] = ["active", "moved-to-qcr", "next-grn"];
 const statusTabs: GrnTabValue[] = ["next-grn"];
 
 const completedGrnStatusOptions = ["Approved", "Partial Rejected", "Rejected"] as const;
@@ -1825,9 +1825,11 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const todayDateInputValue = today.toISOString().slice(0, 10);
   const visibleTabs = module === "process" ? processTabs : statusTabs;
   const requestedTab = searchParams.get("tab");
+  const normalizedRequestedTab =
+    module === "process" && requestedTab === "grn-pending" ? "moved-to-qcr" : requestedTab;
   const activeTab =
-    requestedTab && visibleTabs.includes(requestedTab as GrnTabValue)
-      ? (requestedTab as GrnTabValue)
+    normalizedRequestedTab && visibleTabs.includes(normalizedRequestedTab as GrnTabValue)
+      ? (normalizedRequestedTab as GrnTabValue)
       : GRN_MODULE_META[module].defaultTab;
   const [searchByTab, setSearchByTab] = useState<Record<GrnTabValue, string>>(createDefaultTabTextState);
   const [pageByTab, setPageByTab] = useState<Record<GrnTabValue, number>>(createDefaultTabPageState);
@@ -1855,6 +1857,16 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
     control: updateForm.control,
     name: "items",
   });
+
+  useEffect(() => {
+    if (module !== "process" || requestedTab !== "grn-pending") {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", "moved-to-qcr");
+    setSearchParams(nextParams, { replace: true });
+  }, [module, requestedTab, searchParams, setSearchParams]);
 
   const activeQuery = useQuery({
     queryKey: ["grn-active"],
@@ -2406,7 +2418,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                   {isActiveRecord ? (
                     <Button variant="outline" onClick={() => setMoveTarget(detailRecord)}>
                       <MoveRight className="mr-2 h-4 w-4" />
-                      Move to GRN Pending
+                      Move to QCR
                     </Button>
                   ) : null}
                 </div>
@@ -3687,9 +3699,9 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             setMoveTarget(null);
           }
         }}
-        title="Move Gate Entry to GRN Pending"
-        description={`Move ${moveTarget?.grn_no ?? "this GRN"} to GRN Pending? This completes Gate Entry and sends the record to the pending handoff queue.`}
-        confirmLabel="Move to GRN Pending"
+        title="Move Gate Entry to QCR"
+        description={`Move ${moveTarget?.grn_no ?? "this GRN"} directly to QCR? This completes Gate Entry and sends the record to the QCR queue.`}
+        confirmLabel="Move to QCR"
         onConfirm={() => {
           if (moveTarget) {
             moveMutation.mutate(moveTarget.id);

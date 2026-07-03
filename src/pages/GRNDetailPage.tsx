@@ -77,14 +77,14 @@ const GRNDetailPage = () => {
       return response.data;
     },
     onSuccess: () => {
-      toast.success("GRN moved to GRN Pending.");
+      toast.success("Gate Entry moved to QCR.");
       queryClient.invalidateQueries({ queryKey: ["grn-active"] });
       queryClient.invalidateQueries({ queryKey: ["grn-pending"] });
       queryClient.invalidateQueries({ queryKey: ["grn-moved"] });
       queryClient.invalidateQueries({ queryKey: ["qcr"] });
       navigate(GRN_PROCESS_ROUTE);
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move GRN to GRN Pending.")),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to move Gate Entry to QCR.")),
   });
 
   if (detailQuery.isLoading) {
@@ -154,7 +154,7 @@ const GRNDetailPage = () => {
                     {!isViewOnly && isActiveRecord ? (
                       <Button variant="outline" className="rounded-full" onClick={() => setMoveConfirmOpen(true)}>
                         <MoveRight className="mr-2 h-4 w-4" />
-                        Move to GRN Pending
+                        Move to QCR
                       </Button>
                     ) : null}
                   </div>
@@ -364,9 +364,9 @@ const GRNDetailPage = () => {
       <ConfirmDialog
         open={moveConfirmOpen}
         onOpenChange={setMoveConfirmOpen}
-        title="Move Gate Entry to GRN Pending"
-        description={`Move ${detailRecord.grn_no} to GRN Pending? This will complete Gate Entry and send the record to the pending handoff queue.`}
-        confirmLabel={moveMutation.isPending ? "Moving..." : "Move to GRN Pending"}
+        title="Move Gate Entry to QCR"
+        description={`Move ${detailRecord.grn_no} directly to QCR? This will complete Gate Entry and send the record to the QCR queue.`}
+        confirmLabel={moveMutation.isPending ? "Moving..." : "Move to QCR"}
         onConfirm={() => moveMutation.mutate()}
       />
     </GrnPageLayout>
