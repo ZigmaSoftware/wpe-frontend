@@ -13,7 +13,7 @@ import { canAccessAction, findScreenPermissions } from "@/features/admin-master/
 import { toast } from "@/components/ui/sonner";
 import { registerLogoutHandler } from "@/lib/api";
 import { bootstrapAuth, loginRequest, logoutRequest } from "@/lib/auth";
-import { readStoredAuth, type AuthUser } from "@/lib/token-storage";
+import { clearLastActivity, readStoredAuth, writeLastActivity, type AuthUser } from "@/lib/token-storage";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -62,6 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      clearLastActivity();
       setUser(null);
       setAdminMenu([]);
       setResolvedPermissions(null);
@@ -88,6 +89,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       active = false;
     };
   }, [navigate]);
+
+  useEffect(() => {
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const onActivity = () => {
+      if (throttleTimer) return;
+      writeLastActivity(Date.now());
+      throttleTimer = setTimeout(() => {
+        throttleTimer = null;
+      }, 30_000);
+    };
+
+    const events = ["mousemove", "keydown", "click", "scroll"] as const;
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, onActivity));
+      if (throttleTimer) clearTimeout(throttleTimer);
+    };
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({

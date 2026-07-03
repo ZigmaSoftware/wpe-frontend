@@ -1,5 +1,7 @@
 import { coreApi, clearAuthState, getAuthSnapshot, setAuthTokens, setAuthUser } from "@/lib/api";
-import type { AuthTokens, AuthUser } from "@/lib/token-storage";
+import { clearLastActivity, readLastActivity, writeLastActivity, type AuthTokens, type AuthUser } from "@/lib/token-storage";
+
+const INACTIVITY_LIMIT_MS = 60 * 60 * 1000; // 1 hour
 
 type LoginResponse = AuthTokens & {
   user: AuthUser;
@@ -15,6 +17,7 @@ export const loginRequest = async (username: string, password: string) => {
       },
       response.data.user,
     );
+    writeLastActivity(Date.now());
     return response.data;
   } catch {
     const response = await coreApi.post<LoginResponse>("/api/auth/login/", { username, password });
@@ -25,6 +28,7 @@ export const loginRequest = async (username: string, password: string) => {
       },
       response.data.user,
     );
+    writeLastActivity(Date.now());
     return response.data;
   }
 };
@@ -51,10 +55,18 @@ export const bootstrapAuth = async () => {
     return null;
   }
 
+  const lastActivity = readLastActivity();
+  if (lastActivity !== null && Date.now() - lastActivity > INACTIVITY_LIMIT_MS) {
+    clearAuthState();
+    clearLastActivity();
+    return null;
+  }
+
   try {
     return await fetchCurrentUser();
   } catch {
     clearAuthState();
+    clearLastActivity();
     return null;
   }
 };
@@ -68,5 +80,6 @@ export const logoutRequest = async () => {
     }
   } finally {
     clearAuthState();
+    clearLastActivity();
   }
 };

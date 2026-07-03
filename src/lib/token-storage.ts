@@ -25,6 +25,7 @@ export type StoredAuth = {
 };
 
 const AUTH_STORAGE_KEY = "wpe.auth";
+const ACTIVITY_KEY = "wpe.last_activity";
 
 export const readStoredAuth = (): StoredAuth => {
   if (typeof window === "undefined") {
@@ -62,4 +63,20 @@ export const clearStoredAuth = () => {
   }
 
   window.localStorage.removeItem(AUTH_STORAGE_KEY);
+};
+
+export const readLastActivity = (): number | null => {
+  if (typeof window === "undefined") return null;
+  const val = window.localStorage.getItem(ACTIVITY_KEY);
+  return val ? Number(val) : null;
+};
+
+export const writeLastActivity = (timestamp: number) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ACTIVITY_KEY, String(timestamp));
+};
+
+export const clearLastActivity = () => {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ACTIVITY_KEY);
 };

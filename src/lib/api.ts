@@ -103,14 +103,15 @@ const refreshAccessToken = async (): Promise<AuthTokens | null> => {
   }
 
   if (!refreshPromise) {
+    const currentRefreshToken = authState.refreshToken;
     refreshPromise = axios
-      .post<{ access: string }>(`${CORE_API_URL}/api/token/refresh/`, {
-        refresh: authState.refreshToken,
+      .post<{ access: string; refresh?: string }>(`${CORE_API_URL}/api/token/refresh/`, {
+        refresh: currentRefreshToken,
       })
       .then((response) => {
         const tokens = {
           access: response.data.access,
-          refresh: authState.refreshToken as string,
+          refresh: response.data.refresh ?? currentRefreshToken,
         };
         setAuthTokens(tokens);
         return tokens;

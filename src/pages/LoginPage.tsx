@@ -315,9 +315,6 @@ const LoginPage = () => {
                   </span>
                   Remember me
                 </label>
-                <button type="button" className="forgot">
-                  Forgot Password?
-                </button>
               </div>
 
               <button
