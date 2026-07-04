@@ -72,10 +72,24 @@ const renderDonutLegend = (items: DashboardDonutDatum[]) => (
 );
 
 const DashboardPage = () => {
-  const { adminMenu = [], user } = useAuth();
+  const { adminMenu = [], can, user } = useAuth();
   const [period, setPeriod] = useState<DashboardPeriod>("this-month");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const hasScreenAccess = useMemo(
+    () => (screenCodes: readonly string[]) => user?.is_staff || screenCodes.some((screenCode) => can(screenCode, "list")),
+    [can, user?.is_staff],
+  );
+
+  const canViewStoreInventory =
+    hasScreenAccess(WORKSPACE_SCREEN_CODES.storeInventory) || hasScreenAccess(WORKSPACE_SCREEN_CODES.storeStock);
+  const canViewBlendingInventory = hasScreenAccess(WORKSPACE_SCREEN_CODES.blendingStock);
+  const canViewStoreRequests = hasScreenAccess(WORKSPACE_SCREEN_CODES.requestsStoreRequest);
+  const canViewHeadApprovals = hasScreenAccess(WORKSPACE_SCREEN_CODES.blendingHeadApproval);
+  const canViewStoreApprovals = hasScreenAccess(WORKSPACE_SCREEN_CODES.storeRequest);
+  const canLoadStoreSnapshot = canViewStoreInventory || canViewBlendingInventory;
+  const canLoadRequestWidgets = canViewStoreRequests || canViewHeadApprovals || canViewStoreApprovals;
 
   const hasRouteAccess = useMemo(() => {
     return (to: string) => {
@@ -107,8 +121,14 @@ const DashboardPage = () => {
   }, [adminMenu, user?.is_staff]);
 
   const storeSnapshotQuery = useQuery({
-    queryKey: ["dashboard", "store-snapshot"],
-    queryFn: fetchDashboardStoreSnapshot,
+    queryKey: ["dashboard", "store-snapshot", canViewStoreInventory, canViewBlendingInventory],
+    queryFn: () =>
+      fetchDashboardStoreSnapshot({
+        includeStoreDashboard: canViewStoreInventory,
+        includeStoreInventory: canViewStoreInventory,
+        includeBlendingInventory: canViewBlendingInventory,
+      }),
+    enabled: canLoadStoreSnapshot,
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -143,27 +163,36 @@ const DashboardPage = () => {
     placeholderData: (previousData) => previousData,
   });
   const requestCountsQuery = useQuery({
-    queryKey: ["dashboard-request-counts"],
-    queryFn: fetchDashboardRequestCounts,
+    queryKey: ["dashboard-request-counts", canViewStoreRequests, canViewHeadApprovals, canViewStoreApprovals],
+    queryFn: () =>
+      fetchDashboardRequestCounts({
+        includeStoreRequests: canViewStoreRequests,
+        includeHeadApprovals: canViewHeadApprovals,
+        includeStoreApprovals: canViewStoreApprovals,
+      }),
+    enabled: canLoadRequestWidgets,
     retry: false,
     placeholderData: (previousData) => previousData,
   });
   const requestActivityQuery = useQuery({
-    queryKey: ["dashboard-request-activity"],
-    queryFn: fetchDashboardRequestActivity,
+    queryKey: ["dashboard-request-activity", canViewStoreRequests],
+    queryFn: () => fetchDashboardRequestActivity(canViewStoreRequests),
+    enabled: canViewStoreRequests,
     retry: false,
     placeholderData: (previousData) => previousData,
   });
 
   const degradedWidgets = useMemo(() => {
     const labels: string[] = [];
-    if (storeSnapshotQuery.isError) labels.push("Store / Inventory");
+    if (canLoadStoreSnapshot && storeSnapshotQuery.isError) labels.push("Store / Inventory");
     if (grnActiveQuery.isError || grnPendingQuery.isError) labels.push("GRN");
     if (qcrActiveQuery.isError || qcrCompletedQuery.isError) labels.push("QCR");
     if (productionQuery.isError) labels.push("Production");
-    if (requestCountsQuery.isError || requestActivityQuery.isError) labels.push("Requests");
+    if (canLoadRequestWidgets && (requestCountsQuery.isError || requestActivityQuery.isError)) labels.push("Requests");
     return labels;
   }, [
+    canLoadRequestWidgets,
+    canLoadStoreSnapshot,
     grnActiveQuery.isError,
     grnPendingQuery.isError,
     productionQuery.isError,
