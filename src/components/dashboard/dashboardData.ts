@@ -206,6 +206,18 @@ const fetchRequestActivity = async () => {
   return payload.results ?? [];
 };
 
+type DashboardStoreSnapshotOptions = {
+  includeStoreDashboard: boolean;
+  includeStoreInventory: boolean;
+  includeBlendingInventory: boolean;
+};
+
+type DashboardRequestCountOptions = {
+  includeStoreRequests: boolean;
+  includeHeadApprovals: boolean;
+  includeStoreApprovals: boolean;
+};
+
 const collectAllStageRecords = async (stage: ProductionStageValue) => {
   const pageSize = 200;
   let page = 1;
@@ -583,7 +595,11 @@ const buildRecentActivity = ({
     : REQUEST_ACTIVITY_FALLBACK;
 };
 
-export const fetchDashboardRequestCounts = async () => {
+export const fetchDashboardRequestCounts = async ({
+  includeStoreRequests,
+  includeHeadApprovals,
+  includeStoreApprovals,
+}: DashboardRequestCountOptions) => {
   const [
     pendingHeadCount,
     pendingProcessCount,
@@ -592,12 +608,22 @@ export const fetchDashboardRequestCounts = async () => {
     requestApprovals,
     releaseStock,
   ] = await Promise.all([
-    fetchCount<StoreStockRequest>("/api/blending/store-requests/", { status: "PENDING_HEAD_APPROVAL" }),
-    fetchCount<StoreStockRequest>("/api/blending/store-requests/", { status: "PENDING_REQUEST_PROCESS" }),
-    fetchCount<StoreStockRequest>("/api/blending/store-requests/", { status: "PENDING_STOCK_RELEASE" }),
-    fetchCount<StoreStockRequest>("/api/blending/head-approvals/"),
-    fetchCount<StoreStockRequest>("/api/store/requests/", { queue: "request_process" }),
-    fetchCount<StoreStockRequest>("/api/store/requests/", { queue: "release_stock" }),
+    includeStoreRequests
+      ? fetchCount<StoreStockRequest>("/api/blending/store-requests/", { status: "PENDING_HEAD_APPROVAL" })
+      : Promise.resolve(0),
+    includeStoreRequests
+      ? fetchCount<StoreStockRequest>("/api/blending/store-requests/", { status: "PENDING_REQUEST_PROCESS" })
+      : Promise.resolve(0),
+    includeStoreRequests
+      ? fetchCount<StoreStockRequest>("/api/blending/store-requests/", { status: "PENDING_STOCK_RELEASE" })
+      : Promise.resolve(0),
+    includeHeadApprovals ? fetchCount<StoreStockRequest>("/api/blending/head-approvals/") : Promise.resolve(0),
+    includeStoreApprovals
+      ? fetchCount<StoreStockRequest>("/api/store/requests/", { queue: "request_process" })
+      : Promise.resolve(0),
+    includeStoreApprovals
+      ? fetchCount<StoreStockRequest>("/api/store/requests/", { queue: "release_stock" })
+      : Promise.resolve(0),
   ]);
 
   return {
@@ -609,7 +635,8 @@ export const fetchDashboardRequestCounts = async () => {
   } satisfies DashboardRequestCounts;
 };
 
-export const fetchDashboardRequestActivity = fetchRequestActivity;
+export const fetchDashboardRequestActivity = async (enabled: boolean) =>
+  (enabled ? fetchRequestActivity() : Promise.resolve([]));
 
 export const fetchProductionDashboard = async () => {
   const [ad, bl, gl, pr] = await Promise.all([
@@ -759,16 +786,20 @@ export const buildDashboardOverview = ({
         to: STORE_RELEASE_STOCK_ROUTE,
         unavailable: !requestCounts,
       },
-    ],
+    ].filter((item) => hasRouteAccess(item.to)),
     quickActions: buildDashboardQuickActions(hasRouteAccess),
   };
 };
 
-export const fetchDashboardStoreSnapshot = async () => {
+export const fetchDashboardStoreSnapshot = async ({
+  includeStoreDashboard,
+  includeStoreInventory,
+  includeBlendingInventory,
+}: DashboardStoreSnapshotOptions) => {
   const [storeDashboard, storeInventory, blendingInventory] = await Promise.all([
-    storeApi.getDashboard(),
-    itemsInventoryApi.listSummary("store", { page: 1, pageSize: 8 }),
-    itemsInventoryApi.listSummary("blending", { page: 1, pageSize: 8 }),
+    includeStoreDashboard ? storeApi.getDashboard() : Promise.resolve(null),
+    includeStoreInventory ? itemsInventoryApi.listSummary("store", { page: 1, pageSize: 8 }) : Promise.resolve(null),
+    includeBlendingInventory ? itemsInventoryApi.listSummary("blending", { page: 1, pageSize: 8 }) : Promise.resolve(null),
   ]);
 
   return { storeDashboard, storeInventory, blendingInventory };

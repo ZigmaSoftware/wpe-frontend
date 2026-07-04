@@ -94,7 +94,7 @@ export const INVENTORY_MODULES: Record<
     historyEndpoint: (itemId) => `/api/store/inventory/${itemId}/history/`,
     emptyTitle: "No store inventory rows",
     emptyDescription: "No store stock rows matched the current item search.",
-    accessDescription: "Only store users can monitor the store inventory ledger.",
+    accessDescription: "This screen is available only to user types with Store Inventory access.",
   },
   blending: {
     label: "Blending Inventory",
@@ -102,6 +102,6 @@ export const INVENTORY_MODULES: Record<
     historyEndpoint: (itemId) => `/api/blending/inventory/${itemId}/history/`,
     emptyTitle: "No blending inventory rows",
     emptyDescription: "No blending stock rows matched the current item search.",
-    accessDescription: "Only blending users can monitor the blending inventory ledger.",
+    accessDescription: "This screen is available only to user types with Blending Stock access.",
   },
 };
