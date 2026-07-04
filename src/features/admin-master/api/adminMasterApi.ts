@@ -186,7 +186,13 @@ export const adminMasterApi = {
     const filteredResponse = await coreApi.get<LookupOption[]>("/api/wpe-masters/roles/lookup/", {
       params: { department: departmentId, department_id: departmentId },
     });
-    return filteredResponse.data;
+
+    if (filteredResponse.data.length > 0) {
+      return filteredResponse.data;
+    }
+
+    const fallbackResponse = await coreApi.get<LookupOption[]>("/api/wpe-masters/roles/lookup/");
+    return fallbackResponse.data;
   },
 
   listStaffCreations: (params: AdminTableParams) => listEntity<StaffCreationRecord>("/api/users/staff/", params),
