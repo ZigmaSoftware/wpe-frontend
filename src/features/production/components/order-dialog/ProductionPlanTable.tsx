@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ClipboardList } from "lucide-react";
 import { useFieldArray, useWatch, type UseFormReturn } from "react-hook-form";
+import { Button } from "@/components/ui/button";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -45,18 +46,32 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
   return (
     <ProductionSectionCard
       title="Production Plan"
-      description="Define the compact production plan for this order."
+      description="Define the production target for this order using the current single-line planning logic."
       tone="violet"
       icon={ClipboardList}
+      action={
+        <Button
+          type="button"
+          variant="outline"
+          className="h-8 rounded-lg border-[#e5e7eb] bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+          onClick={() =>
+            form.resetField("plan_rows", {
+              defaultValue: [{ length_mts: "", qty_mts: "", packets: "" }],
+            })
+          }
+        >
+          Clear
+        </Button>
+      }
     >
-      <div className="overflow-hidden rounded-[20px] border border-slate-200/90 bg-white">
+      <div className="overflow-hidden rounded-[18px] border border-[#d8e0e8] bg-white">
         <Table>
-          <TableHeader className="bg-[#f8fbff]">
-            <TableRow className="hover:bg-[#f8fbff]">
-              <TableHead className="w-14 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">#</TableHead>
-              <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Length (Mts)</TableHead>
-              <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Qty</TableHead>
-              <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Packets</TableHead>
+          <TableHeader className="bg-[#edf1f4]">
+            <TableRow className="hover:bg-[#edf1f4]">
+              <TableHead className="w-14 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600">#</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600">Length / Label</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600">Qty</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600">Packets</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -116,7 +131,7 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
                 </TableCell>
               </TableRow>
             ))}
-            <TableRow className="bg-[#fbfdff] hover:bg-[#fbfdff]">
+            <TableRow className="bg-[#edf1f4] hover:bg-[#edf1f4]">
               <TableCell className="text-sm font-semibold text-slate-700">Totals</TableCell>
               <TableCell className="text-sm font-semibold text-slate-950">{totals.length.toFixed(3)}</TableCell>
               <TableCell className="text-sm font-semibold text-slate-950">{totals.quantity.toFixed(3)}</TableCell>
@@ -126,7 +141,7 @@ const ProductionPlanTable = ({ form }: ProductionPlanTableProps) => {
         </Table>
       </div>
 
-      <div className="mt-3 grid gap-2 text-[11px] text-slate-500 md:grid-cols-3">
+      <div className="mt-3 grid gap-2 text-[11px] text-slate-600 md:grid-cols-3">
         <div>
           <span className={productionFieldLabelClassName}>Length</span>
           <div className="mt-1">Total planned length in metres.</div>

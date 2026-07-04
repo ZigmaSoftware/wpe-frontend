@@ -68,10 +68,10 @@ const ProductionGeneralTab = ({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <ProductionSectionCard
-          title="Production Overview"
-          description="Define the basic details for this production order."
+          title="General Information"
+          description="Define the production name, type, workflow stage, and finished goods."
           tone="amber"
           icon={Factory}
         >

@@ -1,14 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Droplets, Eye, EyeOff, Factory, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/AuthProvider";
+import "./LoginPage.css";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required."),
@@ -17,12 +15,82 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+type FeatureBadge = {
+  label: [string, string];
+  icon: JSX.Element;
+};
+
+const featureBadges: FeatureBadge[] = [
+  {
+    label: ["100%", "Recyclable"],
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M7 3l2.5 4.3-1.7 1-2.5-4.3L3 6.4 4 2h4.4L7 3Zm12 6-2.5 4.3 1.7 1 2.5-4.3L21 17.6 22 22h-4.4L19 21l-2.5-4.3-1.7 1L17.3 22H9l3-5.2-1.7-1L7.8 21H5l4-7 5-8.6 5 8.6-2.6-4.5-1.7 1L16.2 12 19 9Z" />
+        <path d="M4 14l4 7H4l-1-4 1-3Zm9-11 4 7-3.5-1L10 3h3Zm7 11-2.6 4.5H21l1-4-2-.5Z" />
+      </svg>
+    ),
+  },
+  {
+    label: ["Eco", "Friendly"],
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M11 20C7 20 4 17 4 12 4 6 10 4 20 4c0 10-3 16-9 16Z" />
+        <path d="M9 15c2-3 5-5 8-6" />
+      </svg>
+    ),
+  },
+  {
+    label: ["Weather", "Resistance"],
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M7 15a4 4 0 010-8 5 5 0 019.6-1.3A3.5 3.5 0 0117 15H7Z" />
+        <path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2" />
+      </svg>
+    ),
+  },
+  {
+    label: ["Highly", "Durable"],
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3Z" />
+        <path d="M9.5 12l2 2 3.5-4" />
+      </svg>
+    ),
+  },
+  {
+    label: ["Termite", "Resistance"],
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <ellipse cx="12" cy="13" rx="4" ry="6" />
+        <path d="M12 7V4M9 5L7 3M15 5l2-2M8 11H4M16 11h4M8 15H4M16 15h4M9 19l-2 2M15 19l2 2" />
+      </svg>
+    ),
+  },
+  {
+    label: ["Anti-Slip", "Surface"],
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="14" cy="5" r="1.6" />
+        <path d="M13 8l-3 2 2 3 1 5M13 10l4 1M10 10l-4 4M3 20h5" />
+      </svg>
+    ),
+  },
+];
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, isBootstrapping, signIn } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [isShaking, setIsShaking] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const shakeTimerRef = useRef<number | null>(null);
 
-  const form = useForm<LoginFormValues>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       username: "",
@@ -36,143 +104,241 @@ const LoginPage = () => {
     }
   }, [isAuthenticated, isBootstrapping, navigate]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const desktopQuery = window.matchMedia("(min-width: 901px)");
+    const cardElement = cardRef.current;
+
+    if (reduceMotionQuery.matches || !desktopQuery.matches || !cardElement) {
+      return undefined;
+    }
+
+    let rafId = 0;
+    const handleMouseMove = (event: MouseEvent) => {
+      window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(() => {
+        if (!cardRef.current) {
+          return;
+        }
+
+        const x = event.clientX / window.innerWidth - 0.5;
+        const y = event.clientY / window.innerHeight - 0.5;
+        cardRef.current.style.transform = `rotateY(${-6 - x * 6}deg) rotateX(${3 + y * 6}deg) translateZ(0)`;
+      });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("mousemove", handleMouseMove);
+      cardElement.style.transform = "rotateY(-6deg) rotateX(3deg)";
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (shakeTimerRef.current) {
+        window.clearTimeout(shakeTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const triggerShake = () => {
+    if (shakeTimerRef.current) {
+      window.clearTimeout(shakeTimerRef.current);
+    }
+
+    setIsShaking(false);
+
+    window.requestAnimationFrame(() => {
+      setIsShaking(true);
+      shakeTimerRef.current = window.setTimeout(() => setIsShaking(false), 450);
+    });
+  };
+
   const onSubmit = async (values: LoginFormValues) => {
     try {
       await signIn(values.username, values.password);
       toast.success(`Welcome back${values.username ? `, ${values.username}` : ""}.`);
       navigate("/app/dashboard", { replace: true });
     } catch (error) {
+      triggerShake();
       toast.error(error instanceof Error ? error.message : "Login failed. Please check your credentials.");
     }
   };
 
+  const onInvalid = () => {
+    triggerShake();
+  };
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(90deg,#dbe8f8_0%,#eef2f7_32%,#fff2e6_100%)]">
-      <div className="absolute inset-0 opacity-50">
-        <div className="mx-auto grid h-full max-w-7xl grid-cols-4 border-x border-slate-300/40">
-          <div className="border-r border-slate-300/40" />
-          <div className="border-r border-slate-300/40" />
-          <div className="border-r border-slate-300/40" />
-          <div />
-        </div>
+    <div className="wpe-login-page">
+      <div className="wpe-login-scene" aria-hidden="true">
+        <div className="fence" />
+        <div className="sweep" />
+        <div className="deck" />
+        <div className="scene-tint" />
       </div>
 
-      <div className="relative flex min-h-screen items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-[0_32px_100px_rgba(15,23,42,0.16)] lg:grid-cols-[1.05fr_0.95fr]">
-          <section className="flex flex-col justify-center px-6 py-10 sm:px-10 lg:px-14">
-            <div className="mx-auto flex w-full max-w-md flex-col items-center text-center lg:mx-0 lg:items-start lg:text-left">
-              <div className="mb-8 flex items-center gap-3">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#46ad22] shadow-lg shadow-[#46ad22]/25">
-                  <img src="/logo.png" alt="WPE logo" className="h-8 w-8 object-contain" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#46ad22]/80">WPE ERP</p>
-                  <h1 className="text-2xl font-semibold text-slate-900">Sign in</h1>
-                </div>
-              </div>
-
-              <p className="mb-8 max-w-sm text-sm leading-6 text-slate-500">
-                Use your backend credentials to access the live operations admin for Core, GRN, and QCR workflows.
-              </p>
-
-              <Form {...form}>
-                <form className="w-full space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
-                  <FormField
-                    control={form.control}
-                    name="username"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-slate-700">Username</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            className="h-12 rounded-xl border-slate-200 bg-slate-50 px-4 text-slate-900"
-                            autoComplete="username"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-slate-700">Password</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input
-                              {...field}
-                              type={showPassword ? "text" : "password"}
-                              className="h-12 rounded-xl border-slate-200 bg-slate-50 px-4 pr-12 text-slate-900"
-                              autoComplete="current-password"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword((current) => !current)}
-                              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition-colors hover:text-slate-700"
-                              aria-label={showPassword ? "Hide password" : "Show password"}
-                            >
-                              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <Button
-                    type="submit"
-                    size="lg"
-                    disabled={form.formState.isSubmitting}
-                    className="h-12 w-full rounded-xl bg-[#f59f0b] text-base font-semibold text-white shadow-lg shadow-amber-500/30 transition-transform duration-300 hover:scale-[1.01] hover:bg-[#e28f08]"
-                  >
-                    {form.formState.isSubmitting ? "Signing in..." : "Sign In"}
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </form>
-              </Form>
-
-              <div className="mt-8 flex flex-wrap gap-3 text-xs text-slate-500">
-                <span className="rounded-full bg-slate-100 px-3 py-1.5">JWT token auth</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5">Auto refresh on 401</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5">Core + GRN services</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="relative flex min-h-[320px] flex-col justify-between bg-[#2f9d27] px-6 py-8 text-white sm:px-10 lg:px-12">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(166,216,0,0.28),transparent_28%)]" />
-
-            <div className="relative flex items-center justify-between">
-              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium tracking-[0.2em] text-white/80">
-                LIVE BACKEND
-              </span>
-              <ShieldCheck className="h-5 w-5 text-white/70" />
-            </div>
-
-            <div className="relative mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center py-8">
-              <div className="relative flex h-72 w-72 items-center justify-center rounded-full border border-white/25">
-                <div className="absolute inset-5 rounded-full border border-white/20" />
-                <Factory className="h-24 w-24 text-white" strokeWidth={1.3} />
-                <Droplets className="absolute left-12 top-16 h-8 w-8 text-[#f59f0b]" strokeWidth={1.5} />
-                <Droplets className="absolute bottom-16 right-14 h-10 w-10 text-white/80" strokeWidth={1.5} />
-                <div className="absolute bottom-10 rounded-full border border-white/30 px-6 py-2 text-3xl font-light tracking-[0.28em] text-white/90">
-                  WPE
-                </div>
-              </div>
-            </div>
-
-            <div className="relative flex items-center justify-center gap-3">
-              <span className="h-1.5 w-8 rounded-full bg-[#f59f0b]" />
-              <span className="h-1.5 w-8 rounded-full bg-white/25" />
-            </div>
-          </section>
-        </div>
+      <div className="leaf-fg tl" aria-hidden="true">
+        <svg viewBox="0 0 100 100" fill="currentColor">
+          <path d="M90 10C40 10 10 40 10 90c50 0 80-30 80-80Z" />
+        </svg>
       </div>
+      <div className="leaf-fg bl" aria-hidden="true">
+        <svg viewBox="0 0 100 100" fill="currentColor">
+          <path d="M10 90C60 90 90 60 90 10 40 10 10 40 10 90Z" />
+        </svg>
+      </div>
+      <div className="leaf-fg rr" aria-hidden="true">
+        <svg viewBox="0 0 100 100" fill="currentColor">
+          <path d="M90 10C40 10 10 40 10 90c50 0 80-30 80-80Z" />
+        </svg>
+      </div>
+
+      <main className="stage">
+        <section className="hero">
+          <div className="brand">
+            <span className="logo">WPE</span>
+            <span className="bt">
+              Exterior
+              <span>Solutions</span>
+            </span>
+          </div>
+
+          <h1>
+            <span className="w1">Building a</span>
+            <br />
+            <span className="w2 g">Sustainable</span> <span className="w3">Future</span>
+          </h1>
+          <div className="accent" />
+          <p className="lead">
+            <b>Innovative. Durable. Eco-Friendly.</b>
+            <br />
+            Together for a cleaner tomorrow.
+          </p>
+
+          <div className="badges">
+            <svg className="connector" viewBox="0 0 600 70" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M15 20 C 120 70, 200 70, 300 30 S 480 -5, 585 40" />
+              <path className="pulse" d="M15 20 C 120 70, 200 70, 300 30 S 480 -5, 585 40" />
+            </svg>
+
+            {featureBadges.map((badge) => (
+              <div key={badge.label.join("-")} className="badge">
+                <span className="disc">{badge.icon}</span>
+                <span className="lbl">
+                  {badge.label[0]}
+                  <br />
+                  {badge.label[1]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="card-wrap">
+          <div ref={cardRef} className="card">
+            <svg className="card-leaf" viewBox="0 0 100 120" fill="none" aria-hidden="true">
+              <path d="M50 10C20 30 20 80 50 110 55 70 55 45 50 10Z" fill="#8a5c34" />
+              <path d="M50 20C70 40 70 85 50 110 46 75 46 50 50 20Z" fill="#5aa62f" />
+              <path d="M50 110V30" stroke="#3c6b20" strokeWidth="1.5" />
+            </svg>
+
+            <div className="clogo">WPE</div>
+            <div className="welcome">Welcome Back!</div>
+            <h2>Login to Your Account</h2>
+            <div className="cdiv" />
+
+            <form noValidate onSubmit={handleSubmit(onSubmit, onInvalid)}>
+              <div className="field">
+                <span className="ic" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+                  </svg>
+                </span>
+                <input
+                  {...register("username")}
+                  type="text"
+                  autoComplete="username"
+                  placeholder="Username or Email"
+                  spellCheck={false}
+                  aria-label="Username or Email"
+                  aria-invalid={errors.username ? "true" : "false"}
+                />
+              </div>
+
+              <div className="field">
+                <span className="ic" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="5" y="11" width="14" height="9" rx="2" />
+                    <path d="M8 11V8a4 4 0 018 0v3" />
+                  </svg>
+                </span>
+                <input
+                  {...register("password")}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="Password"
+                  aria-label="Password"
+                  aria-invalid={errors.password ? "true" : "false"}
+                />
+                <button
+                  type="button"
+                  className="peek"
+                  onClick={() => setShowPassword((current) => !current)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? <Eye /> : <EyeOff />}
+                </button>
+              </div>
+
+              <div className="row">
+                <label className="remember">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(event) => setRememberMe(event.target.checked)}
+                  />
+                  <span className="box" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12l5 5L20 6" />
+                    </svg>
+                  </span>
+                  Remember me
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                className={["login", isSubmitting ? "busy" : "", isShaking ? "shake" : ""].filter(Boolean).join(" ")}
+                disabled={isSubmitting}
+              >
+                <span className="lbl">{isSubmitting ? "Logging in" : "Login"}</span>
+                <span className="arw" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h13M12 6l6 6-6 6" />
+                  </svg>
+                </span>
+                <span className="spin" aria-hidden="true" />
+              </button>
+            </form>
+
+            <div className="cfoot">
+              <div className="t1">WPE Exterior Solutions</div>
+              <div className="t2">Sustainable Today, Better Tomorrow</div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 };
