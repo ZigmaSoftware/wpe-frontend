@@ -83,6 +83,31 @@ export type ProductionInventoryListResult = InventoryPage<ProductionInventoryRow
   totals: ProductionInventoryTotals;
 };
 
+export type ProductionInventorySummaryRow = {
+  id: string;
+  production_id: string;
+  production_order_id: number | null;
+  batch_count: number;
+  recipe: string;
+  production_type: string;
+  total_weight: string;
+  planned_weight: string;
+  uom: string;
+  created_by: string;
+  created_at: string | null;
+};
+
+export type ProductionInventorySummaryListResult = InventoryPage<ProductionInventorySummaryRow> & {
+  totals: ProductionInventoryTotals;
+};
+
+const DEFAULT_TOTALS: ProductionInventoryTotals = {
+  total_inward_weight: "0.000",
+  total_current_weight: "0.000",
+  total_outward_weight: "0.000",
+  planned_weight: "0.000",
+};
+
 export const productionInventoryApi = {
   listByStage: async (
     stage: ProductionInventoryTabStage,
@@ -91,6 +116,7 @@ export const productionInventoryApi = {
       pageSize: number;
       search?: string;
       workCenter?: string;
+      productionId?: string;
       fromDate?: string;
       toDate?: string;
       includeHistory?: boolean;
@@ -105,6 +131,7 @@ export const productionInventoryApi = {
           page_size: params.pageSize,
           search: params.search?.trim() || undefined,
           work_center: params.workCenter?.trim() || undefined,
+          production_id: params.productionId?.trim() || undefined,
           from_date: params.fromDate?.trim() || undefined,
           to_date: params.toDate?.trim() || undefined,
           include_history: params.includeHistory ? "true" : undefined,
@@ -119,18 +146,20 @@ export const productionInventoryApi = {
       total: unwrapped.count ?? 0,
       next: unwrapped.next ?? null,
       previous: unwrapped.previous ?? null,
-      totals: unwrapped.totals ?? {
-        total_inward_weight: "0.000",
-        total_current_weight: "0.000",
-        total_outward_weight: "0.000",
-        planned_weight: "0.000",
-      },
+      totals: unwrapped.totals ?? DEFAULT_TOTALS,
     };
   },
 
   listAllByStage: async (
     stage: ProductionInventoryTabStage,
-    params: { search?: string; workCenter?: string; fromDate?: string; toDate?: string; includeHistory?: boolean },
+    params: {
+      search?: string;
+      workCenter?: string;
+      productionId?: string;
+      fromDate?: string;
+      toDate?: string;
+      includeHistory?: boolean;
+    },
   ): Promise<ProductionInventoryRow[]> => {
     const pageSize = 200;
     let page = 1;
@@ -138,6 +167,73 @@ export const productionInventoryApi = {
 
     while (page <= 100) {
       const response = await productionInventoryApi.listByStage(stage, {
+        page,
+        pageSize,
+        search: params.search,
+        workCenter: params.workCenter,
+        productionId: params.productionId,
+        fromDate: params.fromDate,
+        toDate: params.toDate,
+        includeHistory: params.includeHistory,
+      });
+      items.push(...response.items);
+      if (!response.next || items.length >= response.total) break;
+      page += 1;
+    }
+
+    return items;
+  },
+
+  listSummaryByStage: async (
+    stage: ProductionStage,
+    params: {
+      page: number;
+      pageSize: number;
+      search?: string;
+      workCenter?: string;
+      fromDate?: string;
+      toDate?: string;
+      includeHistory?: boolean;
+    },
+  ): Promise<ProductionInventorySummaryListResult> => {
+    const response = await coreApi.get<ApiSuccessEnvelope<ApiPaginatedResult<ProductionInventorySummaryRow>>>(
+      "/api/inventory/production-inventory/",
+      {
+        params: {
+          stage,
+          page: params.page,
+          page_size: params.pageSize,
+          search: params.search?.trim() || undefined,
+          work_center: params.workCenter?.trim() || undefined,
+          from_date: params.fromDate?.trim() || undefined,
+          to_date: params.toDate?.trim() || undefined,
+          include_history: params.includeHistory ? "true" : undefined,
+          group_by: "production_id",
+        },
+      },
+    );
+    const unwrapped = unwrapSuccessEnvelope(response.data) as ApiPaginatedResult<ProductionInventorySummaryRow> & {
+      totals?: ProductionInventoryTotals;
+    };
+    return {
+      items: unwrapped.results ?? [],
+      total: unwrapped.count ?? 0,
+      next: unwrapped.next ?? null,
+      previous: unwrapped.previous ?? null,
+      totals: unwrapped.totals ?? DEFAULT_TOTALS,
+    };
+  },
+
+  listAllSummariesByStage: async (
+    stage: ProductionStage,
+    params: { search?: string; workCenter?: string; fromDate?: string; toDate?: string; includeHistory?: boolean },
+  ): Promise<ProductionInventorySummaryRow[]> => {
+    const pageSize = 200;
+    let page = 1;
+    const items: ProductionInventorySummaryRow[] = [];
+
+    while (page <= 100) {
+      const response = await productionInventoryApi.listSummaryByStage(stage, {
         page,
         pageSize,
         search: params.search,
