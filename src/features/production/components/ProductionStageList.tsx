@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Waypoints } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
@@ -20,6 +20,7 @@ import { exportTableData, type StoreExportColumn } from "@/features/store/utils/
 import {
   getProductionStageRoute,
   getProductionNewOrderRoute,
+  PRODUCTION_PR_LINE_CONNECT_ROUTE,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
 import {
@@ -239,20 +240,28 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
         title={headerTitle || meta.label}
         description={headerDescription || meta.pageDescription}
         actions={
-          <Button
-            onClick={() =>
-              navigate(getProductionNewOrderRoute(), {
-                state: {
-                  backTo: getProductionStageRoute(stage),
-                  entryStage: stage,
-                  ...(stage === "AD" ? { defaultWorkCenterName: DEFAULT_AD_WORK_CENTER_NAME } : {}),
-                },
-              })
-            }
-          >
-            <Plus className="mr-2 h-4 w-4" />
-              New Order
-          </Button>
+          <>
+            {stage === "PR" ? (
+              <Button variant="outline" onClick={() => navigate(PRODUCTION_PR_LINE_CONNECT_ROUTE)}>
+                <Waypoints className="mr-2 h-4 w-4" />
+                Line Connect
+              </Button>
+            ) : null}
+            <Button
+              onClick={() =>
+                navigate(getProductionNewOrderRoute(), {
+                  state: {
+                    backTo: getProductionStageRoute(stage),
+                    entryStage: stage,
+                    ...(stage === "AD" ? { defaultWorkCenterName: DEFAULT_AD_WORK_CENTER_NAME } : {}),
+                  },
+                })
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" />
+                New Order
+            </Button>
+          </>
         }
       />
 
