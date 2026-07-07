@@ -11,7 +11,7 @@ import { DEVICE_LABEL_MASTERS_ROUTE } from "@/features/device-label-masters/util
 import { GRN_PROCESS_ROUTE, GRN_ROUTE, GRN_STATUS_ROUTE } from "@/features/grn/utils/routes";
 import { INVENTORY_ROUTE, PRODUCTION_INVENTORY_ROUTE, STORE_INVENTORY_ROUTE, WAREHOUSE_INVENTORY_ROUTE } from "@/features/items/utils/routes";
 import { PRODUCTION_MASTERS_ROUTE } from "@/features/production-masters/utils/routes";
-import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_BL_BLENDING_ROUTE, PRODUCTION_GL_GRANULATION_ROUTE, PRODUCTION_PR_PRODUCTION_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
+import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_BL_BLENDING_ROUTE, PRODUCTION_GL_GRANULATION_ROUTE, PRODUCTION_PR_LINE_CONNECT_ROUTE, PRODUCTION_PR_PRODUCTION_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
 import { REQUESTS_HEAD_APPROVAL_ROUTE, REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
 import { RECIPE_BOM_MASTERS_ROUTE } from "@/features/recipe-bom-masters/utils/routes";
 import {
@@ -230,6 +230,7 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   [PRODUCTION_BL_BLENDING_ROUTE]: WORKSPACE_SCREEN_CODES.productionBlBlending,
   [PRODUCTION_GL_GRANULATION_ROUTE]: WORKSPACE_SCREEN_CODES.productionGlGranulation,
   [PRODUCTION_PR_PRODUCTION_ROUTE]: WORKSPACE_SCREEN_CODES.productionPrProduction,
+  [PRODUCTION_PR_LINE_CONNECT_ROUTE]: WORKSPACE_SCREEN_CODES.productionPrProduction,
   [REQUESTS_STORE_REQUEST_ROUTE]: WORKSPACE_SCREEN_CODES.requestsStoreRequest,
   [REQUESTS_HEAD_APPROVAL_ROUTE]: WORKSPACE_SCREEN_CODES.blendingHeadApproval,
   [STORE_STOCK_ROUTE]: WORKSPACE_SCREEN_CODES.storeStock,

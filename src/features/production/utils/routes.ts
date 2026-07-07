@@ -6,6 +6,7 @@ export const PRODUCTION_AD_WEIGHTAGE_ROUTE = `${PRODUCTION_ROUTE}/ad-weightage`;
 export const PRODUCTION_BL_BLENDING_ROUTE = `${PRODUCTION_ROUTE}/bl-blending`;
 export const PRODUCTION_GL_GRANULATION_ROUTE = `${PRODUCTION_ROUTE}/gl-granulation`;
 export const PRODUCTION_PR_PRODUCTION_ROUTE = `${PRODUCTION_ROUTE}/pr-production`;
+export const PRODUCTION_PR_LINE_CONNECT_ROUTE = `${PRODUCTION_PR_PRODUCTION_ROUTE}/line-connect`;
 export const PRODUCTION_NEW_ORDER_ROUTE = `${PRODUCTION_ROUTE}/neworder`;
 export const PRODUCTION_MANAGE_BATCH_ROUTE_PREFIX = `${PRODUCTION_ROUTE}/manage-batch`;
 
@@ -27,6 +28,7 @@ export const getProductionManageBatchRoute = (orderId: number | string, stage?: 
   `${PRODUCTION_MANAGE_BATCH_ROUTE_PREFIX}/${orderId}${stage ? `?stage=${stage}` : ""}`;
 export const getProductionEditRoute = (orderId: number | string) => `${PRODUCTION_ROUTE}/${orderId}/edit`;
 export const getProductionNewOrderRoute = () => PRODUCTION_NEW_ORDER_ROUTE;
+export const getProductionPrLineConnectRoute = () => PRODUCTION_PR_LINE_CONNECT_ROUTE;
 
 export type ProductionWorkspaceModuleDefinition = {
   to: string;
@@ -65,6 +67,7 @@ export const productionWorkspaceModuleDefinitions: ProductionWorkspaceModuleDefi
     icon: Layers,
     label: "PR - Production",
     description: "Review final production-stage orders with running and closed records.",
+    activeMatchPaths: [PRODUCTION_PR_PRODUCTION_ROUTE],
   },
 ];
 
