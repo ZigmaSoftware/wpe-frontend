@@ -1,6 +1,6 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { ProductionMachine } from "@/lib/types";
-import ProductionOrderForm from "./ProductionOrderForm";
+import ProductionOrderForm from "./ProductionOrderFormView";
 import type { CreateProductionOrderPayload } from "./productionOrderForm";
 
 type ProductionOrderDialogProps = {

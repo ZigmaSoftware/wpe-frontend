@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LookupOption } from "@/features/admin-master/types";
 import type { ProductionMachine } from "@/lib/types";
-import { buildInchargeOptions, mapProductionTypeOptions } from "./ProductionOrderForm";
+import { buildInchargeOptions, mapProductionTypeOptions } from "./ProductionOrderFormView";
 import {
   createProductionOrderDefaultValues,
   isMaterialRowConfigured,
