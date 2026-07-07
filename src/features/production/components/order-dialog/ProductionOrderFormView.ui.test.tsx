@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
-import ProductionOrderForm, { buildWorkCenterOptions } from "./ProductionOrderForm";
+import ProductionOrderForm, { buildWorkCenterOptions } from "./ProductionOrderFormView";
 import { createProductionOrderDefaultValues } from "./productionOrderForm";
 
 const { coreApiGet } = vi.hoisted(() => ({
