@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
@@ -20,7 +20,6 @@ import { exportTableData, type StoreExportColumn } from "@/features/store/utils/
 import {
   getProductionStageRoute,
   getProductionNewOrderRoute,
-  getProductionPrLineConnectRoute,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
 import {
@@ -240,29 +239,20 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
         title={headerTitle || meta.label}
         description={headerDescription || meta.pageDescription}
         actions={
-          <div className={`flex gap-2 ${stage === "PR" ? "flex-col items-stretch sm:items-end" : "items-center"}`}>
-            <Button
-              onClick={() =>
-                navigate(getProductionNewOrderRoute(), {
-                  state: {
-                    backTo: getProductionStageRoute(stage),
-                    entryStage: stage,
-                    ...(stage === "AD" ? { defaultWorkCenterName: DEFAULT_AD_WORK_CENTER_NAME } : {}),
-                  },
-                })
-              }
-            >
-              <Plus className="mr-2 h-4 w-4" />
+          <Button
+            onClick={() =>
+              navigate(getProductionNewOrderRoute(), {
+                state: {
+                  backTo: getProductionStageRoute(stage),
+                  entryStage: stage,
+                  ...(stage === "AD" ? { defaultWorkCenterName: DEFAULT_AD_WORK_CENTER_NAME } : {}),
+                },
+              })
+            }
+          >
+            <Plus className="mr-2 h-4 w-4" />
               New Order
-            </Button>
-
-            {stage === "PR" ? (
-              <Button type="button" onClick={() => navigate(getProductionPrLineConnectRoute())}>
-                <Link2 className="mr-2 h-4 w-4" />
-                Line Connect
-              </Button>
-            ) : null}
-          </div>
+          </Button>
         }
       />
 

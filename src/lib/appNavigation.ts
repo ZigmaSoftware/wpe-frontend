@@ -27,7 +27,6 @@ import { inventoryWorkspaceModuleDefinitions } from "@/features/items/utils/rout
 import {
   PRODUCTION_MANAGE_BATCH_ROUTE_PREFIX,
   PRODUCTION_NEW_ORDER_ROUTE,
-  PRODUCTION_PR_LINE_CONNECT_ROUTE,
   PRODUCTION_ROUTE,
   productionWorkspaceModuleDefinitions,
 } from "@/features/production/utils/routes";
@@ -410,14 +409,6 @@ export const buildBreadcrumbs = (pathname: string, navigation: AppNavigation): A
       { label: WORKSPACE_SECTION_LABEL },
       { label: "Production", to: PRODUCTION_ROUTE },
       { label: "New Order" },
-    ];
-  }
-
-  if (pathname === PRODUCTION_PR_LINE_CONNECT_ROUTE) {
-    return [
-      { label: WORKSPACE_SECTION_LABEL },
-      { label: "Production", to: PRODUCTION_ROUTE },
-      { label: "Line Connect" },
     ];
   }
 
