@@ -58,6 +58,7 @@ import {
   PRODUCTION_AD_WEIGHTAGE_ROUTE,
   PRODUCTION_BL_BLENDING_ROUTE,
   PRODUCTION_GL_GRANULATION_ROUTE,
+  PRODUCTION_PR_LINE_CONNECT_ROUTE,
   PRODUCTION_PR_PRODUCTION_ROUTE,
   PRODUCTION_ROUTE,
 } from "@/features/production/utils/routes";
@@ -163,6 +164,7 @@ const StoreStockItemPage = lazy(() => import("@/pages/StoreStockItemPage"));
 const ProductionManageBatchPage = lazy(() => import("@/pages/ProductionManageBatchPage"));
 const ProductionEditOrderPage = lazy(() => import("@/pages/ProductionEditOrderPage"));
 const ProductionNewOrderPage = lazy(() => import("@/pages/ProductionNewOrderPage"));
+const ProductionLineConnectPage = lazy(() => import("@/pages/ProductionLineConnectPage"));
 const ProductionPage = lazy(() => import("@/pages/ProductionPage"));
 const ProductionStagePage = lazy(() => import("@/pages/ProductionStagePage"));
 
@@ -348,6 +350,14 @@ const App = () => (
                       element={
                         <Suspense fallback={<RouteLoadingFallback />}>
                           <ProductionStagePage stage="PR" />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path={PRODUCTION_PR_LINE_CONNECT_ROUTE}
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionLineConnectPage />
                         </Suspense>
                       }
                     />
