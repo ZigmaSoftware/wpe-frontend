@@ -3,7 +3,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, FileSpreadsheet, MoveRight, Plus, RefreshCw } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
@@ -1812,6 +1812,7 @@ type GRNPageProps = {
 const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [payloadRecord, setPayloadRecord] = useState<GrnRecord | null>(null);
@@ -1822,7 +1823,14 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const today = new Date();
   today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
   const todayDateInputValue = today.toISOString().slice(0, 10);
-  const [activeTab, setActiveTab] = useState<GrnTabValue>(GRN_MODULE_META[module].defaultTab);
+  const visibleTabs = module === "process" ? processTabs : statusTabs;
+  const requestedTab = searchParams.get("tab");
+  const normalizedRequestedTab =
+    module === "process" && requestedTab === "grn-pending" ? "moved-to-qcr" : requestedTab;
+  const activeTab =
+    normalizedRequestedTab && visibleTabs.includes(normalizedRequestedTab as GrnTabValue)
+      ? (normalizedRequestedTab as GrnTabValue)
+      : GRN_MODULE_META[module].defaultTab;
   const [searchByTab, setSearchByTab] = useState<Record<GrnTabValue, string>>(createDefaultTabTextState);
   const [pageByTab, setPageByTab] = useState<Record<GrnTabValue, number>>(createDefaultTabPageState);
   const [pageSizeByTab, setPageSizeByTab] = useState<Record<GrnTabValue, StorePageSizeValue>>(createDefaultTabPageSizeState);
@@ -1849,6 +1857,16 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
     control: updateForm.control,
     name: "items",
   });
+
+  useEffect(() => {
+    if (module !== "process" || requestedTab !== "grn-pending") {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", "moved-to-qcr");
+    setSearchParams(nextParams, { replace: true });
+  }, [module, requestedTab, searchParams, setSearchParams]);
 
   const activeQuery = useQuery({
     queryKey: ["grn-active"],
@@ -2045,9 +2063,6 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
     qcrCompletionMutation.mutate({ id: qcrEntryTarget.id, items: qcrEntryItems });
   };
 
-  useEffect(() => {
-    setActiveTab(GRN_MODULE_META[module].defaultTab);
-  }, [module]);
   const activeRecords = useMemo(() => activeQuery.data?.data ?? [], [activeQuery.data?.data]);
   const pendingRecords = useMemo(() => pendingQuery.data?.data ?? [], [pendingQuery.data?.data]);
   const movedRecords = useMemo(() => movedQuery.data?.data ?? [], [movedQuery.data?.data]);
@@ -2283,11 +2298,19 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
   const currentPageSize = pageSizeByTab[activeTab];
   const currentDraftFilters = draftFiltersByTab[activeTab];
   const currentRows = rowsByTab[activeTab];
-  const visibleTabs = module === "process" ? processTabs : statusTabs;
   const showCompletedStatusFilter = activeTab === "next-grn";
   const isPendingMoveReady =
     pendingMoveItems.length > 0 &&
     pendingMoveItems.every((item) => item.receivedQty.trim() && item.storeInId.trim() && isValidReceivedQty(item.receivedQty, item.sentQty));
+  const handleTabChange = (value: GrnTabValue) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (value === GRN_MODULE_META[module].defaultTab) {
+      nextParams.delete("tab");
+    } else {
+      nextParams.set("tab", value);
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const handleToolbarExport = (format: StoreExportFormat) => {
     if (activeTab === "active" || activeTab === "grn-pending") {
@@ -2395,7 +2418,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                   {isActiveRecord ? (
                     <Button variant="outline" onClick={() => setMoveTarget(detailRecord)}>
                       <MoveRight className="mr-2 h-4 w-4" />
-                      Move to GRN Pending
+                      Move to QCR
                     </Button>
                   ) : null}
                 </div>
@@ -2952,7 +2975,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
 
       {!activeQuery.isLoading && !pendingQuery.isLoading && !qcrActiveQuery.isLoading && !qcrCompletedQuery.isLoading &&
        !activeQuery.isError && !pendingQuery.isError && !qcrActiveQuery.isError && !qcrCompletedQuery.isError && !locationLookupQuery.isError ? (
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as GrnTabValue)} className="space-y-4">
+        <Tabs value={activeTab} onValueChange={(value) => handleTabChange(value as GrnTabValue)} className="space-y-4">
           <TabsList>
             {visibleTabs.includes("active") ? <TabsTrigger value="active">Gate Entry</TabsTrigger> : null}
             {visibleTabs.includes("grn-pending") ? <TabsTrigger value="grn-pending">GRN Pending</TabsTrigger> : null}
@@ -3676,9 +3699,9 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             setMoveTarget(null);
           }
         }}
-        title="Move Gate Entry to GRN Pending"
-        description={`Move ${moveTarget?.grn_no ?? "this GRN"} to GRN Pending? This completes Gate Entry and sends the record to the pending handoff queue.`}
-        confirmLabel="Move to GRN Pending"
+        title="Move Gate Entry to QCR"
+        description={`Move ${moveTarget?.grn_no ?? "this GRN"} directly to QCR? This completes Gate Entry and sends the record to the QCR queue.`}
+        confirmLabel="Move to QCR"
         onConfirm={() => {
           if (moveTarget) {
             moveMutation.mutate(moveTarget.id);
@@ -3687,7 +3710,7 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
       />
 
       <Dialog open={Boolean(qcrEntryTarget)} onOpenChange={(open) => !open && closeQcrEntryDialog()}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>QCR Entry</DialogTitle>
             <DialogDescription>
@@ -3717,15 +3740,15 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-border/70 bg-card">
-              <Table className="min-w-[980px]">
+              <Table className="min-w-[860px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16 text-center">S.no</TableHead>
-                    <TableHead>Item Name</TableHead>
-                    <TableHead className="w-40">Sent Qty</TableHead>
-                    <TableHead className="w-48">Accepted Qty</TableHead>
-                    <TableHead className="w-56">Rejected Qty</TableHead>
-                    <TableHead className="w-80">Reason</TableHead>
+                    <TableHead className="w-[280px]">Item Name</TableHead>
+                    <TableHead className="w-32">Sent Qty</TableHead>
+                    <TableHead className="w-44">Accepted Qty</TableHead>
+                    <TableHead className="w-44">Rejected Qty</TableHead>
+                    <TableHead className="w-44">Reason</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -3734,9 +3757,6 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                       <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                       <TableCell>
                         <div className="font-semibold text-foreground">{item.itemName}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {item.itemCode || item.itemId || "-"}{item.unit ? ` | ${item.unit}` : ""}{item.storeInName ? ` | Store In: ${item.storeInName}` : ""}
-                        </div>
                       </TableCell>
                       <TableCell className="font-semibold text-foreground">
                         {item.sentQty || "-"}{item.unit ? ` ${item.unit}` : ""}
@@ -3806,9 +3826,8 @@ const GRNPage = ({ module = "process" }: GRNPageProps) => {
                           <Label htmlFor={`qcr-reason-${index}`} className="sr-only">
                             Reason{item.rejectedQty.trim() && Number(item.rejectedQty) > 0 ? " required" : ""}
                           </Label>
-                          <Textarea
+                          <Input
                             id={`qcr-reason-${index}`}
-                            rows={2}
                             value={item.reason}
                             onChange={(event) => {
                               const nextValue = event.target.value;

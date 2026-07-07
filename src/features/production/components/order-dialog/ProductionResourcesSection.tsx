@@ -37,7 +37,7 @@ const ProductionResourcesSection = ({
 }: ProductionResourcesSectionProps) => (
   <ProductionSectionCard
     title="Schedule & Resources"
-    description="Assign when and where this production will take place."
+    description="Assign the schedule, work center, machine, and shift incharge for this production run."
     tone="blue"
     icon={CalendarDays}
   >

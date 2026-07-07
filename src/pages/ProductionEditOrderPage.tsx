@@ -8,6 +8,7 @@ import {
   type ProductionDialogTab,
   type ProductionOrderDetail,
 } from "@/features/production/components/order-dialog/productionOrderForm";
+import { getProductionStageUi } from "@/features/production/components/order-dialog/productionStageUi";
 import {
   PRODUCTION_AD_WEIGHTAGE_ROUTE,
   PRODUCTION_BL_BLENDING_ROUTE,
@@ -59,6 +60,7 @@ const ProductionEditOrderPage = () => {
     effectiveVisibleTabs[0] === "output"
       ? effectiveOutputStage
       : null;
+  const outputOnlyStageUi = outputOnlyStage ? getProductionStageUi(outputOnlyStage) : null;
   const backRoute = typeof locationState?.backTo === "string" && locationState.backTo.trim().length > 0
     ? locationState.backTo
     : outputOnlyStage === "BL"
@@ -67,15 +69,9 @@ const ProductionEditOrderPage = () => {
         ? PRODUCTION_GL_GRANULATION_ROUTE
       : PRODUCTION_AD_WEIGHTAGE_ROUTE;
   const backLabel =
-    outputOnlyStage === "AD"
-      ? "Back to AD - Manage Batch"
-      : outputOnlyStage === "BL"
-        ? "Back to BL - Manage Batch"
-        : outputOnlyStage === "GL"
-          ? "Back to GL - Manage Batch"
-          : outputOnlyStage === "PR"
-            ? "Back to PR - Manage Batch"
-        : undefined;
+    outputOnlyStageUi
+      ? outputOnlyStageUi.manageBatchBackLabel
+      : undefined;
 
   const machinesQ = useQuery({
     queryKey: ["production-machines"],
@@ -129,15 +125,12 @@ const ProductionEditOrderPage = () => {
   const order = orderQ.data!;
   const initialValues = mapOrderDetailToFormValues(order, machines);
   const formTitle =
-    outputOnlyStage === "AD"
-      ? `Batch Creation — ${order.production_id}`
-      : outputOnlyStage === "BL"
-        ? `Bin Assign — ${order.production_id}`
-        : outputOnlyStage === "GL"
-          ? `Bag Assign — ${order.production_id}`
-          : outputOnlyStage === "PR"
-            ? `Line Assign — ${order.production_id}`
-        : `Edit Order — ${order.production_id}`;
+    outputOnlyStageUi
+      ? `${outputOnlyStageUi.assignmentTitle} — ${order.production_id}`
+      : `Edit Order — ${order.production_id}`;
+  const formSubtitle = outputOnlyStageUi
+    ? outputOnlyStageUi.assignmentSubtitle
+    : "Review and update the selected production order.";
 
   return (
     <ProductionOrderPageLayout onBack={() => navigate(backRoute)} backLabel={backLabel}>
@@ -150,6 +143,7 @@ const ProductionEditOrderPage = () => {
         initialValues={initialValues}
         orderId={Number(id)}
         formTitle={formTitle}
+        formSubtitle={formSubtitle}
         submitLabel="Save Changes"
         showFooterActions={!(outputOnlyStage === "AD" || outputOnlyStage === "BL" || outputOnlyStage === "GL" || outputOnlyStage === "PR")}
         initialTab={effectiveInitialTab}

@@ -235,6 +235,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<StoreStockRequest | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StoreStockRequest | null>(null);
   const [productPickerItem, setProductPickerItem] = useState<StoreStockRecord | null>(null);
@@ -344,7 +345,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
     },
     onSuccess: () => {
       toast.success(editingRequest ? "Store request updated." : "Store request submitted.");
-      handleDialogOpenChange(false);
+      closeRequestDialog();
       void queryClient.invalidateQueries({ queryKey: ["blending"] });
     },
     onError: (error) => {
@@ -386,7 +387,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
     },
     onSuccess: () => {
       toast.success("Store request updated.");
-      handleDialogOpenChange(false);
+      closeRequestDialog();
       void queryClient.invalidateQueries({ queryKey: ["blending"] });
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update the store request.")),
@@ -457,15 +458,26 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
     !requestStockMutation.isPending &&
     !updateRequestMutation.isPending;
 
+  const resetRequestDialogState = () => {
+    setEditingRequest(null);
+    form.reset(createAdditiveRequestDefaults(requestDepartment));
+    setProductPickerItem(null);
+    setProductPickerResetKey(0);
+    setSelectedAdditiveItems([]);
+  };
+
+  const closeRequestDialog = () => {
+    setDialogOpen(false);
+    setCancelConfirmOpen(false);
+    resetRequestDialogState();
+  };
+
   const handleDialogOpenChange = (open: boolean) => {
     setDialogOpen(open);
 
     if (!open) {
-      setEditingRequest(null);
-      form.reset(createAdditiveRequestDefaults(requestDepartment));
-      setProductPickerItem(null);
-      setProductPickerResetKey(0);
-      setSelectedAdditiveItems([]);
+      setCancelConfirmOpen(false);
+      resetRequestDialogState();
     }
   };
 
@@ -490,6 +502,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
   useEffect(() => {
     if (module !== "requests") {
       setDialogOpen(false);
+      setCancelConfirmOpen(false);
       setEditingRequest(null);
       form.reset(createAdditiveRequestDefaults(requestDepartment));
       setProductPickerItem(null);
@@ -973,7 +986,13 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
       {module === "transactions" ? renderTransactionView() : null}
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent
+          className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+          onPointerDownOutside={(event) => {
+            event.preventDefault();
+            setCancelConfirmOpen(true);
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{editingRequest ? "Edit Store Request" : "Create Store Request"}</DialogTitle>
             <DialogDescription>
@@ -1013,7 +1032,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
                 ) : null}
 
                 {itemsFieldArray.fields.length ? (
-                  <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="max-h-80 overflow-auto rounded-lg border border-border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1185,7 +1204,7 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)}>
+                <Button type="button" variant="outline" onClick={closeRequestDialog}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={!canSubmitAdditiveRequest}>
@@ -1211,6 +1230,20 @@ const BlendingPage = ({ module = "stock" }: BlendingPageProps) => {
             setPreviewRequest(null);
           }
         }}
+      />
+
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelConfirmOpen(false);
+          }
+        }}
+        title="Cancel store request"
+        description="Are you sure you want to cancel?"
+        cancelLabel="No"
+        confirmLabel="Yes"
+        onConfirm={closeRequestDialog}
       />
 
       <ConfirmDialog

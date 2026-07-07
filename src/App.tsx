@@ -391,7 +391,7 @@ const App = () => (
                     <Route path="/app/grn/:id/edit" element={<LegacyGrnEditRedirect />} />
                     <Route path="/app/grn/:id/view" element={<LegacyGrnViewRedirect />} />
                     <Route path="/app/grn/:id" element={<LegacyGrnDetailRedirect />} />
-                    <Route path="/app/qcr" element={<Navigate to={GRN_PROCESS_ROUTE} replace />} />
+                    <Route path="/app/qcr" element={<Navigate to={`${GRN_PROCESS_ROUTE}?tab=moved-to-qcr`} replace />} />
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.grnStatus} />}>
                     <Route path={GRN_STATUS_ROUTE} element={<GRNPage module="status" />} />

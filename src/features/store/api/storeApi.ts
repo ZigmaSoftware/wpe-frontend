@@ -3,16 +3,8 @@ import type { LookupOption } from "@/features/admin-master/types";
 import { itemsInventoryApi } from "@/features/items/api/inventoryApi";
 import { coreApi } from "@/lib/api";
 import { unwrapSuccessEnvelope } from "@/lib/api-helpers";
-import type { ApiPaginatedResult, ApiSuccessEnvelope, StoreStockRequest, StoreTransactionRecord } from "@/lib/types";
-
-type PaginatedPage<T> = {
-  items: T[];
-  total: number;
-  next: string | null;
-  previous: string | null;
-};
-
-type PaginatedEnvelope<T> = ApiSuccessEnvelope<ApiPaginatedResult<T>> | ApiPaginatedResult<T>;
+import { collectAllPages, normalizePaginatedEnvelope, type PaginatedEnvelope } from "@/lib/api/pagination";
+import type { ApiSuccessEnvelope, StoreStockRequest, StoreTransactionRecord } from "@/lib/types";
 
 export type StoreDashboardSummary = {
   warehouse_summary: Array<{
@@ -26,38 +18,6 @@ export type StoreDashboardSummary = {
   approved_store_requests: number;
   stock_ledger_entries: number;
   warehouses: number;
-};
-
-const normalizePaginatedEnvelope = <T,>(payload: PaginatedEnvelope<T>): PaginatedPage<T> => {
-  const normalized = unwrapSuccessEnvelope(payload);
-
-  return {
-    items: normalized.results ?? [],
-    total: normalized.count ?? 0,
-    next: normalized.next ?? null,
-    previous: normalized.previous ?? null,
-  };
-};
-
-const collectAllPages = async <T,>(fetchPage: (page: number, pageSize: number) => Promise<PaginatedPage<T>>) => {
-  const pageSize = 200;
-  let page = 1;
-  let total = 0;
-  const items: T[] = [];
-
-  while (page <= 100) {
-    const response = await fetchPage(page, pageSize);
-    items.push(...response.items);
-    total = response.total;
-
-    if (!response.next || items.length >= total) {
-      break;
-    }
-
-    page += 1;
-  }
-
-  return items;
 };
 
 export const storeApi = {

@@ -1,286 +1,453 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight } from "lucide-react";
-import { Link } from "react-router-dom";
-import PageHeader from "@/components/PageHeader";
-import StatCard from "@/components/StatCard";
-import { LoadingState } from "@/components/QueryState";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { coreApi, grnApi } from "@/lib/api";
-import { buildAppNavigation } from "@/lib/appNavigation";
-import { normalizeGrnResponse, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
-import type {
-  ApiPaginatedResult,
-  ApiSuccessEnvelope,
-  Contact,
-  GrnListResponse,
-  QcrRecord,
-  StoreStockRecord,
-} from "@/lib/types";
+import { CalendarDays } from "lucide-react";
+import { format } from "date-fns";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import DashboardChartCard from "@/components/dashboard/DashboardChartCard";
+import DashboardKpiCard from "@/components/dashboard/DashboardKpiCard";
+import PendingApprovalsCard from "@/components/dashboard/PendingApprovalsCard";
+import QuickActionsCard from "@/components/dashboard/QuickActionsCard";
+import RecentActivityCard from "@/components/dashboard/RecentActivityCard";
+import {
+  buildDashboardOverview,
+  fetchDashboardRequestActivity,
+  fetchDashboardRequestCounts,
+  fetchDashboardStoreSnapshot,
+  fetchGrnActiveRecords,
+  fetchGrnPendingRecords,
+  fetchProductionDashboard,
+  fetchQcrActiveRecords,
+  fetchQcrCompletedRecords,
+  getDashboardPeriodLabel,
+} from "@/components/dashboard/dashboardData";
+import type { DashboardDonutDatum, DashboardFooterStat, DashboardPeriod } from "@/components/dashboard/types";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { hasAnyScreenAccess } from "@/features/admin-master/utils/permissions";
+import { GRN_PROCESS_ROUTE } from "@/features/grn/utils/routes";
+import { REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
+import { WORKSPACE_SCREEN_CODES, getRouteScreenCodes } from "@/lib/routePermissions";
 import { useAuth } from "@/providers/AuthProvider";
 
-const getListFromResponse = <T,>(payload: Contact[] | { data: Contact[] } | unknown) => {
-  try {
-    return normalizeListResponse<T>(payload);
-  } catch {
-    return [];
+const PERIOD_OPTIONS: DashboardPeriod[] = ["this-month", "this-week", "today"];
+
+const normalizeRouteForAccess = (to: string) => to.split("?")[0] || to;
+
+const formatYAxis = (value: number) => {
+  if (value >= 1000) {
+    const rounded = value >= 10000 ? Math.round(value / 1000) : Number((value / 1000).toFixed(1));
+    return `${rounded}K`;
   }
+
+  return value;
 };
 
-const getStoreCount = (payload: ApiSuccessEnvelope<ApiPaginatedResult<StoreStockRecord>>) => {
-  try {
-    return unwrapSuccessEnvelope(payload).count ?? 0;
-  } catch {
-    return 0;
-  }
-};
-
-const getGrnRecords = (payload: GrnListResponse) => {
-  try {
-    return normalizeGrnResponse(payload).data;
-  } catch {
-    return [];
-  }
-};
+const renderDonutLegend = (items: DashboardDonutDatum[]) => (
+  <div className="space-y-3">
+    {items.map((item) => (
+      <div key={item.label} className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+          <span className="truncate text-sm text-[#334155]">{item.label}</span>
+        </div>
+        <span className="shrink-0 text-sm font-semibold text-[#111827]">
+          {item.value} ({item.percent}%)
+        </span>
+      </div>
+    ))}
+  </div>
+);
 
 const DashboardPage = () => {
-  const { adminMenu = [], user } = useAuth();
-  const navigation = useMemo(
-    () => buildAppNavigation(adminMenu, { hasFullAccess: Boolean(user?.is_staff) }),
-    [adminMenu, user?.is_staff],
+  const { adminMenu = [], can, user } = useAuth();
+  const [period, setPeriod] = useState<DashboardPeriod>("this-month");
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const hasScreenAccess = useMemo(
+    () => (screenCodes: readonly string[]) => user?.is_staff || screenCodes.some((screenCode) => can(screenCode, "list")),
+    [can, user?.is_staff],
   );
-  const grnLink = navigation.workspace.find((group) => group.key === "grn")?.items[0]?.to ?? null;
-  const productionLink = navigation.workspace.find((group) => group.key === "production")?.items[0]?.to ?? null;
 
-  const overviewQuery = useQuery({
-    queryKey: ["dashboard-overview"],
-    queryFn: async () => {
-      const [
-        contactsResult,
-        storeStockResult,
-        blendingStockResult,
-        grnActiveResult,
-        qcrActiveResult,
-      ] = await Promise.allSettled([
-        coreApi.get<Contact[] | { data: Contact[] }>("/api/contacts/contacts/"),
-        coreApi.get<ApiSuccessEnvelope<ApiPaginatedResult<StoreStockRecord>>>("/api/store/stock/", {
-          params: { page_size: 1 },
-        }),
-        coreApi.get<ApiSuccessEnvelope<ApiPaginatedResult<StoreStockRecord>>>("/api/store/stock/", {
-          params: { warehouse_code: "BLENDING", page_size: 1 },
-        }),
-        grnApi.get<GrnListResponse>("/api/grn/"),
-        grnApi.get<QcrRecord[]>("/api/qcr/"),
-      ]);
+  const canViewStoreInventory =
+    hasScreenAccess(WORKSPACE_SCREEN_CODES.storeInventory) || hasScreenAccess(WORKSPACE_SCREEN_CODES.storeStock);
+  const canViewBlendingInventory = hasScreenAccess(WORKSPACE_SCREEN_CODES.blendingStock);
+  const canViewStoreRequests = hasScreenAccess(WORKSPACE_SCREEN_CODES.requestsStoreRequest);
+  const canViewHeadApprovals = hasScreenAccess(WORKSPACE_SCREEN_CODES.blendingHeadApproval);
+  const canViewStoreApprovals = hasScreenAccess(WORKSPACE_SCREEN_CODES.storeRequest);
+  const canLoadStoreSnapshot = canViewStoreInventory || canViewBlendingInventory;
+  const canLoadRequestWidgets = canViewStoreRequests || canViewHeadApprovals || canViewStoreApprovals;
 
-      const failedSources: string[] = [];
+  const hasRouteAccess = useMemo(() => {
+    return (to: string) => {
+      if (user?.is_staff) {
+        return true;
+      }
 
-      if (contactsResult.status === "rejected") failedSources.push("Contacts");
-      if (storeStockResult.status === "rejected") failedSources.push("Store Stock");
-      if (blendingStockResult.status === "rejected") failedSources.push("Blending Stock");
-      if (grnActiveResult.status === "rejected") failedSources.push("GRN");
-      if (qcrActiveResult.status === "rejected") failedSources.push("QCR");
+      const path = normalizeRouteForAccess(to);
+      const directScreenCodes = getRouteScreenCodes(path);
 
-      return {
-        contacts:
-          contactsResult.status === "fulfilled" ? getListFromResponse<Contact>(contactsResult.value.data) : [],
-        storeStockCount:
-          storeStockResult.status === "fulfilled" ? getStoreCount(storeStockResult.value.data) : 0,
-        blendingStockCount:
-          blendingStockResult.status === "fulfilled" ? getStoreCount(blendingStockResult.value.data) : 0,
-        grn: grnActiveResult.status === "fulfilled" ? getGrnRecords(grnActiveResult.value.data) : [],
-        qcr: qcrActiveResult.status === "fulfilled" ? qcrActiveResult.value.data : [],
-        failedSources,
-      };
-    },
+      if (directScreenCodes.length > 0) {
+        return hasAnyScreenAccess(adminMenu, directScreenCodes);
+      }
+
+      if (path === "/app/production/neworder") {
+        return hasAnyScreenAccess(adminMenu, WORKSPACE_SCREEN_CODES.productionAdWeightage);
+      }
+
+      if (path === "/app/grn/process/new") {
+        return hasAnyScreenAccess(adminMenu, WORKSPACE_SCREEN_CODES.grnProcess);
+      }
+
+      if (path.startsWith("/app/contacts/")) {
+        return hasAnyScreenAccess(adminMenu, WORKSPACE_SCREEN_CODES.contacts);
+      }
+
+      return false;
+    };
+  }, [adminMenu, user?.is_staff]);
+
+  const storeSnapshotQuery = useQuery({
+    queryKey: ["dashboard", "store-snapshot", canViewStoreInventory, canViewBlendingInventory],
+    queryFn: () =>
+      fetchDashboardStoreSnapshot({
+        includeStoreDashboard: canViewStoreInventory,
+        includeStoreInventory: canViewStoreInventory,
+        includeBlendingInventory: canViewBlendingInventory,
+      }),
+    enabled: canLoadStoreSnapshot,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+  const grnActiveQuery = useQuery({
+    queryKey: ["grn-active"],
+    queryFn: fetchGrnActiveRecords,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+  const grnPendingQuery = useQuery({
+    queryKey: ["grn-pending"],
+    queryFn: fetchGrnPendingRecords,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+  const qcrActiveQuery = useQuery({
+    queryKey: ["qcr", "active"],
+    queryFn: fetchQcrActiveRecords,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+  const qcrCompletedQuery = useQuery({
+    queryKey: ["qcr", "completed"],
+    queryFn: fetchQcrCompletedRecords,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+  const productionQuery = useQuery({
+    queryKey: ["production-dashboard"],
+    queryFn: fetchProductionDashboard,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+  const requestCountsQuery = useQuery({
+    queryKey: ["dashboard-request-counts", canViewStoreRequests, canViewHeadApprovals, canViewStoreApprovals],
+    queryFn: () =>
+      fetchDashboardRequestCounts({
+        includeStoreRequests: canViewStoreRequests,
+        includeHeadApprovals: canViewHeadApprovals,
+        includeStoreApprovals: canViewStoreApprovals,
+      }),
+    enabled: canLoadRequestWidgets,
+    retry: false,
+    placeholderData: (previousData) => previousData,
+  });
+  const requestActivityQuery = useQuery({
+    queryKey: ["dashboard-request-activity", canViewStoreRequests],
+    queryFn: () => fetchDashboardRequestActivity(canViewStoreRequests),
+    enabled: canViewStoreRequests,
+    retry: false,
+    placeholderData: (previousData) => previousData,
   });
 
-  if (overviewQuery.isLoading) {
-    return <LoadingState label="Loading dashboard..." />;
-  }
+  const degradedWidgets = useMemo(() => {
+    const labels: string[] = [];
+    if (canLoadStoreSnapshot && storeSnapshotQuery.isError) labels.push("Store / Inventory");
+    if (grnActiveQuery.isError || grnPendingQuery.isError) labels.push("GRN");
+    if (qcrActiveQuery.isError || qcrCompletedQuery.isError) labels.push("QCR");
+    if (productionQuery.isError) labels.push("Production");
+    if (canLoadRequestWidgets && (requestCountsQuery.isError || requestActivityQuery.isError)) labels.push("Requests");
+    return labels;
+  }, [
+    canLoadRequestWidgets,
+    canLoadStoreSnapshot,
+    grnActiveQuery.isError,
+    grnPendingQuery.isError,
+    productionQuery.isError,
+    qcrActiveQuery.isError,
+    qcrCompletedQuery.isError,
+    requestActivityQuery.isError,
+    requestCountsQuery.isError,
+    storeSnapshotQuery.isError,
+  ]);
 
-  const {
-    contacts = [],
-    storeStockCount = 0,
-    blendingStockCount = 0,
-    grn = [],
-    qcr = [],
-    failedSources = [],
-  } = overviewQuery.data ?? {};
-  const hasConnectionIssues = failedSources.length > 0;
+  const overview = useMemo(
+    () =>
+      buildDashboardOverview({
+        period,
+        storeDashboard: storeSnapshotQuery.data?.storeDashboard ?? null,
+        storeInventory: storeSnapshotQuery.data?.storeInventory ?? null,
+        blendingInventory: storeSnapshotQuery.data?.blendingInventory ?? null,
+        grnActive: grnActiveQuery.data ?? null,
+        grnPending: grnPendingQuery.data ?? null,
+        qcrActive: qcrActiveQuery.data ?? null,
+        qcrCompleted: qcrCompletedQuery.data ?? null,
+        production: productionQuery.data ?? null,
+        requestCounts: requestCountsQuery.data ?? null,
+        requestActivity: requestActivityQuery.data ?? null,
+        hasRouteAccess,
+      }),
+    [
+      grnActiveQuery.data,
+      grnPendingQuery.data,
+      hasRouteAccess,
+      period,
+      productionQuery.data,
+      qcrActiveQuery.data,
+      qcrCompletedQuery.data,
+      requestActivityQuery.data,
+      requestCountsQuery.data,
+      storeSnapshotQuery.data,
+    ],
+  );
+
+  const dateLabel = format(selectedDate, "d MMMM yyyy, EEEE");
+  const stockFooterStats: DashboardFooterStat[] = [
+    { id: "total-stock", label: "Total Stock", value: overview.stockSummary.totalStock },
+    { id: "stores", label: "Stores", value: overview.stockSummary.stores },
+    { id: "low-stock", label: "Low Stock Alerts", value: overview.stockSummary.lowStockAlerts, tone: "danger" },
+  ];
+  const grnFooterStats: DashboardFooterStat[] = [
+    { id: "total-qty", label: "Total Qty Received", value: overview.grnOverview.totalQtyReceived },
+    { id: "suppliers", label: "Suppliers", value: overview.grnOverview.suppliers },
+    { id: "on-time", label: "On-time Rate", value: overview.grnOverview.onTimeRate, tone: "success" },
+  ];
+  const activityViewAllTo = hasRouteAccess(GRN_PROCESS_ROUTE) ? GRN_PROCESS_ROUTE : REQUESTS_STORE_REQUEST_ROUTE;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Zigma · WPE ERP"
-        title="Operations Dashboard"
-        description="Current backend counts, active workspace routes, and receiving visibility from the live WPE application."
-        actions={
-          <>
-            {grnLink ? (
-              <Button asChild variant="outline">
-                <Link to={grnLink}>Open GRN</Link>
-              </Button>
-            ) : null}
-            {productionLink ? (
-              <Button asChild>
-                <Link to={productionLink}>Open Production</Link>
-              </Button>
-            ) : null}
-          </>
-        }
-      />
+    <div className="space-y-6 pb-2 pt-4 md:pt-5">
+      <section className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-[2rem] font-semibold tracking-[-0.04em] text-[#121926]">Dashboard</h1>
+          <p className="mt-2 text-sm text-[#64748b]">Real-time overview of operations and key performance indicators.</p>
+        </div>
 
-      {hasConnectionIssues ? (
-        <div className="rounded-[10px] border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-sm">
-          Some dashboard sources are currently unavailable: {failedSources.join(", ")}. The shell stays available, and
-          any reachable sections will continue to render.
+        <div className="flex w-full flex-col gap-3 pt-1 sm:mt-2 sm:w-auto sm:flex-row sm:pt-0">
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex min-w-[230px] items-center gap-3 rounded-2xl border border-[#e5eaf1] bg-white px-4 py-3 text-left shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)] transition-colors hover:bg-[#f8fafc]"
+                aria-label="Choose dashboard date"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f8fafc] text-[#64748b]">
+                  <CalendarDays className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-medium text-[#1e293b]">{dateLabel}</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto rounded-2xl border border-[#e5eaf1] p-0 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.24)]">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => {
+                  if (!date) {
+                    return;
+                  }
+                  setSelectedDate(date);
+                  setCalendarOpen(false);
+                }}
+                initialFocus
+                className="rounded-2xl"
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Select value={period} onValueChange={(value) => setPeriod(value as DashboardPeriod)}>
+            <SelectTrigger className="h-[58px] min-w-[148px] rounded-2xl border-[#e5eaf1] bg-white px-4 text-sm font-medium text-[#1e293b] shadow-[0_12px_32px_-24px_rgba(15,23,42,0.16)]">
+              <SelectValue>{getDashboardPeriodLabel(period)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {PERIOD_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {getDashboardPeriodLabel(option)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
+
+      {degradedWidgets.length ? (
+        <div className="rounded-2xl border border-[#f5d8c7] bg-[#fff8f3] px-4 py-3 text-sm text-[#9a3412]">
+          Some live widgets are currently using fallback or unavailable data: {degradedWidgets.join(", ")}.
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Contacts" value={contacts.length} hint={`${contacts.filter((contact) => contact.is_active).length} active`} />
-        <StatCard label="Store Stock Rows" value={storeStockCount} hint="Persisted warehouse balances" />
-        <StatCard label="Blending Stock Rows" value={blendingStockCount} hint="Blending inventory rows" />
-        <StatCard label="Gate Entry" value={grn.length} hint="Active goods receipt records" />
-        <StatCard label="QCR Queue" value={qcr.length} hint="Current quality review records" />
-      </div>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {overview.kpis.map((item) => (
+          <DashboardKpiCard key={item.id} item={item} />
+        ))}
+      </section>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[1.3fr_1fr]">
-        <section className="wpe-surface">
-          <div className="wpe-surface-head">
-            <div>
-              <div className="wpe-surface-title">Workspace Modules</div>
-              <div className="wpe-surface-subtitle">
-                Mega-menu navigation generated from the current active route definitions.
+      <section className="grid gap-5 xl:grid-cols-[1.05fr_1.15fr_1fr]">
+        <DashboardChartCard
+          title="Production Stage Overview"
+          period={period}
+          onPeriodChange={setPeriod}
+          unavailable={overview.production.unavailable}
+          className="xl:min-h-[420px]"
+        >
+          <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="relative h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={overview.production.breakdown}
+                    dataKey="value"
+                    nameKey="label"
+                    innerRadius={64}
+                    outerRadius={92}
+                    strokeWidth={0}
+                    paddingAngle={2}
+                  >
+                    {overview.production.breakdown.map((entry) => (
+                      <Cell key={entry.label} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number, _name, payload: { payload: DashboardDonutDatum }) => [`${value}`, payload.payload.label]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <div className="font-display text-[2rem] font-semibold tracking-[-0.04em] text-[#111827]">{overview.production.totalBatches}</div>
+                <div className="text-sm text-[#6b7280]">Total Batches</div>
               </div>
             </div>
-            <div className="ml-auto">
-              <Badge variant="outline">{navigation.workspace.length} groups</Badge>
-            </div>
-          </div>
-          <div className="wpe-surface-body">
-            <div className="wpe-module-grid">
-              {navigation.workspace.map((group) => (
-                <Link key={group.key} to={group.items[0]?.to ?? "#"} className="wpe-module-card">
-                  <span className="wpe-module-icon">
-                    <group.icon className="h-4 w-4" />
-                  </span>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="wpe-module-card-title">{group.label}</div>
-                    <div className="wpe-module-card-text">
-                      {group.items.map((item) => item.label).join(" · ")}
-                    </div>
-                    <div className="wpe-module-card-meta">{group.items.length} active route entries</div>
-                  </div>
-                  <ArrowUpRight className="mt-0.5 h-4 w-4 text-[var(--wpe-faint)]" />
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
 
-        <section className="wpe-surface">
-          <div className="wpe-surface-head">
-            <div>
-              <div className="wpe-surface-title">GRN / QCR Snapshot</div>
-              <div className="wpe-surface-subtitle">Live items from the receiving pipeline and quality queue.</div>
+            <div className="space-y-4">
+              {renderDonutLegend(overview.production.breakdown)}
             </div>
           </div>
-          <div className="wpe-surface-body">
-            {grn.length === 0 && qcr.length === 0 ? (
-              <div className="rounded-[7px] border border-dashed border-border bg-secondary/50 px-4 py-5 text-sm text-muted-foreground">
-                No GRN or QCR records are available to display right now.
-              </div>
-            ) : (
-              <div className="wpe-list-stack">
-                {grn.slice(0, 3).map((record) => (
-                  <div key={`grn-${record.id}`} className="wpe-list-row">
-                    <div className="wpe-list-row-copy">
-                      <div className="wpe-list-row-title">{record.grn_no}</div>
-                      <div className="wpe-list-row-meta">
-                        {record.supplier_details.trade_name || record.trade_name || "Unknown supplier"}
-                      </div>
-                    </div>
-                    <div className="wpe-list-row-code">{record.process_status}</div>
-                  </div>
-                ))}
-                {qcr.slice(0, 2).map((record) => (
-                  <div key={`qcr-${record.id}`} className="wpe-list-row">
-                    <div className="wpe-list-row-copy">
-                      <div className="wpe-list-row-title">{record.grn_reference_no}</div>
-                      <div className="wpe-list-row-meta">QCR unique id: {record.unique_id}</div>
-                    </div>
-                    <div className="wpe-list-row-code">{record.status}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <section className="wpe-surface">
-          <div className="wpe-surface-head">
-            <div>
-              <div className="wpe-surface-title">Recent Contacts</div>
-              <div className="wpe-surface-subtitle">Directly from the Core contacts endpoint.</div>
+          <div className="mt-6 border-t border-[#edf1f6] pt-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-[#64748b]">Completion Rate</div>
+                <div className="flex items-center gap-3">
+                  <span className="font-display text-[1.35rem] font-semibold text-[#16a34a]">{overview.production.completionRate}%</span>
+                  <div className="w-[260px] max-w-full">
+                    <Progress value={overview.production.completionRate} className="h-2.5 bg-[#edf1f6]" />
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-[#64748b]">vs last month</div>
+                <div className="font-display text-[1.35rem] font-semibold text-[#16a34a]">+8%</div>
+              </div>
             </div>
           </div>
-          <div className="wpe-surface-body">
-            {contacts.length === 0 ? (
-              <div className="rounded-[7px] border border-dashed border-border bg-secondary/50 px-4 py-5 text-sm text-muted-foreground">
-                No recent contacts are available right now.
-              </div>
-            ) : (
-              <div className="wpe-list-stack">
-                {contacts.slice(0, 5).map((contact) => (
-                  <div key={contact.id} className="wpe-list-row">
-                    <div className="wpe-list-row-copy">
-                      <div className="wpe-list-row-title">{contact.name}</div>
-                      <div className="wpe-list-row-meta">
-                        {contact.category} · {contact.company_name || "No company"}
-                      </div>
-                    </div>
-                    <div className="wpe-list-row-code">{contact.ref_code}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+        </DashboardChartCard>
 
-        <section className="wpe-surface">
-          <div className="wpe-surface-head">
-            <div>
-              <div className="wpe-surface-title">Master Domains</div>
-              <div className="wpe-surface-subtitle">Current master groups exposed through active routes and permissions.</div>
-            </div>
-            <div className="ml-auto">
-              <Badge variant="outline">{navigation.masters.length} groups</Badge>
-            </div>
+        <DashboardChartCard
+          title="Stock Summary (By Store)"
+          period={period}
+          onPeriodChange={setPeriod}
+          unavailable={overview.stockSummary.unavailable}
+          footerStats={stockFooterStats}
+          className="xl:min-h-[420px]"
+        >
+          <div className="h-[285px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={overview.stockSummary.bars} margin={{ top: 18, right: 10, left: 0, bottom: 24 }}>
+                <CartesianGrid vertical={false} stroke="#e9eef4" />
+                <XAxis
+                  dataKey="shortLabel"
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                  angle={-30}
+                  height={52}
+                  textAnchor="end"
+                  tick={{ fontSize: 11, fill: "#6b7280" }}
+                />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#6b7280" }} tickFormatter={formatYAxis} />
+                <Tooltip formatter={(value: number) => `${value.toLocaleString("en-IN")} Kgs`} />
+                <Bar dataKey="value" radius={[10, 10, 2, 2]} fill="#f97316" maxBarSize={34} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-          <div className="wpe-surface-body">
-            <div className="wpe-module-grid">
-              {navigation.masters.map((group) => (
-                <Link key={group.key} to={group.to ?? group.items[0]?.to ?? "#"} className="wpe-module-card">
-                  <span className="wpe-module-icon">
-                    <group.icon className="h-4 w-4" />
-                  </span>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="wpe-module-card-title">{group.label}</div>
-                    <div className="wpe-module-card-text">{group.items.slice(0, 3).map((item) => item.label).join(" · ")}</div>
-                    <div className="wpe-module-card-meta">{group.items.length} screens linked</div>
-                  </div>
-                  <ArrowUpRight className="mt-0.5 h-4 w-4 text-[var(--wpe-faint)]" />
-                </Link>
-              ))}
+        </DashboardChartCard>
+
+        <DashboardChartCard
+          title="GRN Overview"
+          period={period}
+          onPeriodChange={setPeriod}
+          unavailable={overview.grnOverview.unavailable}
+          footerStats={grnFooterStats}
+          className="xl:min-h-[420px]"
+        >
+          <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="relative h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={overview.grnOverview.breakdown}
+                    dataKey="value"
+                    nameKey="label"
+                    innerRadius={64}
+                    outerRadius={92}
+                    strokeWidth={0}
+                    paddingAngle={2}
+                  >
+                    {overview.grnOverview.breakdown.map((entry) => (
+                      <Cell key={entry.label} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number, _name, payload: { payload: DashboardDonutDatum }) => [`${value}`, payload.payload.label]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <div className="font-display text-[2rem] font-semibold tracking-[-0.04em] text-[#111827]">{overview.grnOverview.totalGrns}</div>
+                <div className="text-sm text-[#6b7280]">Total GRNs</div>
+              </div>
             </div>
+
+            <div className="space-y-4">{renderDonutLegend(overview.grnOverview.breakdown)}</div>
           </div>
-        </section>
-      </div>
+        </DashboardChartCard>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.08fr_1fr_1fr]">
+        <RecentActivityCard items={overview.recentActivity} viewAllTo={activityViewAllTo} />
+        <PendingApprovalsCard items={overview.pendingApprovals.filter((item) => hasRouteAccess(item.to))} />
+        <QuickActionsCard actions={overview.quickActions} />
+      </section>
     </div>
   );
 };

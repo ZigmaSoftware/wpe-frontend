@@ -2,7 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
-import ProductionOrderForm, { buildWorkCenterOptions } from "./ProductionOrderFormView";
+import ProductionOrderForm, { buildWorkCenterOptions } from "./ProductionOrderForm";
+import { createProductionOrderDefaultValues } from "./productionOrderForm";
 
 const { coreApiGet } = vi.hoisted(() => ({
   coreApiGet: vi.fn(async (url: string) => {
@@ -139,6 +140,30 @@ describe("ProductionOrderForm UI shell", () => {
     expect(screen.queryByText("Sections")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /general/i })).not.toBeInTheDocument();
     expect(screen.getByTestId("output-section-state")).toHaveTextContent("Output Section Active");
+  });
+
+  it("shows generated production id state in create mode and saved state in edit mode", async () => {
+    const createModeView = renderForm();
+
+    await waitFor(() => expect(screen.getByText("Generated")).toBeVisible());
+    expect(screen.getByText("PROD-1001")).toBeInTheDocument();
+    createModeView.unmount();
+
+    const initialValues = createProductionOrderDefaultValues();
+    initialValues.production_id = "BL08";
+    initialValues.production_for = "WPE";
+    initialValues.production_type = "WPE Blend Production";
+    initialValues.plan_rows = [{ length_mts: "1.000", qty_mts: "2.000", packets: "1" }];
+    initialValues.resources.work_center = "20";
+    initialValues.resources.shift_incharge = "30";
+
+    renderForm({
+      initialValues,
+      orderId: 8,
+    });
+
+    await waitFor(() => expect(screen.getByText("Saved")).toBeVisible());
+    expect(screen.getByText("BL08")).toBeInTheDocument();
   });
 
   it("does not mount the output section until the output tab is selected", async () => {

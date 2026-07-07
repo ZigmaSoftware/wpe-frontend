@@ -3,12 +3,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { CheckCircle2, ChevronDown, ChevronRight, PackageCheck, QrCode, Scale } from "lucide-react";
 import { useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { useScannerInput } from "@/hooks/useScannerInput";
 import { useWeightStream } from "@/hooks/useWeightStream";
 import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
-import { SCALE_BRIDGE_LOCAL_STATUS_URL } from "@/lib/env";
+import { CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS, SCALE_BRIDGE_LOCAL_STATUS_URL } from "@/lib/env";
 import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
 import { BATCH_STATUS_CLASSES, StatusBadge } from "@/pages/productionShared";
 import ProductionSectionCard from "./ProductionSectionCard";
@@ -33,6 +35,12 @@ import QRLabelPreviewModal, { type QRLabelContext } from "./QRLabelPreviewModal"
 
 const TOLERANCE_PERCENT = 0.5;
 const LOCAL_BRIDGE_STATUS_POLL_MS = 2000;
+const OUTPUT_SCALE_IDENTITY_STORAGE_KEY = "wpe.outputScaleBridgeIdentity";
+const LEGACY_SCALE_IDENTITY_KEYS = {
+  deviceId: "wpe.scale.device_id",
+  workstationId: "wpe.scale.workstation_id",
+  bridgeClientId: "wpe.scale.bridge_client_id",
+};
 type DemoMaterial = {
   client_id: string;
   item_code: string;
@@ -43,14 +51,14 @@ type DemoMaterial = {
 };
 
 const DEMO_MATERIALS: DemoMaterial[] = [
-  { client_id: "demo-1", item_code: "WGO:2001", item_name: "Wood Powder", per_unit_quantity: "-0.40", tolerance_kg: "0.40", sequence: 1 },
-  { client_id: "demo-2", item_code: "HOP:2020", item_name: "HDPE Chips (White)", per_unit_quantity: "22.900", sequence: 2 },
-  { client_id: "demo-3", item_code: "CAL:2001", item_name: "Calcium carbonate", per_unit_quantity: "4.600", sequence: 3 },
-  { client_id: "demo-4", item_code: "COU:2003", item_name: "Coupling agent", per_unit_quantity: "3.500", sequence: 4 },
-  { client_id: "demo-5", item_code: "LUB:2007", item_name: "Lubricant", per_unit_quantity: "1.100", sequence: 5 },
-  { client_id: "demo-6", item_code: "REG:2019", item_name: "Regrind Material - HDPE", per_unit_quantity: "22.900", sequence: 6 },
-  { client_id: "demo-7", item_code: "ANT:2005", item_name: "Antioxidant Agent", per_unit_quantity: "0.140", sequence: 7 },
-  { client_id: "demo-8", item_code: "REG:2025", item_name: "Regrind Material - LDPE", per_unit_quantity: "9.200", sequence: 8 },
+  // { client_id: "demo-1", item_code: "WGO:2001", item_name: "Wood Powder", per_unit_quantity: "-0.40", tolerance_kg: "0.40", sequence: 1 },
+  // { client_id: "demo-2", item_code: "HOP:2020", item_name: "HDPE Chips (White)", per_unit_quantity: "22.900", sequence: 2 },
+  // { client_id: "demo-3", item_code: "CAL:2001", item_name: "Calcium carbonate", per_unit_quantity: "4.600", sequence: 3 },
+  // { client_id: "demo-4", item_code: "COU:2003", item_name: "Coupling agent", per_unit_quantity: "3.500", sequence: 4 },
+  // { client_id: "demo-5", item_code: "LUB:2007", item_name: "Lubricant", per_unit_quantity: "1.100", sequence: 5 },
+  // { client_id: "demo-6", item_code: "REG:2019", item_name: "Regrind Material - HDPE", per_unit_quantity: "22.900", sequence: 6 },
+  // { client_id: "demo-7", item_code: "ANT:2005", item_name: "Antioxidant Agent", per_unit_quantity: "0.140", sequence: 7 },
+  // { client_id: "demo-8", item_code: "REG:2025", item_name: "Regrind Material - LDPE", per_unit_quantity: "9.200", sequence: 8 },
 ];
 
 const EMPTY_FORM_MATERIAL_ROWS: ProductionOrderFormValues["materials"]["rows"] = [];
@@ -93,6 +101,110 @@ type LocalBridgeStatus = {
   unit?: string | null;
   last_seen?: string | null;
   error?: string | null;
+};
+
+type BridgeIdentity = {
+  bridgeClientId: string;
+  workstationId: string;
+  deviceId: string | null;
+};
+
+type BridgeIdentityFormState = {
+  bridgeClientId: string;
+  workstationId: string;
+  deviceId: string;
+};
+
+const fetchLocalBridgeStatus = async () => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 1500);
+
+  try {
+    const response = await fetch(`${SCALE_BRIDGE_LOCAL_STATUS_URL}/status`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Local bridge status request failed with ${response.status}`);
+    }
+
+    return (await response.json()) as LocalBridgeStatus;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
+
+const normalizeBridgeIdentity = (
+  bridgeClientId?: string | null,
+  workstationId?: string | null,
+  deviceId?: string | null,
+): BridgeIdentity | null => {
+  const normalizedBridgeClientId = bridgeClientId?.trim() || null;
+  const normalizedWorkstationId = workstationId?.trim() || null;
+  const normalizedDeviceId = deviceId?.trim() || null;
+
+  if (!normalizedBridgeClientId || !normalizedWorkstationId) {
+    return null;
+  }
+
+  return {
+    bridgeClientId: normalizedBridgeClientId,
+    workstationId: normalizedWorkstationId,
+    deviceId: normalizedDeviceId,
+  };
+};
+
+const bridgeIdentityToFormState = (identity: BridgeIdentity | null): BridgeIdentityFormState => ({
+  bridgeClientId: identity?.bridgeClientId ?? "",
+  workstationId: identity?.workstationId ?? "",
+  deviceId: identity?.deviceId ?? "",
+});
+
+const readStoredBridgeIdentity = (): BridgeIdentity | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawIdentity = window.localStorage.getItem(OUTPUT_SCALE_IDENTITY_STORAGE_KEY);
+    if (rawIdentity) {
+      const parsed = JSON.parse(rawIdentity) as Partial<BridgeIdentity>;
+      const identity = normalizeBridgeIdentity(
+        parsed.bridgeClientId,
+        parsed.workstationId,
+        parsed.deviceId,
+      );
+      if (identity) {
+        return identity;
+      }
+    }
+  } catch {
+    window.localStorage.removeItem(OUTPUT_SCALE_IDENTITY_STORAGE_KEY);
+  }
+
+  return normalizeBridgeIdentity(
+    window.localStorage.getItem(LEGACY_SCALE_IDENTITY_KEYS.bridgeClientId),
+    window.localStorage.getItem(LEGACY_SCALE_IDENTITY_KEYS.workstationId),
+    window.localStorage.getItem(LEGACY_SCALE_IDENTITY_KEYS.deviceId),
+  );
+};
+
+const writeStoredBridgeIdentity = (identity: BridgeIdentity | null) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!identity) {
+    window.localStorage.removeItem(OUTPUT_SCALE_IDENTITY_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(
+    OUTPUT_SCALE_IDENTITY_STORAGE_KEY,
+    JSON.stringify(identity),
+  );
 };
 
 const findMatchingBatchEntry = (batch: ProductionBatch, component: OutputCaptureComponent) => {
@@ -198,18 +310,40 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const capturedSessionKeysRef = useRef(new Set<string>());
   const activeBatchIdRef = useRef<number | null>(null);
   const { processScan } = useScannerInput();
+  const [storedBridgeIdentity, setStoredBridgeIdentity] = useState<BridgeIdentity | null>(() =>
+    readStoredBridgeIdentity(),
+  );
+  const [bridgeIdentityForm, setBridgeIdentityForm] = useState<BridgeIdentityFormState>(() =>
+    bridgeIdentityToFormState(readStoredBridgeIdentity()),
+  );
   const localBridgeStatusQuery = useQuery({
     queryKey: ["local-scale-bridge-status", SCALE_BRIDGE_LOCAL_STATUS_URL],
-    enabled: queriesEnabled,
+    enabled: queriesEnabled && CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS,
     refetchInterval: queriesEnabled ? LOCAL_BRIDGE_STATUS_POLL_MS : false,
     retry: false,
-    queryFn: async () => {
-      const response = await coreApi.get<LocalBridgeStatus>(`${SCALE_BRIDGE_LOCAL_STATUS_URL}/status`, {
-        timeout: 1500,
-      });
-      return response.data;
-    },
+    queryFn: fetchLocalBridgeStatus,
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const identityFromUrl = normalizeBridgeIdentity(
+      params.get("bridge_client_id") ?? params.get("client_id"),
+      params.get("workstation_id"),
+      params.get("device_id") ?? params.get("scale_device_id"),
+    );
+
+    if (!identityFromUrl) {
+      return;
+    }
+
+    writeStoredBridgeIdentity(identityFromUrl);
+    setStoredBridgeIdentity(identityFromUrl);
+    setBridgeIdentityForm(bridgeIdentityToFormState(identityFromUrl));
+  }, []);
 
   const stageBatchesQuery = useQuery({
     queryKey: ["production-output-batches", persistedOrderId, outputStage],
@@ -518,6 +652,44 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       ? activeComponent.maxWeightKg
       : fallbackMaxWeight;
 
+  const localBridgeStatus = localBridgeStatusQuery.data ?? null;
+  const localBridgeIdentity = useMemo(
+    () =>
+      normalizeBridgeIdentity(
+        localBridgeStatus?.bridge_client_id,
+        localBridgeStatus?.workstation_id,
+        localBridgeStatus?.device_id,
+      ),
+    [localBridgeStatus],
+  );
+  const activeBridgeIdentity = localBridgeIdentity ?? storedBridgeIdentity;
+  const isUsingLocalBridgeStatus = localBridgeIdentity !== null;
+
+  const saveBridgeIdentity = useCallback(() => {
+    const identity = normalizeBridgeIdentity(
+      bridgeIdentityForm.bridgeClientId,
+      bridgeIdentityForm.workstationId,
+      bridgeIdentityForm.deviceId,
+    );
+
+    if (!identity) {
+      toast.error("Enter workstation and bridge client before saving scale identity.");
+      return;
+    }
+
+    writeStoredBridgeIdentity(identity);
+    setStoredBridgeIdentity(identity);
+    setBridgeIdentityForm(bridgeIdentityToFormState(identity));
+    toast.success("Scale identity saved for this browser.");
+  }, [bridgeIdentityForm]);
+
+  const clearBridgeIdentity = useCallback(() => {
+    writeStoredBridgeIdentity(null);
+    setStoredBridgeIdentity(null);
+    setBridgeIdentityForm(bridgeIdentityToFormState(null));
+    toast.success("Scale identity cleared for this browser.");
+  }, []);
+
   const {
     weight,
     connected,
@@ -535,33 +707,16 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     preferBridge: true,
     bridgeDemandEnabled: isActive,
     tolerancePercent: TOLERANCE_PERCENT,
-    enabled: isActive && localBridgeStatusQuery.isSuccess,
-    scaleDeviceId: localBridgeStatusQuery.data?.device_id ?? null,
-    bridgeClientId: localBridgeStatusQuery.data?.bridge_client_id ?? null,
-    workstationId: localBridgeStatusQuery.data?.workstation_id ?? null,
+    enabled: isActive && activeBridgeIdentity !== null,
+    scaleDeviceId: activeBridgeIdentity?.deviceId ?? null,
+    bridgeClientId: activeBridgeIdentity?.bridgeClientId ?? null,
+    workstationId: activeBridgeIdentity?.workstationId ?? null,
   });
 
-  const localBridgeStatus = localBridgeStatusQuery.data ?? null;
-  const localBridgeIdentity = useMemo(() => {
-    const bridgeClientId = localBridgeStatus?.bridge_client_id?.trim() || null;
-    const workstationId = localBridgeStatus?.workstation_id?.trim() || null;
-    const deviceId = localBridgeStatus?.device_id?.trim() || null;
-
-    if (!bridgeClientId || !workstationId) {
-      return null;
-    }
-
-    return {
-      bridgeClientId,
-      workstationId,
-      deviceId,
-    };
-  }, [localBridgeStatus]);
-
   const activeScaleBridgeClientId =
-    localBridgeIdentity?.bridgeClientId ?? resolvedBridgeClientId ?? null;
-  const activeScaleDeviceId = localBridgeIdentity?.deviceId ?? resolvedDeviceId ?? null;
-  const activeScaleWorkstationId = localBridgeIdentity?.workstationId ?? resolvedWorkstationId ?? null;
+    activeBridgeIdentity?.bridgeClientId ?? resolvedBridgeClientId ?? null;
+  const activeScaleDeviceId = activeBridgeIdentity?.deviceId ?? resolvedDeviceId ?? null;
+  const activeScaleWorkstationId = activeBridgeIdentity?.workstationId ?? resolvedWorkstationId ?? null;
   const scaleCapturePayload = useMemo(
     () => ({
       device_id: activeScaleDeviceId ?? undefined,
@@ -571,8 +726,13 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     }),
     [activeScaleBridgeClientId, activeScaleDeviceId, activeScaleWorkstationId],
   );
-  const localBridgeRunning = localBridgeStatusQuery.isSuccess && localBridgeStatus?.status === "running";
-  const localScaleConnected = Boolean(localBridgeStatus?.scale_connected);
+  const localBridgeRunning =
+    isUsingLocalBridgeStatus
+      ? localBridgeStatusQuery.isSuccess && localBridgeStatus?.status === "running"
+      : activeBridgeIdentity !== null;
+  const localScaleConnected = isUsingLocalBridgeStatus
+    ? Boolean(localBridgeStatus?.scale_connected)
+    : connected;
   const localBridgeStatusText =
     connected || status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading"
       ? statusLabel
@@ -589,24 +749,19 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       : connected
         ? "bg-emerald-400 animate-pulse"
         : "bg-red-500";
-  const scaleWorkstationLabel = activeScaleWorkstationId ?? "No workstation";
-  const scaleClientLabel = activeScaleBridgeClientId
-    ? formatBridgeClientId(activeScaleBridgeClientId)
-    : "No client id";
-  const scaleDeviceLabel = activeScaleDeviceId ?? "No device";
-  const scalePortLabel =
-    detectedPort ?? localBridgeStatus?.device_port ?? localBridgeStatus?.serial_port ?? "USB scale not detected";
-  const scaleHelpText = localBridgeStatusQuery.isError
-    ? "Local scale bridge is not running on this PC. Start bridge.py and try again."
-    : !localBridgeIdentity
-      ? "Local bridge identity is unavailable on this PC."
+  const scaleHelpText = CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS && localBridgeStatusQuery.isError
+    ? "Local scale bridge status is unavailable. Using saved browser identity when configured."
+    : !activeBridgeIdentity
+      ? "Scale identity is not configured for this browser."
       : !localBridgeRunning
-        ? "Local scale bridge is not running on this PC. Start bridge.py and try again."
+        ? "Scale identity is not configured for this browser."
         : !localScaleConnected
-          ? (localBridgeStatus?.error?.trim() || "USB scale is not connected for this PC.")
-          : scaleError || "This page is locked to the local bridge client configured on this PC.";
-  const scaleLastSeenLabel = formatScaleSeenTime(lastSeenAt ?? localBridgeStatus?.last_seen ?? null);
-
+          ? (
+              localBridgeStatus?.error?.trim() ||
+              scaleError ||
+              "Scale is offline for this configured PC."
+            )
+          : scaleError || "This page is locked to the configured bridge client for this browser.";
   const tolerance =
     !isSingleCaptureMode && displayStdWeight > 0 && weight
       ? {
@@ -1174,51 +1329,63 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     <ProductionSectionCard title="Output Weight Capture" tone="emerald" icon={Scale}>
       <div className="space-y-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.25)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-xl">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Scale Source
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-slate-700">
-                  Local Bridge Client Scale
-                </span>
-                <span className={`rounded-full border px-2.5 py-1 font-mono font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-red-200 bg-red-50 text-red-700"}`}>
-                  {localBridgeStatusText}
-                </span>
-              </div>
-              <div className={`mt-3 flex items-start gap-2 text-[12px] ${connected ? "text-slate-600" : scaleStatusClassName}`}>
-                <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${scaleStatusDotClassName}`} />
-                <span>{scaleHelpText}</span>
-              </div>
+          <div className="max-w-none">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Scale Source
             </div>
-
-            <div className="grid flex-1 gap-2 text-[11px] sm:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Workstation</div>
-                <div className="mt-1 font-mono text-slate-700">{scaleWorkstationLabel}</div>
+            <div className="mt-3 rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
+              <div className="grid gap-3 lg:grid-cols-[220px_220px_160px_minmax(0,1fr)]">
+                <Input
+                  value={bridgeIdentityForm.deviceId}
+                  onChange={(event) =>
+                    setBridgeIdentityForm((current) => ({
+                      ...current,
+                      deviceId: event.target.value,
+                    }))
+                  }
+                  className="h-11 rounded-xl bg-white font-mono text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]"
+                  placeholder="Device"
+                />
+                <Input
+                  value={bridgeIdentityForm.workstationId}
+                  onChange={(event) =>
+                    setBridgeIdentityForm((current) => ({
+                      ...current,
+                      workstationId: event.target.value,
+                    }))
+                  }
+                  className="h-11 rounded-xl bg-white font-mono text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]"
+                  placeholder="Workstation"
+                />
+                <Input
+                  value={bridgeIdentityForm.bridgeClientId}
+                  onChange={(event) =>
+                    setBridgeIdentityForm((current) => ({
+                      ...current,
+                      bridgeClientId: event.target.value,
+                    }))
+                  }
+                  className="h-11 rounded-xl bg-white font-mono text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]"
+                  placeholder="Bridge Client"
+                />
+                <div aria-hidden="true" className="hidden lg:block" />
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Bridge Client</div>
-                <div className="mt-1 font-mono text-slate-700">{scaleClientLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Device</div>
-                <div className="mt-1 font-mono text-slate-700">{scaleDeviceLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Port</div>
-                <div className="mt-1 font-mono text-slate-700">{scalePortLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Last Seen</div>
-                <div className="mt-1 font-mono text-slate-700">{scaleLastSeenLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <div className="font-semibold uppercase tracking-[0.14em] text-slate-400">Bridge Mode</div>
-                <div className="mt-1 font-mono text-slate-700">
-                  {localBridgeRunning ? "Locked to local client" : "Bridge offline"}
-                </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  className="h-10 rounded-xl bg-slate-900 px-4 text-[12px] font-semibold text-white hover:bg-slate-800"
+                  onClick={saveBridgeIdentity}
+                >
+                  Save Identity
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-xl border-slate-200 bg-white px-4 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={clearBridgeIdentity}
+                >
+                  Clear
+                </Button>
               </div>
             </div>
           </div>

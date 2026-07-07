@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import InventoryStockTable from "@/features/items/components/InventoryStockTable";
 import type { InventorySummaryRow } from "@/features/items/types";
 import RequestItemsPreviewDialog, { getRequestItemSummary } from "@/features/requests/components/RequestItemsPreviewDialog";
@@ -122,20 +121,51 @@ const formatQuantityWithUnit = (quantity: string | null | undefined, unit: strin
   return `${formattedQuantity}${unit ? ` ${unit}` : ""}`;
 };
 
+const sumRequestItemQuantity = (
+  items: StoreStockRequest["items"] | undefined,
+  field: "requested_qty" | "approved_qty" | "issued_qty",
+) => {
+  if (!items?.length) {
+    return null;
+  }
+
+  const total = items.reduce((sum, item) => sum + Number(item[field] ?? 0), 0);
+  return total.toFixed(3);
+};
+
+const pickRequestedSummaryQuantity = (row: StoreStockRequest) => {
+  const itemTotal = sumRequestItemQuantity(row.items, "requested_qty");
+  if (itemTotal !== null) {
+    return itemTotal;
+  }
+
+  const totalRequestedQty = Number(row.total_requested_qty ?? Number.NaN);
+  if (Number.isFinite(totalRequestedQty) && totalRequestedQty > 0) {
+    return row.total_requested_qty;
+  }
+
+  const fallbackQuantity = Number(row.quantity ?? Number.NaN);
+  if (Number.isFinite(fallbackQuantity) && fallbackQuantity > 0) {
+    return row.quantity;
+  }
+
+  return row.total_requested_qty ?? row.quantity;
+};
+
 const getRequestQuantity = (row: StoreStockRequest) => {
-  const quantity = row.total_requested_qty ?? row.quantity;
+  const quantity = pickRequestedSummaryQuantity(row);
   const unit = row.unit || row.items?.[0]?.unit || "";
   return formatQuantityWithUnit(quantity, unit);
 };
 
 const getProcessedQuantityWithUnit = (row: StoreStockRequest) => {
-  const quantity = row.total_approved_qty ?? row.quantity;
+  const quantity = sumRequestItemQuantity(row.items, "approved_qty") ?? row.total_approved_qty ?? row.quantity;
   const unit = row.unit || row.items?.[0]?.unit || "";
   return formatQuantityWithUnit(quantity, unit);
 };
 
 const getReleasedQuantityWithUnit = (row: StoreStockRequest) => {
-  const quantity = row.total_issued_qty ?? row.quantity;
+  const quantity = sumRequestItemQuantity(row.items, "issued_qty") ?? row.total_issued_qty ?? row.quantity;
   const unit = row.unit || row.items?.[0]?.unit || "";
   return formatQuantityWithUnit(quantity, unit);
 };
@@ -622,7 +652,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                   <TableHead>Request</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Items</TableHead>
-                  <TableHead className="text-right">Process Qty</TableHead>
+                  <TableHead className="text-right">Total Qty</TableHead>
                   <TableHead className="hidden lg:table-cell">Approved By</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -669,7 +699,7 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                           {summary.extra ? <div className="text-xs text-primary">{summary.extra}</div> : null}
                         </button>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{getProcessedQuantityWithUnit(row)}</TableCell>
+                      <TableCell className="text-right font-medium">{getRequestQuantity(row)}</TableCell>
                       <TableCell className="hidden lg:table-cell">{row.approved_by_username || "-"}</TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -1226,12 +1256,12 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16 text-center">S.No</TableHead>
-                    <TableHead>Item Name</TableHead>
+                    <TableHead className="w-[280px]">Item Name</TableHead>
                     <TableHead className="w-48">Requested Qty</TableHead>
                     <TableHead className="w-56">
                       Process Qty <span className="text-destructive">*</span>
                     </TableHead>
-                    <TableHead className="w-80">Reason</TableHead>
+                    <TableHead className="w-56">Reason</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1240,10 +1270,6 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                       <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
                       <TableCell>
                         <div className="font-semibold text-foreground">{item.itemName}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {item.itemCode}
-                          {item.unit ? ` | ${item.unit}` : ""}
-                        </div>
                       </TableCell>
                       <TableCell className="font-semibold text-foreground">
                         {formatDecimal(item.requestedQty)}{item.unit ? ` ${item.unit}` : ""}
@@ -1281,9 +1307,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Textarea
+                        <Input
                           value={item.reason}
-                          rows={3}
                           placeholder="Optional reason"
                           onChange={(event) => {
                             const nextValue = event.target.value;
@@ -1299,10 +1324,11 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
               </Table>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:justify-between">
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
+              className="h-10 min-w-24 border-orange-200 bg-white text-slate-900 hover:bg-orange-500 hover:text-white"
               onClick={() => {
                 if (requestReviewTarget) {
                   setProcessRejectConfirmation(requestReviewTarget);
@@ -1315,6 +1341,8 @@ const StorePage = ({ module = "stock" }: StorePageProps) => {
             </Button>
             <Button
               type="button"
+              variant="outline"
+              className="h-10 min-w-24 border-orange-200 bg-white text-slate-900 hover:bg-orange-500 hover:text-white"
               onClick={() => {
                 if (!requestReviewTarget) return;
                 const nextErrors: Record<number, RequestReviewError> = {};

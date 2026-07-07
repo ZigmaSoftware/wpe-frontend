@@ -1,5 +1,6 @@
 import { coreApi } from "@/lib/api";
-import { normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
+import { normalizeListResponse } from "@/lib/api-helpers";
+import { normalizePaginatedResult } from "@/lib/api/pagination";
 import type { ApiPaginatedResult, ApiSuccessEnvelope, ProductionOrder, ProductionStageRecord } from "@/lib/types";
 
 export type ProductionStageValue = "AD" | "BL" | "GL" | "PR";
@@ -12,18 +13,6 @@ export type ProductionStageListParams = {
   dateTo?: string;
   page?: number;
   pageSize?: number;
-};
-
-const normalizePaginatedEnvelope = <T,>(
-  payload: ApiSuccessEnvelope<ApiPaginatedResult<T>> | ApiPaginatedResult<T>,
-): ApiPaginatedResult<T> => {
-  const data = unwrapSuccessEnvelope<ApiPaginatedResult<T>>(payload);
-  return {
-    count: Number(data?.count ?? 0),
-    next: data?.next ?? null,
-    previous: data?.previous ?? null,
-    results: Array.isArray(data?.results) ? data.results : [],
-  };
 };
 
 export const productionWorkspaceApi = {
@@ -54,6 +43,6 @@ export const productionWorkspaceApi = {
         },
       },
     );
-    return normalizePaginatedEnvelope<ProductionStageRecord>(response.data);
+    return normalizePaginatedResult<ProductionStageRecord>(response.data);
   },
 };
