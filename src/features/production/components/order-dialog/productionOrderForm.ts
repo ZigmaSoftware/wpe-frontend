@@ -583,6 +583,7 @@ type ExtraFormData = {
   finished_goods?: ProductionItemOption | null;
   production_facility?: string;
   work_center?: string;
+  line_machine_id?: string;
   shift_incharge?: string;
   selected_bom_variant_id?: string;
   bom_multiplier?: string;
@@ -615,8 +616,10 @@ export const mapOrderDetailToFormValues = (
   const extra = order.extra_form_data ?? {};
   const shiftValue = SHIFT_OPTIONS.find((o) => o.apiLabel === order.shift)?.value ?? "SHIFT_1";
   const qty = parseFloat(String(order.planned_quantity ?? "0")) || 0;
+  const savedMachineId = String(extra.line_machine_id ?? "").trim();
   const machine = machines.find(
     (m) =>
+      (savedMachineId && String(m.id) === savedMachineId) ||
       (order.line_number && m.machine_code === order.line_number) ||
       (order.line_name && m.name === order.line_name),
   );
@@ -678,7 +681,7 @@ export const mapOrderDetailToFormValues = (
       shift: shiftValue,
       production_facility: extra.production_facility ?? "",
       work_center: extra.work_center ?? "",
-      line_machine_id: machine ? String(machine.id) : "",
+      line_machine_id: savedMachineId || (machine ? String(machine.id) : ""),
       shift_incharge: extra.shift_incharge ?? "",
     },
     details: {
@@ -732,6 +735,7 @@ export const toProductionOrderPayload = (
       finished_goods: values.finished_goods ?? null,
       production_facility: values.resources.production_facility,
       work_center: values.resources.work_center,
+      line_machine_id: values.resources.line_machine_id,
       shift_incharge: values.resources.shift_incharge,
       selected_bom_variant_id: values.materials.selected_bom_variant_id,
       bom_multiplier: values.materials.bom_multiplier,
