@@ -428,6 +428,7 @@ const RecipeItemCreationPage = () => {
 
   const handleSuccess = async () => {
     await queryClient.invalidateQueries({ queryKey: ["recipe-bom-masters", "recipes"] });
+    setDialogOpen(false);
   };
 
   return (

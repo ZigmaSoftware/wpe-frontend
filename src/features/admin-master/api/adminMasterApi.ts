@@ -218,8 +218,10 @@ export const adminMasterApi = {
   updateUserCreation: (id: number, payload: Partial<UserCreationWritePayload>) => updateEntity<UserCreationRecord>(`/api/users/users-creation/${id}/`, payload),
   deleteUserCreation: (id: number) => deleteEntity(`/api/users/users-creation/${id}/`),
   toggleUserCreation: (id: number) => toggleEntity(`/api/users/users-creation/${id}/toggle-status/`),
-  lookupUserCreationSelectOptions: async () => {
-    const response = await coreApi.get<LookupOption[]>("/api/users/users-creation/lookup-options/");
+  lookupUserCreationSelectOptions: async (department?: string) => {
+    const response = await coreApi.get<LookupOption[]>("/api/users/users-creation/lookup-options/", {
+      params: department ? { department } : undefined,
+    });
     return response.data;
   },
   lookupUserCreationDepartments: async () => {

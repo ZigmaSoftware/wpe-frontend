@@ -71,6 +71,14 @@ const DEFAULT_PRODUCTION_TYPE_BY_STAGE: Record<ProductionBatch["stage"], string>
 };
 const REQUIRED_PRODUCTION_TYPE_OPTIONS = Object.values(DEFAULT_PRODUCTION_TYPE_BY_STAGE);
 
+const SHIFT_INCHARGE_DEPARTMENT_BY_STAGE: Record<ProductionBatch["stage"], string> = {
+  AD: "Blending",
+  BL: "Blending",
+  GL: "Production",
+  PR: "Production",
+};
+const DEFAULT_SHIFT_INCHARGE_DEPARTMENT = SHIFT_INCHARGE_DEPARTMENT_BY_STAGE.AD;
+
 const mapNamedOptions = (items: LookupItem[]) =>
   items
     .map((item) => ({
@@ -218,9 +226,15 @@ const ProductionOrderForm = ({
     staleTime: 5 * 60 * 1000,
   });
 
+  const watchedStage = useWatch({ control: form.control, name: "stage" });
+  const currentStage = (watchedStage || entryStage) as ProductionBatch["stage"] | undefined;
+  const shiftInchargeDepartment = currentStage
+    ? SHIFT_INCHARGE_DEPARTMENT_BY_STAGE[currentStage] ?? DEFAULT_SHIFT_INCHARGE_DEPARTMENT
+    : DEFAULT_SHIFT_INCHARGE_DEPARTMENT;
+
   const usersQuery = useQuery({
-    queryKey: ["production-order-form", "user-creation-options"],
-    queryFn: adminMasterApi.lookupUserCreationSelectOptions,
+    queryKey: ["production-order-form", "user-creation-options", shiftInchargeDepartment],
+    queryFn: () => adminMasterApi.lookupUserCreationSelectOptions(shiftInchargeDepartment),
     staleTime: 5 * 60 * 1000,
   });
 
