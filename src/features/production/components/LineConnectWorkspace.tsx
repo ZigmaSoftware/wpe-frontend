@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ScanLine } from "lucide-react";
+import { Loader2, Scale, ScanLine } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
-import LiveWeightDisplay from "@/components/LiveWeightDisplay";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -211,7 +210,20 @@ const LineConnectWorkspace = () => {
               </Badge>
             </div>
 
-            <LiveWeightDisplay deviceId="line-connect-scale-1" label="Bag Weight (Live)" showTareButton={false} />
+            <div className="rounded-lg overflow-hidden border border-border">
+              <div className="flex items-center justify-between px-4 py-2 bg-secondary">
+                <div className="flex items-center gap-2">
+                  <Scale className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium text-secondary-foreground">Bag Weight (Available)</span>
+                </div>
+              </div>
+              <div className="weight-display px-6 py-5 text-center">
+                <div className="text-4xl font-mono font-bold tracking-wider">
+                  {scanned.weight_kg ? Number(scanned.weight_kg).toFixed(3) : "----.---"}
+                </div>
+                <div className="text-sm mt-1 opacity-70">KG</div>
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">

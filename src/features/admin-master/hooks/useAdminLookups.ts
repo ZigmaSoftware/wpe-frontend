@@ -24,7 +24,7 @@ export const useUserScreenOptions = (mainScreenId?: number | null, screenSection
 export const useUserCreationSelectOptions = () =>
   useQuery({
     queryKey: adminMasterKeys.lookup("user-creation-select-options"),
-    queryFn: adminMasterApi.lookupUserCreationSelectOptions,
+    queryFn: () => adminMasterApi.lookupUserCreationSelectOptions(),
   });
 
 export const useUserCreationDepartmentOptions = () =>
