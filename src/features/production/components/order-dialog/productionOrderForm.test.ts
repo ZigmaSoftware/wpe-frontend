@@ -78,6 +78,7 @@ describe("productionOrderForm create flow", () => {
     expect(payload.shift).toBe("Shift 1 (6:00 am - 2:00 pm)");
     expect(payload.line_name).toBe("Line 7");
     expect(payload.line_number).toBe("LN-07");
+    expect(payload.extra_form_data?.line_machine_id).toBe(String(machineFixture.id));
     expect(payload.batch_number).toBe("BATCH-00000042");
     expect(payload.material_cost).toBe("195.00");
     expect(payload.total_cost).toBe("195.00");
@@ -194,6 +195,7 @@ describe("productionOrderForm create flow", () => {
         extra_form_data: {
           production_facility: "10",
           work_center: "20",
+          line_machine_id: String(machineFixture.id),
           shift_incharge: "30",
           selected_bom_variant_id: "77",
           bom_multiplier: "3",
@@ -204,6 +206,7 @@ describe("productionOrderForm create flow", () => {
 
     expect(values.resources.work_center).toBe("20");
     expect(values.resources.production_facility).toBe("10");
+    expect(values.resources.line_machine_id).toBe(String(machineFixture.id));
     expect(values.materials.selected_bom_variant_id).toBe("77");
     expect(values.materials.bom_multiplier).toBe("3");
     expect(values.materials.rows).toHaveLength(1);
