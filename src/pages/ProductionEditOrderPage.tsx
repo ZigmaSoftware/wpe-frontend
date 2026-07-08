@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderForm";
+import ProductionOrderForm from "@/features/production/components/order-dialog/ProductionOrderFormView";
 import ProductionOrderPageLayout from "@/features/production/components/order-dialog/ProductionOrderPageLayout";
 import {
   mapOrderDetailToFormValues,

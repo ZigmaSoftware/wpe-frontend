@@ -619,7 +619,7 @@ const ProductionManageBatchPage = () => {
                       </div>
                     </div>
 
-                    {(currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL") && canRunHeaderAction ? (
+                    {(currentManageStage === "AD" || currentManageStage === "BL" || currentManageStage === "GL" || currentManageStage === "PR") && canRunHeaderAction ? (
                       <div className="flex justify-end md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2">
                         <Button
                           size="sm"
@@ -731,21 +731,6 @@ const ProductionManageBatchPage = () => {
                               ) : null}
                             </div>
                             <p className="text-[11px] text-slate-500">{detailSubtitle}</p>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            {currentManageStage !== "AD" && currentManageStage !== "BL" && currentManageStage !== "GL" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-9 rounded-md px-3 text-xs"
-                                onClick={handleHeaderAction}
-                                disabled={!canRunHeaderAction}
-                              >
-                                {currentManageStage === "BL" || currentManageStage === "GL" ? <Plus className="mr-2 h-3.5 w-3.5" /> : null}
-                                {headerActionLabel}
-                              </Button>
-                            ) : null}
                           </div>
                         </div>
                       </div>

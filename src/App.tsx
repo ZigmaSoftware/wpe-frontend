@@ -59,6 +59,7 @@ import {
   PRODUCTION_BL_BLENDING_ROUTE,
   PRODUCTION_GL_GRANULATION_ROUTE,
   PRODUCTION_PR_PRODUCTION_ROUTE,
+  PRODUCTION_PR_LINE_CONNECT_ROUTE,
   PRODUCTION_ROUTE,
 } from "@/features/production/utils/routes";
 import { buildAppNavigation } from "@/lib/appNavigation";
@@ -165,6 +166,7 @@ const ProductionEditOrderPage = lazy(() => import("@/pages/ProductionEditOrderPa
 const ProductionNewOrderPage = lazy(() => import("@/pages/ProductionNewOrderPage"));
 const ProductionPage = lazy(() => import("@/pages/ProductionPage"));
 const ProductionStagePage = lazy(() => import("@/pages/ProductionStagePage"));
+const ProductionLineConnectPage = lazy(() => import("@/pages/ProductionLineConnectPage"));
 
 const RouteLoadingFallback = () => (
   <div className="p-6 text-sm text-muted-foreground">Loading production workspace...</div>
@@ -348,6 +350,14 @@ const App = () => (
                       element={
                         <Suspense fallback={<RouteLoadingFallback />}>
                           <ProductionStagePage stage="PR" />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path={PRODUCTION_PR_LINE_CONNECT_ROUTE}
+                      element={
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                          <ProductionLineConnectPage />
                         </Suspense>
                       }
                     />
