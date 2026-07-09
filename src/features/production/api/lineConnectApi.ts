@@ -48,12 +48,20 @@ export interface GlScancodeDetails {
   active_connection: LineConnectionRecord | null;
 }
 
+export interface LineConnectionListParams {
+  status?: LineConnectionStatus;
+  production_line?: number;
+  production_line_id?: number;
+  page?: number;
+  page_size?: number;
+}
+
 export const lineConnectApi = {
   scanGlScancode: async (scanCode: string) => {
     const response = await coreApi.get<unknown>(`${BASE}/scan/`, { params: { scan_code: scanCode } });
     return unwrapSuccessEnvelope<GlScancodeDetails>(response.data);
   },
-  listConnections: async (params: { status?: LineConnectionStatus; production_line?: number } = {}) => {
+  listConnections: async (params: LineConnectionListParams = {}) => {
     const response = await coreApi.get<unknown>(`${BASE}/`, { params });
     return unwrapSuccessEnvelope<{ results: LineConnectionRecord[] }>(response.data);
   },
