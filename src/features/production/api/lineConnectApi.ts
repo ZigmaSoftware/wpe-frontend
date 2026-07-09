@@ -42,6 +42,7 @@ export interface GlScancodeDetails {
   item_code: string;
   item_name: string;
   weight_kg: string;
+  total_weight_kg: string;
   production_id: string | null;
   is_connected: boolean;
   active_connection: LineConnectionRecord | null;

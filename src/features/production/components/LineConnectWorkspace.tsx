@@ -10,7 +10,7 @@ import { toast } from "@/components/ui/sonner";
 import { productionMastersApi } from "@/features/production-masters/api/productionMastersApi";
 import type { ProductionLineRecord } from "@/features/production-masters/types";
 import { lineConnectApi, type GlScancodeDetails, type LineConnectionRecord } from "@/features/production/api/lineConnectApi";
-import { formatDateTime, getApiErrorMessage } from "@/lib/api-helpers";
+import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
 import { cn } from "@/lib/utils";
 
 const formatDurationMs = (ms: number) => {
@@ -40,6 +40,15 @@ const DetailRow = ({ label, value }: DetailRowProps) => (
     <dd className="text-sm font-medium text-slate-900 sm:text-right">{value}</dd>
   </div>
 );
+
+const formatWeightPair = (availableWeight?: string | null, totalWeight?: string | null) => {
+  const available = formatDecimal(availableWeight, 3);
+  const total = formatDecimal(totalWeight ?? availableWeight, 3);
+  if (available === "-" && total === "-") {
+    return "----.--- / ----.---";
+  }
+  return `${available} / ${total}`;
+};
 
 const LineConnectWorkspace = () => {
   const queryClient = useQueryClient();
@@ -141,7 +150,8 @@ const LineConnectWorkspace = () => {
   const displayLineCode = displayedConnection?.production_line_code || selectedLine?.code || "-";
   const displayMachineName = displayedConnection?.machine_name || selectedLine?.machine_name || "-";
   const connectionStatus = displayedConnection?.status ?? "OFF";
-  const bagWeight = scanned?.weight_kg ? `${scanned.weight_kg} kg` : "-";
+  const bagWeight = scanned ? `${formatWeightPair(scanned.weight_kg, scanned.total_weight_kg)} kg` : "-";
+  const bagWeightDisplay = scanned ? formatWeightPair(scanned.weight_kg, scanned.total_weight_kg) : "----.--- / ----.---";
 
   return (
     <div className="space-y-6">
@@ -198,7 +208,7 @@ const LineConnectWorkspace = () => {
                 <div className="font-mono text-3xl font-bold tracking-tight text-slate-950">{scanned.serial_no || "-"}</div>
                 <div className="flex flex-wrap gap-2 text-xs text-slate-500">
                   <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">Scan Code: {scanned.scan_code}</span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">Available Weight: {bagWeight}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">Available / Total Weight: {bagWeight}</span>
                   {scanned.production_id ? (
                     <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">Production ID: {scanned.production_id}</span>
                   ) : null}
@@ -214,12 +224,12 @@ const LineConnectWorkspace = () => {
               <div className="flex items-center justify-between px-4 py-2 bg-secondary">
                 <div className="flex items-center gap-2">
                   <Scale className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium text-secondary-foreground">Bag Weight (Available)</span>
+                  <span className="text-sm font-medium text-secondary-foreground">Bag Weight (Available / Total)</span>
                 </div>
               </div>
               <div className="weight-display px-6 py-5 text-center">
                 <div className="text-4xl font-mono font-bold tracking-wider">
-                  {scanned.weight_kg ? Number(scanned.weight_kg).toFixed(3) : "----.---"}
+                  {bagWeightDisplay}
                 </div>
                 <div className="text-sm mt-1 opacity-70">KG</div>
               </div>
