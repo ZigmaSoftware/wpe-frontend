@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Waypoints } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
@@ -20,10 +20,12 @@ import { exportTableData, type StoreExportColumn } from "@/features/store/utils/
 import {
   getProductionStageRoute,
   getProductionNewOrderRoute,
+  PRODUCTION_PR_LINE_CONNECT_ROUTE,
   type ProductionWorkspaceModuleDefinition,
 } from "@/features/production/utils/routes";
 import {
   formatProductionListLabel,
+  getProductionBatchCountLabel,
 } from "@/features/production/components/productionListShared";
 import { toast } from "@/components/ui/sonner";
 import { coreApi } from "@/lib/api";
@@ -113,7 +115,6 @@ const getExportColumns = (
   stage: ProductionStageValue,
   orderLookup: Map<number, ProductionOrder>,
 ): StoreExportColumn<ProductionStageRecord>[] => {
-  const showsBatchCount = stage !== "PR";
   const getProductionName = (row: ProductionStageRecord) => {
     const matchedOrder = orderLookup.get(row.order_id);
     if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
@@ -126,7 +127,7 @@ const getExportColumns = (
   const columns: StoreExportColumn<ProductionStageRecord>[] = [
     { label: "Prd ID", value: (row) => row.production_id || "-" },
     { label: "Production Name", value: (row) => getProductionName(row) },
-    { label: "No.of Batch", value: (row) => (showsBatchCount ? String(row.batch_count ?? 0) : row.display_batch_no || row.batch_no || "-") },
+    { label: "No.of Batch", value: (row) => getProductionBatchCountLabel(row) },
     { label: "BOM Varient", value: () => "-" },
     { label: "Started Date", value: (row) => formatDate(row.start_date_time || row.production_date) },
     { label: "Ended Date", value: (row) => formatDate(row.end_date_time) },
@@ -138,7 +139,6 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const meta = STAGE_PAGE_META[stage];
-  const showsBatchCount = stage !== "PR";
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -239,20 +239,28 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
         title={headerTitle || meta.label}
         description={headerDescription || meta.pageDescription}
         actions={
-          <Button
-            onClick={() =>
-              navigate(getProductionNewOrderRoute(), {
-                state: {
-                  backTo: getProductionStageRoute(stage),
-                  entryStage: stage,
-                  ...(stage === "AD" ? { defaultWorkCenterName: DEFAULT_AD_WORK_CENTER_NAME } : {}),
-                },
-              })
-            }
-          >
-            <Plus className="mr-2 h-4 w-4" />
-              New Order
-          </Button>
+          <>
+            {stage === "PR" ? (
+              <Button variant="outline" onClick={() => navigate(PRODUCTION_PR_LINE_CONNECT_ROUTE)}>
+                <Waypoints className="mr-2 h-4 w-4" />
+                Line Connect
+              </Button>
+            ) : null}
+            <Button
+              onClick={() =>
+                navigate(getProductionNewOrderRoute(), {
+                  state: {
+                    backTo: getProductionStageRoute(stage),
+                    entryStage: stage,
+                    ...(stage === "AD" ? { defaultWorkCenterName: DEFAULT_AD_WORK_CENTER_NAME } : {}),
+                  },
+                })
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" />
+                New Order
+            </Button>
+          </>
         }
       />
 
@@ -306,7 +314,6 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
             <ProductionStageListResults
               rows={rows}
               stage={stage}
-              showsBatchCount={showsBatchCount}
               showRowActions={showRowActions}
               page={page}
               pageSize={resolvedPageSize}

@@ -7,6 +7,7 @@ import {
   getProductionEditRoute,
   getProductionManageBatchRoute,
 } from "@/features/production/utils/routes";
+import { getProductionBatchCountLabel } from "@/features/production/components/productionListShared";
 import { formatDate } from "@/lib/api-helpers";
 import type { ProductionStageRecord } from "@/lib/types";
 import type { ProductionStageValue } from "@/features/production/api/productionWorkspaceApi";
@@ -14,7 +15,6 @@ import type { ProductionStageValue } from "@/features/production/api/productionW
 type ProductionStageListResultsProps = {
   rows: ProductionStageRecord[];
   stage: ProductionStageValue;
-  showsBatchCount: boolean;
   showRowActions: boolean;
   page: number;
   pageSize: number;
@@ -29,7 +29,6 @@ type ProductionStageListResultsProps = {
 const ProductionStageListResults = ({
   rows,
   stage,
-  showsBatchCount,
   showRowActions,
   page,
   pageSize,
@@ -63,7 +62,7 @@ const ProductionStageListResults = ({
             >
               <TableCell className="font-mono text-xs font-medium">{row.production_id || "-"}</TableCell>
               <TableCell className="font-medium">{getProductionName(row)}</TableCell>
-              <TableCell>{showsBatchCount ? row.batch_count ?? 0 : row.display_batch_no || row.batch_no || "-"}</TableCell>
+              <TableCell>{getProductionBatchCountLabel(row)}</TableCell>
               <TableCell className="text-muted-foreground">-</TableCell>
               <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
               <TableCell>{formatDate(row.end_date_time)}</TableCell>
