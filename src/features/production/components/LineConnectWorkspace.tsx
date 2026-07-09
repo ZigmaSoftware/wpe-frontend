@@ -10,7 +10,8 @@ import { toast } from "@/components/ui/sonner";
 import { productionMastersApi } from "@/features/production-masters/api/productionMastersApi";
 import type { ProductionLineRecord } from "@/features/production-masters/types";
 import { lineConnectApi, type GlScancodeDetails, type LineConnectionRecord } from "@/features/production/api/lineConnectApi";
-import { formatDateTime, getApiErrorMessage } from "@/lib/api-helpers";
+import LineConnectDashboard from "@/features/production/components/LineConnectDashboard";
+import { formatDateTime, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
 import { cn } from "@/lib/utils";
 
 const formatDurationMs = (ms: number) => {
@@ -23,6 +24,8 @@ const formatDurationMs = (ms: number) => {
 };
 
 const detailCardClassName = "rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm";
+const productionLinesQueryKey = ["production-lines-for-line-connect"] as const;
+const lineConnectDashboardQueryKey = ["line-connect-dashboard"] as const;
 
 const connectionBadgeClassName = (status: "ON" | "OFF") =>
   status === "ON"
@@ -41,6 +44,15 @@ const DetailRow = ({ label, value }: DetailRowProps) => (
   </div>
 );
 
+const formatWeightPair = (availableWeight?: string | null, totalWeight?: string | null) => {
+  const available = formatDecimal(availableWeight, 3);
+  const total = formatDecimal(totalWeight ?? availableWeight, 3);
+  if (available === "-" && total === "-") {
+    return "----.--- / ----.---";
+  }
+  return `${available} / ${total}`;
+};
+
 const LineConnectWorkspace = () => {
   const queryClient = useQueryClient();
   const [scanValue, setScanValue] = useState("");
@@ -58,11 +70,19 @@ const LineConnectWorkspace = () => {
   }, [displayedConnection]);
 
   const linesQuery = useQuery({
-    queryKey: ["production-lines-for-line-connect"],
-    queryFn: () => productionMastersApi.productionLines.list({ pageSize: 200, ordering: "name" }),
+    queryKey: productionLinesQueryKey,
+    queryFn: () => productionMastersApi.productionLines.list({ pageSize: 200, ordering: "code", is_active: true }),
+    refetchInterval: 15000,
+  });
+
+  const activeConnectionsQuery = useQuery({
+    queryKey: [...lineConnectDashboardQueryKey, "active-connections"],
+    queryFn: () => lineConnectApi.listConnections({ status: "ON", page_size: 500 }),
+    refetchInterval: 15000,
   });
 
   const lines: ProductionLineRecord[] = linesQuery.data?.items ?? [];
+  const activeConnections = activeConnectionsQuery.data?.results ?? [];
   const selectedLine = lines.find((line) => String(line.id) === selectedLineId) ?? null;
 
   const resetScan = () => {
@@ -91,7 +111,8 @@ const LineConnectWorkspace = () => {
       setDisplayedConnection(connection);
       setSelectedLineId(String(connection.production_line));
       setScanned((prev) => (prev ? { ...prev, is_connected: true, active_connection: connection } : prev));
-      queryClient.invalidateQueries({ queryKey: ["production-lines-for-line-connect"] });
+      queryClient.invalidateQueries({ queryKey: productionLinesQueryKey });
+      queryClient.invalidateQueries({ queryKey: lineConnectDashboardQueryKey });
       toast.success(`Bag ${connection.serial_no} connected to ${connection.production_line_name}.`);
     },
     onError: (error) => {
@@ -105,7 +126,8 @@ const LineConnectWorkspace = () => {
       setDisplayedConnection(connection);
       setSelectedLineId(String(connection.production_line));
       setScanned((prev) => (prev ? { ...prev, is_connected: false, active_connection: null } : prev));
-      queryClient.invalidateQueries({ queryKey: ["production-lines-for-line-connect"] });
+      queryClient.invalidateQueries({ queryKey: productionLinesQueryKey });
+      queryClient.invalidateQueries({ queryKey: lineConnectDashboardQueryKey });
       toast.success(`${connection.production_line_name} disconnected.`);
     },
     onError: (error) => {
@@ -141,13 +163,20 @@ const LineConnectWorkspace = () => {
   const displayLineCode = displayedConnection?.production_line_code || selectedLine?.code || "-";
   const displayMachineName = displayedConnection?.machine_name || selectedLine?.machine_name || "-";
   const connectionStatus = displayedConnection?.status ?? "OFF";
-  const bagWeight = scanned?.weight_kg ? `${scanned.weight_kg} kg` : "-";
+  const bagWeight = scanned ? `${formatWeightPair(scanned.weight_kg, scanned.total_weight_kg)} kg` : "-";
+  const bagWeightDisplay = scanned ? formatWeightPair(scanned.weight_kg, scanned.total_weight_kg) : "----.--- / ----.---";
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Line Connect"
         description="Scan a GL bag from Connection to Line stock and connect it to an available production line."
+      />
+
+      <LineConnectDashboard
+        lines={lines}
+        activeConnections={activeConnections}
+        isLoading={linesQuery.isLoading || activeConnectionsQuery.isLoading}
       />
 
       <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
@@ -198,7 +227,7 @@ const LineConnectWorkspace = () => {
                 <div className="font-mono text-3xl font-bold tracking-tight text-slate-950">{scanned.serial_no || "-"}</div>
                 <div className="flex flex-wrap gap-2 text-xs text-slate-500">
                   <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">Scan Code: {scanned.scan_code}</span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">Available Weight: {bagWeight}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">Available / Total Weight: {bagWeight}</span>
                   {scanned.production_id ? (
                     <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">Production ID: {scanned.production_id}</span>
                   ) : null}
@@ -214,12 +243,12 @@ const LineConnectWorkspace = () => {
               <div className="flex items-center justify-between px-4 py-2 bg-secondary">
                 <div className="flex items-center gap-2">
                   <Scale className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium text-secondary-foreground">Bag Weight (Available)</span>
+                  <span className="text-sm font-medium text-secondary-foreground">Bag Weight (Available / Total)</span>
                 </div>
               </div>
               <div className="weight-display px-6 py-5 text-center">
                 <div className="text-4xl font-mono font-bold tracking-wider">
-                  {scanned.weight_kg ? Number(scanned.weight_kg).toFixed(3) : "----.---"}
+                  {bagWeightDisplay}
                 </div>
                 <div className="text-sm mt-1 opacity-70">KG</div>
               </div>

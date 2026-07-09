@@ -1,3 +1,5 @@
+import type { ProductionStageRecord } from "@/lib/types";
+
 export const PRODUCTION_STATUS_BADGE_CLASSES: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-800",
   PLANNED: "bg-slate-100 text-slate-700",
@@ -65,6 +67,9 @@ export const formatProductionListLabel = (value?: string | null) => {
 
   return normalized;
 };
+
+export const getProductionBatchCountLabel = (row: Pick<ProductionStageRecord, "batch_count">) =>
+  String(row.batch_count ?? 0);
 
 export const ProductionStatusBadge = ({ status }: { status: string }) => (
   <span
