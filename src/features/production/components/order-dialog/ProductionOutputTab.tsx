@@ -1483,10 +1483,10 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                 NET WEIGHT
               </span>
               <div className="flex items-end gap-2">
-                <span className={`text-[46px] font-mono font-bold leading-none tracking-wider ${netWeightColor}`}>
+                <span className={`text-[52px] font-weight-display font-bold leading-none tracking-[0.04em] ${netWeightColor}`}>
                   {weight ? weight.value.toFixed(3) : "0.000"}
                 </span>
-                <span className="mb-1 font-mono text-lg text-slate-400">kg</span>
+                <span className="mb-1 font-weight-display text-base text-slate-400">kg</span>
               </div>
               {tolerance ? (
                 <div
@@ -1513,24 +1513,32 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                 <button
                   type="button"
                   onClick={() => setActiveIndex(0)}
-                  className={`w-full rounded-2xl px-4 py-4 text-left transition-all ${
+                  className={`relative w-full rounded-2xl px-4 py-4 text-left transition-all ${
                     activeCapture
                       ? "border border-emerald-500/70 bg-[#064e3b]"
                       : "border border-blue-400/70 bg-[#1e3a8a]"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">Current Batch Weight</div>
-                      <div className="mt-2 text-[30px] font-mono font-bold leading-none text-white">
+                  <div
+                    className={`absolute right-4 top-4 h-3 w-3 shrink-0 rounded-full ${
+                      activeCapture ? "bg-emerald-400" : "bg-blue-400 animate-pulse"
+                    }`}
+                  />
+                  <div className="flex min-h-[150px] flex-col">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      Current Batch Weight
+                    </div>
+                    <div className="flex flex-1 flex-col items-center justify-center text-center">
+                      <div className="text-[56px] font-weight-display font-bold leading-none tracking-[0.04em] text-white">
                         {activeCapture ? activeCapture.weightKg.toFixed(3) : weight?.value.toFixed(3) ?? "0.000"}
                       </div>
-                      <div className="mt-1 font-mono text-[11px] text-slate-300">kg</div>
+                      <div className="mt-1 font-weight-display text-[14px] text-slate-300">kg</div>
                     </div>
-                    <div className={`mt-1 h-3 w-3 shrink-0 rounded-full ${activeCapture ? "bg-emerald-400" : "bg-blue-400 animate-pulse"}`} />
+                    <div className="font-mono text-[10px] font-semibold text-blue-200">{currentBatchLabel}</div>
+                    <div className="mt-1 text-[11px] text-slate-300">
+                      Saved weight is used to create the batch-specific captured output list below.
+                    </div>
                   </div>
-                  <div className="mt-4 font-mono text-[10px] font-semibold text-blue-200">{currentBatchLabel}</div>
-                  <div className="mt-1 text-[11px] text-slate-300">Saved weight is used to create the batch-specific captured output list below.</div>
                 </button>
               ) : (
                 <div className="grid grid-cols-4 gap-2">

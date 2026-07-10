@@ -325,7 +325,11 @@ const AppLayout = () => {
 
           <div className="wpe-topnav-left">
             <Link className="wpe-brand wpe-brand--edge" to={homePath}>
-              <img src="/zigma.png" alt="Zigma WPE ERP" className="h-9 w-auto object-contain" />
+              <img
+                src="/zigma-mark.png"
+                alt="Zigma"
+                className="h-[58px] w-auto shrink-0 object-contain"
+              />
             </Link>
           </div>
 
@@ -439,7 +443,7 @@ const AppLayout = () => {
                   <span className="wpe-profile-copy">
                     <b>{sessionTitle}</b>
                   </span>
-                  <ChevronDown className="h-4 w-4 text-white/70" />
+                  <ChevronDown className="h-4 w-4 text-slate-500" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 rounded-xl border-[#e5eaf1] p-2 shadow-xl">
