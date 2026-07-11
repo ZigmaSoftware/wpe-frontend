@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWatch, type UseFormReturn } from "react-hook-form";
-import { CheckCircle2, ChevronDown, ChevronRight, PackageCheck, QrCode, Scale } from "lucide-react";
+import { ChevronDown, ChevronRight, PackageCheck, QrCode, Scale } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -744,13 +744,13 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       ? "text-amber-400"
       : connected
         ? "text-emerald-400"
-        : "text-red-400";
+        : "text-slate-500";
   const scaleStatusDotClassName =
     status === "bridge_not_reporting" || status === "no_serial_port" || status === "invalid_reading"
       ? "bg-amber-400"
       : connected
         ? "bg-emerald-400 animate-pulse"
-        : "bg-red-500";
+        : "bg-slate-400";
   const scaleHelpText = CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS && localBridgeStatusQuery.isError
     ? "Local scale bridge status is unavailable. Using saved browser identity when configured."
     : !activeBridgeIdentity
@@ -775,6 +775,11 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const canCapture = isSingleCaptureMode
     ? !!(weight?.stable && weight.value > 0 && activeComponent)
     : !!(weight?.stable && tolerance?.withinTolerance === true && activeComponent);
+  const scaleDisplayClassName = !connected
+    ? "border-[#9ca3af] bg-gradient-to-b from-[#e5e7eb] to-[#cbd5e1] text-[#1f2937]"
+    : canCapture
+      ? "border-[#7fa244] bg-gradient-to-b from-[#b3d377] to-[#a2c95f] text-[#15200b]"
+      : "border-[#b5271a] bg-gradient-to-b from-[#ef5041] to-[#e23b2c] text-white";
   const totalCaptured = Array.from(capturedWeights.values()).reduce((sum, capture) => sum + capture.weightKg, 0);
   const missingComponents = useMemo(
     () => getMissingRequiredOutputComponents(outputComponents, capturedWeights),
@@ -1313,15 +1318,6 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     [invalidateBatchQueries, isBlMode, isGlMode, outputCapturesQuery, outwardingRecordId, persistedOrderId],
   );
 
-  const netWeightColor = isSingleCaptureMode
-    ? weight?.stable
-      ? "text-[#4ade80]"
-      : "text-white"
-    : tolerance?.withinTolerance === false
-      ? "text-red-400"
-      : tolerance?.withinTolerance === true
-        ? "text-[#4ade80]"
-        : "text-white";
   const isSingleCaptureLocked =
     isSingleCaptureMode && (activeBatch?.status === "COMPLETED" || (existingSingleCapture !== null && !canResumeExistingPrCapture));
   const saveWeightDisabled =
@@ -1416,285 +1412,237 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-slate-700 bg-[#1a1a2e] shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
-          <div className="flex min-h-[88px] items-stretch">
-            <div className="w-[168px] shrink-0 space-y-[5px] border-r border-slate-700 bg-[#0d0d1a] px-4 py-3 font-mono text-[11px]">
-              {isSingleCaptureMode ? (
-                <>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">STAGE</span>
-                    <span className="font-semibold text-white">{outputStage}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">BATCH</span>
-                    <span className="truncate text-right font-semibold text-yellow-400">{currentBatchLabel}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">CAPTURED</span>
-                    <span className="font-semibold text-yellow-400">{activeCapture?.weightKg.toFixed(3) ?? "0.000"} KG</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">STO WT</span>
-                    <span className="font-semibold text-white">{displayStdWeight.toFixed(3)} KG</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">MIN WT</span>
-                    <span className="font-semibold text-yellow-400">{minWeight.toFixed(3)} KG</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">MAX WT</span>
-                    <span className="font-semibold text-yellow-400">{maxWeight.toFixed(3)} KG</span>
-                  </div>
-                </>
-              )}
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">TARE</span>
-                <span className="font-semibold text-slate-300">0.000 KG</span>
-              </div>
-            </div>
-
-            <div className="flex flex-1 flex-col items-center justify-center gap-1 border-r border-slate-700 bg-[#111827] px-4">
-              <span className="text-[13px] font-bold uppercase tracking-[0.2em] text-white">
-                {isBlMode ? "Bin Assign" : isGlMode ? "Bag Assign" : isPrMode ? "Line Assign" : "Recipe No:"}&nbsp;{recipeNo}
-              </span>
-              {activeComponent ? (
-                <div className="text-center">
-                  <span className="font-mono text-[11px] tracking-widest text-blue-300">
-                    ▶ {isSingleCaptureMode ? currentBatchLabel : activeComponent.itemCode}
-                  </span>
-                  <div className="mt-1 text-[11px] text-slate-400">
-                    {isBlMode
-                      ? "Single bin weight capture for the selected BL batch."
-                      : isGlMode
-                        ? "Single bag weight capture for the selected GL batch."
-                        : isPrMode
-                          ? "Single line weight capture for the selected PR batch."
-                        : activeComponent.itemName}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="flex w-[220px] shrink-0 flex-col items-end justify-center bg-[#0d0d1a] px-6 py-3">
-              <span className="mb-1 text-[9px] font-bold uppercase tracking-[0.22em] text-slate-400">
-                NET WEIGHT
-              </span>
-              <div className="flex items-end gap-2">
-                <span className={`text-[52px] font-weight-display font-bold leading-none tracking-[0.04em] ${netWeightColor}`}>
-                  {weight ? weight.value.toFixed(3) : "0.000"}
-                </span>
-                <span className="mb-1 font-weight-display text-base text-slate-400">kg</span>
-              </div>
-              {tolerance ? (
-                <div
-                  className={`mt-1 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-mono font-bold tracking-widest ${
-                    tolerance.withinTolerance
-                      ? "border-emerald-700/50 bg-emerald-900/60 text-emerald-400"
-                      : "border-red-700/50 bg-red-900/60 text-red-400"
-                  }`}
-                >
-                  {tolerance.withinTolerance ? <CheckCircle2 className="h-3 w-3" /> : <span>✗</span>}
-                  {tolerance.withinTolerance ? "WITHIN RANGE" : "OUT OF RANGE"}
-                </div>
-              ) : (
-                <div className={`mt-1 text-[9px] font-mono tracking-widest ${connected ? "text-slate-500" : scaleStatusClassName}`}>
-                  {connected ? "AWAITING READING" : statusLabel.toUpperCase()}
-                </div>
-              )}
-            </div>
+        <div className="border border-[#d2d4d8] bg-white p-4 shadow-[0_6px_24px_rgba(0,0,0,0.16)] sm:p-5">
+          <div className="relative z-10 ml-3 inline-flex rounded-t bg-[#5a5a5a] px-4 py-2 text-[13px] font-bold text-white">
+            Record Output
           </div>
 
-          <div className="flex items-stretch border-t border-slate-700">
-            <div className="flex-1 p-3">
-              {isSingleCaptureMode ? (
+          <div className="-mt-px border border-[#dcdcdc] bg-white p-3 sm:p-4">
+            <div className="flex flex-col items-stretch gap-3 lg:flex-row">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <div
+                  className={`relative flex min-h-[142px] flex-col justify-between gap-5 overflow-hidden rounded-[5px] border px-4 pb-4 pt-12 sm:flex-row sm:items-center sm:px-5 ${scaleDisplayClassName}`}
+                >
+                  <div className="absolute left-1/2 top-0 max-w-[calc(100%-32px)] -translate-x-1/2 truncate rounded-b-md bg-[#a82318] px-6 py-1.5 font-mono text-[13px] font-bold tracking-wide text-white shadow-md">
+                    {isAdMode
+                      ? `Recipe No: ${recipeNo}`
+                      : `${isBlMode ? "Bin Assign" : isGlMode ? "Bag Assign" : "Line Assign"}: ${recipeNo}`}
+                  </div>
+
+                  <div className="min-w-[230px] space-y-1 font-mono text-[12px] font-semibold leading-6 sm:text-[13px]">
+                    {isSingleCaptureMode ? (
+                      <>
+                        <div className="grid grid-cols-[88px_16px_minmax(0,1fr)] items-baseline">
+                          <span>STAGE</span><span>:</span><span className="font-mono text-[14px] font-bold">{outputStage}</span>
+                        </div>
+                        <div className="grid grid-cols-[88px_16px_minmax(0,1fr)] items-baseline">
+                          <span>BATCH</span><span>:</span><span className="truncate font-semibold">{currentBatchLabel}</span>
+                        </div>
+                        <div className="grid grid-cols-[88px_16px_minmax(0,1fr)] items-baseline">
+                          <span>CAPTURED</span><span>:</span><span className="font-weight-display text-[14px]">{activeCapture?.weightKg.toFixed(3) ?? "0.000"} <span className="font-sans text-[11px]">KG</span></span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-[88px_16px_minmax(0,1fr)] items-baseline">
+                          <span>STD WT.</span><span>:</span><span className="font-weight-display text-[14px]">{displayStdWeight.toFixed(3)} <span className="font-sans text-[11px]">KG</span></span>
+                        </div>
+                        <div className="grid grid-cols-[88px_16px_minmax(0,1fr)] items-baseline">
+                          <span>MIN WT.</span><span>:</span><span className="font-weight-display text-[14px]">{minWeight.toFixed(3)} <span className="font-sans text-[11px]">KG</span></span>
+                        </div>
+                        <div className="grid grid-cols-[88px_16px_minmax(0,1fr)] items-baseline">
+                          <span>MAX WT.</span><span>:</span><span className="font-weight-display text-[14px]">{maxWeight.toFixed(3)} <span className="font-sans text-[11px]">KG</span></span>
+                        </div>
+                      </>
+                    )}
+                    <div className="grid grid-cols-[88px_16px_minmax(0,1fr)] items-baseline">
+                      <span>TARE</span><span>:</span><span className="font-weight-display text-[14px]">0.000 <span className="font-sans text-[11px]">KG</span></span>
+                    </div>
+                  </div>
+
+                  <div className="self-end text-right sm:self-center">
+                    <div className="mb-1 font-mono text-[13px] font-bold tracking-[0.12em]">NET WEIGHT</div>
+                    <div className="flex items-end justify-end gap-1.5">
+                      <span className="font-weight-display text-[clamp(42px,5vw,64px)] font-bold leading-none tracking-[0.06em]">
+                        {weight ? weight.value.toFixed(3) : "0.000"}
+                      </span>
+                      <span className="mb-1.5 text-[15px] font-bold">kg</span>
+                    </div>
+                    <div className="mt-1 font-mono text-[10px] font-semibold tracking-wide">
+                      {tolerance
+                        ? tolerance.withinTolerance
+                          ? "WITHIN RANGE"
+                          : "OUT OF RANGE"
+                        : connected
+                          ? weight?.stable
+                            ? "STABLE"
+                            : "AWAITING STABLE READING"
+                          : statusLabel.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+
+                {isAdMode ? (
+                  <div className="flex flex-col gap-0.5 sm:flex-row">
+                    <div className="grid min-w-0 flex-1 grid-cols-2 gap-0.5 bg-[#8b8b8b] md:grid-cols-4">
+                      {outputComponents.map((component, index) => {
+                        const captured = capturedWeights.get(component.id);
+                        const isActive = index === activeIndex;
+                        const displayWeight = captured
+                          ? captured.weightKg.toFixed(3)
+                          : Math.abs(component.plannedWeightKg).toFixed(3);
+
+                        return (
+                          <button
+                            key={component.id}
+                            type="button"
+                            onClick={() => setActiveIndex(index)}
+                            className={`relative min-h-[86px] min-w-0 px-3 py-2.5 text-left text-white transition-colors ${
+                              isActive
+                                ? "bg-[#29a3dd]"
+                                : captured
+                                  ? "bg-[#4f8f55] hover:bg-[#579d5e]"
+                                  : "bg-[#6d6d6d] hover:bg-[#787878]"
+                            }`}
+                          >
+                            <div className="truncate font-weight-display text-[22px] font-bold leading-none tracking-[0.05em]">
+                              {displayWeight}<span className="ml-1 font-sans text-[10px]">KG</span>
+                            </div>
+                            <div className="mt-2 truncate text-[11px] font-semibold tracking-wide">{component.itemCode}</div>
+                            <div className="mt-0.5 truncate text-[10px] text-white/80">{component.itemName}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex min-h-[86px] shrink-0 flex-col items-center justify-center bg-[#4e4e4e] px-5 py-3 text-white sm:w-[180px]">
+                      <div className="text-[13px] font-bold tracking-[0.1em]">TOTAL WT.</div>
+                      <div className="mt-2 font-weight-display text-[34px] font-bold leading-none tracking-[0.05em]">
+                        {totalCaptured.toFixed(3)}
+                      </div>
+                      <div className="mt-1 text-[11px] font-bold">KG</div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex min-h-[118px] shrink-0 flex-col items-center justify-center gap-3 rounded-md border border-[#4a4a4a] bg-[#5c5c5c] px-5 lg:w-[118px]">
+                <span className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-white/70">
+                  Record Weight
+                </span>
                 <button
                   type="button"
-                  onClick={() => setActiveIndex(0)}
-                  className={`relative w-full rounded-2xl px-4 py-4 text-left transition-all ${
-                    activeCapture
-                      ? "border border-emerald-500/70 bg-[#064e3b]"
-                      : "border border-blue-400/70 bg-[#1e3a8a]"
+                  onClick={handleCapture}
+                  disabled={saveWeightDisabled}
+                  aria-label="Record weight"
+                  title={
+                    isSyncingCapture
+                      ? "Saving weight..."
+                      : !weight?.stable
+                        ? "Waiting for stable reading…"
+                        : !isSingleCaptureMode && !tolerance?.withinTolerance
+                          ? `Weight out of range (${minWeight.toFixed(3)}–${maxWeight.toFixed(3)} kg)`
+                          : isBlMode
+                            ? "Save the current BL batch weight"
+                            : isGlMode
+                              ? "Save the current GL batch weight"
+                              : isPrMode
+                                ? "Save the current PR batch weight"
+                                : "Save weight to the current capture session"
+                  }
+                  className={`h-11 w-11 rounded-full border-0 transition-transform active:scale-90 ${
+                    !saveWeightDisabled
+                      ? "cursor-pointer bg-[radial-gradient(circle_at_35%_32%,#ff5d51,#dc2f22_70%)] shadow-[0_0_0_3px_rgba(0,0,0,0.12),0_2px_5px_rgba(0,0,0,0.4)]"
+                      : "cursor-not-allowed bg-[#767676] shadow-inner"
                   }`}
-                >
-                  <div
-                    className={`absolute right-4 top-4 h-3 w-3 shrink-0 rounded-full ${
-                      activeCapture ? "bg-emerald-400" : "bg-blue-400 animate-pulse"
-                    }`}
-                  />
-                  <div className="flex min-h-[150px] flex-col">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      Current Batch Weight
-                    </div>
-                    <div className="flex flex-1 flex-col items-center justify-center text-center">
-                      <div className="text-[56px] font-weight-display font-bold leading-none tracking-[0.04em] text-white">
-                        {activeCapture ? activeCapture.weightKg.toFixed(3) : weight?.value.toFixed(3) ?? "0.000"}
-                      </div>
-                      <div className="mt-1 font-weight-display text-[14px] text-slate-300">kg</div>
-                    </div>
-                    <div className="font-mono text-[10px] font-semibold text-blue-200">{currentBatchLabel}</div>
-                    <div className="mt-1 text-[11px] text-slate-300">
-                      Saved weight is used to create the batch-specific captured output list below.
-                    </div>
-                  </div>
-                </button>
-              ) : (
-                <div className="grid grid-cols-4 gap-2">
-                  {outputComponents.map((component, index) => {
-                    const captured = capturedWeights.get(component.id);
-                    const isActive = index === activeIndex;
-                    const isCaptured = !!captured;
-                    const displayWeight = isCaptured
-                      ? captured.weightKg.toFixed(3)
-                      : Math.abs(component.plannedWeightKg).toFixed(3);
-
-                    const cardBackground = isActive
-                      ? "border border-blue-400/70 bg-[#1e3a8a]"
-                      : isCaptured
-                        ? "border border-emerald-500/70 bg-[#064e3b]"
-                        : "border border-green-800/60 bg-[#14532d]";
-                    const weightColor = isActive
-                      ? "text-white"
-                      : isCaptured
-                        ? "text-emerald-300"
-                        : "text-[#4ade80]";
-                    const codeColor = isActive
-                      ? "text-blue-300"
-                      : isCaptured
-                        ? "text-emerald-400"
-                        : "text-slate-400";
-                    const dotColor = isActive
-                      ? "bg-blue-400 animate-pulse"
-                      : isCaptured
-                        ? "bg-emerald-400"
-                        : "bg-green-800";
-
-                    return (
-                      <button
-                        key={component.id}
-                        type="button"
-                        onClick={() => setActiveIndex(index)}
-                        className={`rounded-xl px-3 py-2 text-left transition-all hover:brightness-110 ${cardBackground}`}
-                      >
-                        <div className="mb-0.5 flex items-start justify-between">
-                          <span className={`text-[22px] font-mono font-bold leading-none tabular-nums ${weightColor}`}>
-                            {displayWeight}
-                          </span>
-                          <div className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dotColor}`} />
-                        </div>
-                        <div className="mb-1 font-mono text-[10px] text-slate-500">kg</div>
-                        <div className={`truncate font-mono text-[10px] font-semibold ${codeColor}`}>
-                          {component.itemCode}
-                        </div>
-                        <div className="mt-1 truncate text-[10px] text-slate-300">{component.itemName}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                />
+                <span className="font-mono text-[9px] font-semibold text-white/60">
+                  {isSyncingCapture ? "SAVING..." : saveWeightDisabled ? "NOT READY" : "READY"}
+                </span>
+              </div>
             </div>
 
-            <div className="flex w-[130px] shrink-0 flex-col items-center justify-between gap-3 border-l border-slate-700 px-4 py-4">
-              <div className="text-center">
-                <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                  TOTAL WT.
-                </div>
-                <div className="text-[32px] font-mono font-bold leading-none tabular-nums text-white">
-                  {totalCaptured.toFixed(2)}
-                </div>
-                <div className="mt-1 font-mono text-[11px] text-slate-400">kg</div>
+            <div className="mt-4 flex flex-col gap-3 border-t border-[#e2e2e2] pt-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div className={`h-2 w-2 shrink-0 rounded-full ${scaleStatusDotClassName}`} />
+                <span className={`font-mono text-[11px] ${scaleStatusClassName}`}>
+                  {localBridgeStatusText.toUpperCase()}
+                </span>
+                {weight ? (
+                  <span className={`font-mono text-[11px] ${weight.stable ? "text-emerald-600" : "text-amber-600"}`}>
+                    {weight.stable ? "● STABLE" : "◌ STABILIZING…"}
+                  </span>
+                ) : null}
+                {tolerance ? (
+                  <span className={`font-mono text-[11px] ${tolerance.withinTolerance ? "text-emerald-600" : "text-red-600"}`}>
+                    Δ {tolerance.deviation >= 0 ? "+" : ""}{tolerance.deviation.toFixed(3)} kg
+                  </span>
+                ) : null}
+                <span className="font-mono text-[11px] text-slate-500">
+                  {capturedWeights.size}/{requiredComponents.length} captured
+                </span>
+                {scaleHelpText ? <span className="font-mono text-[11px] text-amber-600">{scaleHelpText}</span> : null}
               </div>
 
-              <button
-                type="button"
-                onClick={handleCapture}
-                disabled={saveWeightDisabled}
-                title={
-                  isSyncingCapture
-                    ? "Saving weight..."
-                    : !weight?.stable
-                    ? "Waiting for stable reading…"
-                      : !isSingleCaptureMode && !tolerance?.withinTolerance
-                        ? `Weight out of range (${minWeight.toFixed(3)}–${maxWeight.toFixed(3)} kg)`
-                      : isBlMode
-                        ? "Save the current BL batch weight"
-                        : isGlMode
-                          ? "Save the current GL batch weight"
-                          : isPrMode
-                            ? "Save the current PR batch weight"
-                          : "Save weight to the current capture session"
-                }
-                className={`w-full rounded-xl py-2.5 font-mono text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  !saveWeightDisabled
-                    ? "cursor-pointer bg-emerald-600 text-white shadow-[0_0_14px_rgba(52,211,153,0.45)] hover:bg-emerald-500"
-                    : "cursor-not-allowed bg-slate-800 text-slate-600"
-                }`}
-              >
-                <span className="flex flex-col items-center gap-1">
-                  <CheckCircle2 className={`h-4 w-4 ${!saveWeightDisabled ? "text-emerald-200" : "text-slate-700"}`} />
-                  SAVE WT.
-                </span>
-              </button>
-
-              <div
-                className={`h-10 w-10 rounded-full transition-colors ${
-                  connected
-                    ? "bg-red-500 shadow-[0_0_14px_4px_rgba(239,68,68,0.55)]"
-                    : "bg-slate-700"
-                }`}
-              />
+              <div className="flex items-center gap-2 self-end">
+                <button
+                  type="button"
+                  onClick={handleFinalCapture}
+                  disabled={finalCaptureDisabled}
+                  className={`rounded px-4 py-2 text-[12px] font-bold uppercase tracking-wide transition-colors ${
+                    !finalCaptureDisabled
+                      ? "bg-[#29a3dd] text-white hover:bg-[#218ec2]"
+                      : "cursor-not-allowed bg-[#b9bdc2] text-white/70"
+                  }`}
+                >
+                  Final Capture
+                </button>
+                <button
+                  type="button"
+                  onClick={tare}
+                  className="rounded bg-[#5a5a5a] px-4 py-2 text-[12px] font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#494949]"
+                >
+                  Tare
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 border-t border-slate-700 bg-[#0d0d1a] px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className={`h-2 w-2 shrink-0 rounded-full ${scaleStatusDotClassName}`} />
-              <span className={`font-mono text-[11px] ${scaleStatusClassName}`}>
-                {localBridgeStatusText.toUpperCase()}
-              </span>
-              {weight ? (
-                <span className={`font-mono text-[11px] ${weight.stable ? "text-emerald-400" : "text-yellow-400"}`}>
-                  {weight.stable ? "● STABLE" : "◌ STABILIZING…"}
-                </span>
-              ) : null}
-              {tolerance ? (
-                <span className={`font-mono text-[11px] ${tolerance.withinTolerance ? "text-emerald-400" : "text-red-400"}`}>
-                  Δ {tolerance.deviation >= 0 ? "+" : ""}
-                  {tolerance.deviation.toFixed(3)} kg
-                </span>
-              ) : null}
-              <span className="font-mono text-[11px] text-slate-500">
-                {capturedWeights.size}/{requiredComponents.length} captured
-              </span>
-              {scaleHelpText ? (
-                <span className="font-mono text-[11px] text-amber-400">{scaleHelpText}</span>
-              ) : null}
+          {isSingleCaptureMode ? (
+            <div className="mt-4">
+              <div className="flex justify-end">
+                <div className="overflow-hidden rounded font-bold text-white">
+                  <span className="inline-flex bg-[#29a3dd] px-5 py-2 text-[13px]">KG</span>
+                  <span className="inline-flex bg-[#5a5a5a] px-5 py-2 text-[13px]">Single Product</span>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                <div className="flex overflow-hidden rounded font-bold text-white">
+                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Plan Qty</span>
+                  <span className="bg-[#1d87c8] px-4 py-2 font-weight-display text-[13px]">{displayStdWeight.toFixed(3)}</span>
+                </div>
+                <div className="flex overflow-hidden rounded font-bold text-white">
+                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Prdn. Qty</span>
+                  <span className="bg-[#1d87c8] px-4 py-2 font-weight-display text-[13px]">{totalCaptured.toFixed(3)}</span>
+                </div>
+                <div className="flex overflow-hidden rounded font-bold text-white">
+                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Captured</span>
+                  <span className="bg-[#1d87c8] px-4 py-2 text-[13px]">{capturedWeights.size}</span>
+                </div>
+                <div className="flex overflow-hidden rounded font-bold text-white">
+                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Ok</span>
+                  <span className="bg-[#43a047] px-4 py-2 text-[13px]">{activeCapture ? 1 : 0}</span>
+                </div>
+                <div className="flex overflow-hidden rounded font-bold text-white">
+                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Pending</span>
+                  <span className="bg-[#f4511e] px-4 py-2 text-[13px]">{activeCapture ? 0 : requiredComponents.length}</span>
+                </div>
+              </div>
+              <div className="relative mt-3 h-2 rounded bg-[#ececec]">
+                <div className="absolute inset-y-0 left-0 w-[62%] rounded bg-[#c9c9c9]" />
+              </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleFinalCapture}
-                disabled={finalCaptureDisabled}
-                className={`rounded-lg px-4 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest transition-colors ${
-                  !finalCaptureDisabled
-                    ? "bg-[#ff6b00] text-white hover:bg-[#ff7e1f]"
-                    : "cursor-not-allowed bg-slate-800 text-slate-600"
-                }`}
-              >
-                Final Capture
-              </button>
-              <button
-                type="button"
-                onClick={tare}
-                className="rounded-lg bg-slate-700 px-4 py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest text-slate-200 transition-colors hover:bg-slate-600"
-              >
-                TARE
-              </button>
-            </div>
-          </div>
+          ) : null}
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_32px_-24px_rgba(15,23,42,0.22)]">
