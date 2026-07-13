@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProductionOrderForm, { buildWorkCenterOptions } from "./ProductionOrderFormView";
 import { createProductionOrderDefaultValues } from "./productionOrderForm";
 
@@ -89,6 +89,10 @@ const renderForm = (props: Partial<ComponentProps<typeof ProductionOrderForm>> =
 };
 
 describe("ProductionOrderForm UI shell", () => {
+  beforeEach(() => {
+    coreApiGet.mockClear();
+  });
+
   it("falls back to location records when dedicated work center master is empty", () => {
     const options = buildWorkCenterOptions(
       [
@@ -114,6 +118,20 @@ describe("ProductionOrderForm UI shell", () => {
     expect(screen.getByRole("button", { name: /general/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /materials/i })).toBeInTheDocument();
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+  });
+
+  it("loads shift incharge options without department filtering", async () => {
+    renderForm();
+
+    await waitFor(() =>
+      expect(
+        coreApiGet.mock.calls.some(
+          ([url, config]) =>
+            url === "/api/users/users-creation/lookup-options/"
+            && !("department" in (((config as { params?: Record<string, unknown> } | undefined)?.params) ?? {})),
+        ),
+      ).toBe(true),
+    );
   });
 
   it("switches visible sections from the left sidebar navigation", async () => {
