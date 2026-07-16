@@ -71,7 +71,7 @@ const MachineCreationsPage = () => {
         status: record.status,
         is_active: record.is_active,
       })}
-      mapFormToPayload={(values) => ({
+      mapFormToPayload={(values: MachineCreationFormValues) => ({
         name: values.name,
         machine_type: values.machine_type,
         department: values.department || null,
@@ -107,7 +107,7 @@ const MachineCreationsPage = () => {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Machine Type*</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={String(field.value ?? "")} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select Machine Type" />
@@ -165,7 +165,7 @@ const MachineCreationsPage = () => {
                   <Input
                     type="number"
                     step="0.001"
-                    value={field.value ?? ""}
+                    value={field.value === undefined ? "" : String(field.value)}
                     onChange={(event) => field.onChange(event.target.value === "" ? undefined : Number(event.target.value))}
                   />
                 </FormControl>
@@ -179,7 +179,7 @@ const MachineCreationsPage = () => {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Capacity UOM</FormLabel>
-                <Select value={field.value || "none"} onValueChange={(value) => field.onChange(value === "none" ? "" : value)}>
+                <Select value={field.value ? String(field.value) : "none"} onValueChange={(value) => field.onChange(value === "none" ? "" : value)}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select UOM" />

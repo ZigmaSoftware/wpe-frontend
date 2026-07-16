@@ -19,6 +19,8 @@ import type {
   ProfileCreationWritePayload,
   ProfileSizeRecord,
   ProfileSizeWritePayload,
+  TareMasterRecord,
+  TareMasterWritePayload,
   WorkCentreCreationRecord,
   WorkCentreCreationWritePayload,
 } from "@/features/production-masters/types";
@@ -55,6 +57,8 @@ export const productionMastersApi = {
   productionLines: codeMasterResource<ProductionLineRecord, ProductionLineWritePayload>(BASE, "production-lines"),
   binCreations: codeMasterResource<BinCreationRecord, BinCreationWritePayload>(BASE, "bin-creations"),
   bagCreations: codeMasterResource<BagCreationRecord, BagCreationWritePayload>(BASE, "bag-creations"),
+  tareMasters: codeMasterResource<TareMasterRecord, TareMasterWritePayload>(BASE, "tare-masters"),
   packingTypes: codeMasterResource<PackingTypeRecord, PackingTypeWritePayload>(BASE, "packing-types"),
   packingMaterials: codeMasterResource<PackingMaterialRecord, PackingMaterialWritePayload>(BASE, "packing-materials"),
 };
+

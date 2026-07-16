@@ -8,7 +8,7 @@ import {
   getProductionManageBatchRoute,
 } from "@/features/production/utils/routes";
 import { getProductionBatchCountLabel } from "@/features/production/components/productionListShared";
-import { formatDate } from "@/lib/api-helpers";
+import { formatDate, formatDecimal } from "@/lib/api-helpers";
 import type { ProductionStageRecord } from "@/lib/types";
 import type { ProductionStageValue } from "@/features/production/api/productionWorkspaceApi";
 
@@ -24,6 +24,7 @@ type ProductionStageListResultsProps = {
   onDeleteOrder: (orderId: number, productionId: string) => void;
   isDeleting?: boolean;
   getProductionName: (row: ProductionStageRecord) => string;
+  getProductionQty: (row: ProductionStageRecord) => number;
 };
 
 const ProductionStageListResults = ({
@@ -38,6 +39,7 @@ const ProductionStageListResults = ({
   onDeleteOrder,
   isDeleting = false,
   getProductionName,
+  getProductionQty,
 }: ProductionStageListResultsProps) => (
   <>
     <div className="overflow-x-auto">
@@ -47,6 +49,7 @@ const ProductionStageListResults = ({
             <TableHead>Prd ID</TableHead>
             <TableHead>Production Name</TableHead>
             <TableHead>No.of Batch</TableHead>
+            <TableHead>Production Qty</TableHead>
             <TableHead>BOM Varient</TableHead>
             <TableHead>Started Date</TableHead>
             <TableHead>Ended Date</TableHead>
@@ -63,6 +66,7 @@ const ProductionStageListResults = ({
               <TableCell className="font-mono text-xs font-medium">{row.production_id || "-"}</TableCell>
               <TableCell className="font-medium">{getProductionName(row)}</TableCell>
               <TableCell>{getProductionBatchCountLabel(row)}</TableCell>
+              <TableCell>{formatDecimal(getProductionQty(row))}</TableCell>
               <TableCell className="text-muted-foreground">-</TableCell>
               <TableCell>{formatDate(row.start_date_time || row.production_date)}</TableCell>
               <TableCell>{formatDate(row.end_date_time)}</TableCell>

@@ -12,6 +12,7 @@ import { coreApi } from "@/lib/api";
 import { getApiErrorMessage, normalizeListResponse, unwrapSuccessEnvelope } from "@/lib/api-helpers";
 import { CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS, SCALE_BRIDGE_LOCAL_STATUS_URL } from "@/lib/env";
 import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
+import type { TareMasterRecord } from "@/features/production-masters/types";
 import { BATCH_STATUS_CLASSES, StatusBadge } from "@/pages/productionShared";
 import ProductionSectionCard from "./ProductionSectionCard";
 import {
@@ -29,7 +30,7 @@ import {
   type OutputCaptureMaterialSeed,
   type OutputComponentCapture,
 } from "./productionOutputCapture";
-import type { ProductionOrderFormValues } from "./productionOrderForm";
+import { getProductionQuantity, type ProductionOrderFormValues } from "./productionOrderForm";
 import { useBomComponents } from "./useBomComponents";
 import QRLabelPreviewModal, { type QRLabelContext } from "./QRLabelPreviewModal";
 
@@ -269,6 +270,8 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const productionFor = useWatch({ control: form.control, name: "production_for" }) ?? "";
   const finishedGoods = useWatch({ control: form.control, name: "finished_goods" });
   const batchAuto = useWatch({ control: form.control, name: "details.batch_auto" }) ?? "";
+  const planRows = useWatch({ control: form.control, name: "plan_rows" });
+  const plannedOrderQuantity = useMemo(() => getProductionQuantity(planRows ?? []), [planRows]);
   const outputStage = context?.stage ?? "AD";
   const isAdMode = outputStage === "AD";
   const isBlMode = outputStage === "BL";
@@ -323,6 +326,17 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     retry: false,
     queryFn: fetchLocalBridgeStatus,
   });
+  const tareMasterQuery = useQuery({
+    queryKey: ["production-tare-master", outputStage],
+    enabled: queriesEnabled,
+    queryFn: async () => {
+      const response = await coreApi.get<unknown>("/api/production/tare-masters/", {
+        params: { stage: outputStage },
+      });
+      return normalizeListResponse<TareMasterRecord>(response.data);
+    },
+  });
+  const tareWeightKg = parseNumericValue(tareMasterQuery.data?.[0]?.tare_weight);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -714,6 +728,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     bridgeClientId: activeBridgeIdentity?.bridgeClientId ?? null,
     workstationId: activeBridgeIdentity?.workstationId ?? null,
   });
+  const netWeightKg = weight ? +(weight.value - tareWeightKg).toFixed(3) : null;
 
   const activeScaleBridgeClientId =
     activeBridgeIdentity?.bridgeClientId ?? resolvedBridgeClientId ?? null;
@@ -765,15 +780,15 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             )
           : scaleError || "This page is locked to the configured bridge client for this browser.";
   const tolerance =
-    !isSingleCaptureMode && displayStdWeight > 0 && weight
+    !isSingleCaptureMode && displayStdWeight > 0 && weight && netWeightKg !== null
       ? {
-          withinTolerance: weight.value >= minWeight && weight.value <= maxWeight,
-          deviation: +(weight.value - displayStdWeight).toFixed(3),
+          withinTolerance: netWeightKg >= minWeight && netWeightKg <= maxWeight,
+          deviation: +(netWeightKg - displayStdWeight).toFixed(3),
         }
       : null;
 
   const canCapture = isSingleCaptureMode
-    ? !!(weight?.stable && weight.value > 0 && activeComponent)
+    ? !!(weight?.stable && netWeightKg !== null && netWeightKg > 0 && activeComponent)
     : !!(weight?.stable && tolerance?.withinTolerance === true && activeComponent);
   const scaleDisplayClassName = !connected
     ? "border-[#9ca3af] bg-gradient-to-b from-[#e5e7eb] to-[#cbd5e1] text-[#1f2937]"
@@ -789,6 +804,24 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     () => areAllRequiredOutputComponentsCaptured(outputComponents, capturedWeights),
     [capturedWeights, outputComponents],
   );
+  const activeComponentCapture = activeComponent ? capturedWeights.get(activeComponent.id) ?? null : null;
+  const planQtyTotal = plannedOrderQuantity;
+  // Cumulative production for this order/stage: every already-finalized capture plus whatever
+  // is captured but not yet finalized in the current round. totalCaptured stays round-only
+  // (it also drives the live "TOTAL WT." scale readout).
+  const cumulativeCapturedQty =
+    visibleCapturedOutputs.reduce((sum, record) => sum + parseNumericValue(record.weightKg), 0) + totalCaptured;
+  const planQuantityMet = planQtyTotal > 0 && cumulativeCapturedQty >= planQtyTotal;
+  const capturedCount = visibleCapturedOutputs.length + capturedWeights.size;
+  // A captured record only counts as done once its batch reaches "Completed" — anything
+  // else (still IN_PROGRESS, etc.) is pending, regardless of round-level component progress.
+  const completedCaptureCount = visibleCapturedOutputs.filter((record) => record.productionStatus === "COMPLETED").length;
+  const pendingCaptureCount = visibleCapturedOutputs.filter((record) => record.productionStatus !== "COMPLETED").length;
+  const okComponentCount = isSingleCaptureMode
+    ? (activeComponentCapture ? 1 : 0)
+    : requiredComponents.filter((component) => capturedWeights.has(component.id)).length;
+  const captureProgressPercent =
+    requiredComponents.length > 0 ? Math.min(100, Math.round((okComponentCount / requiredComponents.length) * 100)) : 0;
 
   const invalidateBatchQueries = useCallback(() => {
     if (persistedOrderId === null) {
@@ -978,7 +1011,15 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   );
 
   const handleCapture = useCallback(() => {
-    if (!canCapture || !weight || !activeComponent || isSyncingCapture || isFinalizingCapture || outwardingRecordId !== null) {
+    if (
+      !canCapture ||
+      !weight ||
+      netWeightKg === null ||
+      !activeComponent ||
+      isSyncingCapture ||
+      isFinalizingCapture ||
+      outwardingRecordId !== null
+    ) {
       return;
     }
 
@@ -986,7 +1027,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       if (!isSingleCaptureMode && !deferAdBatchCreationUntilFinalCapture) {
         setIsSyncingCapture(true);
         try {
-          await saveAdCapturedWeight(activeComponent, weight.value, weight.timestamp);
+          await saveAdCapturedWeight(activeComponent, netWeightKg, weight.timestamp);
           toast.success("Weight saved.");
         } catch (error) {
           toast.error(getApiErrorMessage(error, "Failed to save the AD weight."));
@@ -999,7 +1040,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
           const next = new Map(current);
           next.set(activeComponent.id, {
             componentId: activeComponent.id,
-            weightKg: weight.value,
+            weightKg: netWeightKg,
             capturedAt: weight.timestamp,
           });
           return next;
@@ -1029,6 +1070,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
     isSingleCaptureMode,
     isSyncingCapture,
     deferAdBatchCreationUntilFinalCapture,
+    netWeightKg,
     outwardingRecordId,
     outputComponents,
     saveAdCapturedWeight,
@@ -1321,8 +1363,13 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
   const isSingleCaptureLocked =
     isSingleCaptureMode && (activeBatch?.status === "COMPLETED" || (existingSingleCapture !== null && !canResumeExistingPrCapture));
   const saveWeightDisabled =
-    !canCapture || isSyncingCapture || isFinalizingCapture || outwardingRecordId !== null || isSingleCaptureLocked;
-  const finalCaptureDisabled = isSingleCaptureMode
+    !canCapture ||
+    isSyncingCapture ||
+    isFinalizingCapture ||
+    outwardingRecordId !== null ||
+    isSingleCaptureLocked ||
+    planQuantityMet;
+  const finalCaptureDisabled = planQuantityMet || (isSingleCaptureMode
     ? activeBatch?.status === "COMPLETED" ||
       (existingSingleCapture !== null && !canResumeExistingPrCapture) ||
       requiredComponents.length === 0 ||
@@ -1330,7 +1377,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
       isSyncingCapture ||
       outwardingRecordId !== null ||
       (!allRequiredCaptured && existingSingleCapture === null)
-    : !allRequiredCaptured || requiredComponents.length === 0 || isFinalizingCapture || isSyncingCapture || outwardingRecordId !== null;
+    : !allRequiredCaptured || requiredComponents.length === 0 || isFinalizingCapture || isSyncingCapture || outwardingRecordId !== null);
   const currentBatchLabel =
     activeBatch?.display_batch_no?.trim() ||
     activeBatch?.batch_no?.trim() ||
@@ -1456,7 +1503,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                       </>
                     )}
                     <div className="grid grid-cols-[88px_16px_minmax(0,1fr)] items-baseline">
-                      <span>TARE</span><span>:</span><span className="font-weight-display text-[14px]">0.000 <span className="font-sans text-[11px]">KG</span></span>
+                      <span>TARE</span><span>:</span><span className="font-weight-display text-[14px]">{tareWeightKg.toFixed(3)} <span className="font-sans text-[11px]">KG</span></span>
                     </div>
                   </div>
 
@@ -1464,7 +1511,7 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                     <div className="mb-1 font-mono text-[13px] font-bold tracking-[0.12em]">NET WEIGHT</div>
                     <div className="flex items-end justify-end gap-1.5">
                       <span className="font-weight-display text-[clamp(42px,5vw,64px)] font-bold leading-none tracking-[0.06em]">
-                        {weight ? weight.value.toFixed(3) : "0.000"}
+                        {netWeightKg !== null ? netWeightKg.toFixed(3) : "0.000"}
                       </span>
                       <span className="mb-1.5 text-[15px] font-bold">kg</span>
                     </div>
@@ -1536,7 +1583,9 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                   disabled={saveWeightDisabled}
                   aria-label="Record weight"
                   title={
-                    isSyncingCapture
+                    planQuantityMet
+                      ? "Plan quantity met for this order — capture is restricted."
+                      : isSyncingCapture
                       ? "Saving weight..."
                       : !weight?.stable
                         ? "Waiting for stable reading…"
@@ -1582,6 +1631,11 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
                   {capturedWeights.size}/{requiredComponents.length} captured
                 </span>
                 {scaleHelpText ? <span className="font-mono text-[11px] text-amber-600">{scaleHelpText}</span> : null}
+                {planQuantityMet ? (
+                  <span className="font-mono text-[11px] font-semibold text-red-600">
+                    Plan quantity met — capture is restricted for this batch.
+                  </span>
+                ) : null}
               </div>
 
               <div className="flex items-center gap-2 self-end">
@@ -1608,41 +1662,44 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
             </div>
           </div>
 
-          {isSingleCaptureMode ? (
-            <div className="mt-4">
-              <div className="flex justify-end">
-                <div className="overflow-hidden rounded font-bold text-white">
-                  <span className="inline-flex bg-[#29a3dd] px-5 py-2 text-[13px]">KG</span>
-                  <span className="inline-flex bg-[#5a5a5a] px-5 py-2 text-[13px]">Single Product</span>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-                <div className="flex overflow-hidden rounded font-bold text-white">
-                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Plan Qty</span>
-                  <span className="bg-[#1d87c8] px-4 py-2 font-weight-display text-[13px]">{displayStdWeight.toFixed(3)}</span>
-                </div>
-                <div className="flex overflow-hidden rounded font-bold text-white">
-                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Prdn. Qty</span>
-                  <span className="bg-[#1d87c8] px-4 py-2 font-weight-display text-[13px]">{totalCaptured.toFixed(3)}</span>
-                </div>
-                <div className="flex overflow-hidden rounded font-bold text-white">
-                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Captured</span>
-                  <span className="bg-[#1d87c8] px-4 py-2 text-[13px]">{capturedWeights.size}</span>
-                </div>
-                <div className="flex overflow-hidden rounded font-bold text-white">
-                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Ok</span>
-                  <span className="bg-[#43a047] px-4 py-2 text-[13px]">{activeCapture ? 1 : 0}</span>
-                </div>
-                <div className="flex overflow-hidden rounded font-bold text-white">
-                  <span className="bg-[#37474f] px-3 py-2 text-[13px]">Pending</span>
-                  <span className="bg-[#f4511e] px-4 py-2 text-[13px]">{activeCapture ? 0 : requiredComponents.length}</span>
-                </div>
-              </div>
-              <div className="relative mt-3 h-2 rounded bg-[#ececec]">
-                <div className="absolute inset-y-0 left-0 w-[62%] rounded bg-[#c9c9c9]" />
+          <div className="mt-4">
+            <div className="flex justify-end">
+              <div className="overflow-hidden rounded font-bold text-white">
+                <span className="inline-flex bg-[#29a3dd] px-5 py-2 text-[13px]">KG</span>
+                <span className="inline-flex bg-[#5a5a5a] px-5 py-2 text-[13px]">
+                  {isSingleCaptureMode ? "Single Product" : "Multi Product"}
+                </span>
               </div>
             </div>
-          ) : null}
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              <div className="flex overflow-hidden rounded font-bold text-white">
+                <span className="bg-[#37474f] px-3 py-2 text-[13px]">Plan Qty</span>
+                <span className="bg-[#1d87c8] px-4 py-2 font-weight-display text-[13px]">{planQtyTotal.toFixed(3)}</span>
+              </div>
+              <div className="flex overflow-hidden rounded font-bold text-white">
+                <span className="bg-[#37474f] px-3 py-2 text-[13px]">Prdn. Qty</span>
+                <span className="bg-[#1d87c8] px-4 py-2 font-weight-display text-[13px]">{cumulativeCapturedQty.toFixed(3)}</span>
+              </div>
+              <div className="flex overflow-hidden rounded font-bold text-white">
+                <span className="bg-[#37474f] px-3 py-2 text-[13px]">Captured</span>
+                <span className="bg-[#1d87c8] px-4 py-2 text-[13px]">{capturedCount}</span>
+              </div>
+              <div className="flex overflow-hidden rounded font-bold text-white">
+                <span className="bg-[#37474f] px-3 py-2 text-[13px]">Ok</span>
+                <span className="bg-[#43a047] px-4 py-2 text-[13px]">{completedCaptureCount}</span>
+              </div>
+              <div className="flex overflow-hidden rounded font-bold text-white">
+                <span className="bg-[#37474f] px-3 py-2 text-[13px]">Pending</span>
+                <span className="bg-[#f4511e] px-4 py-2 text-[13px]">{pendingCaptureCount}</span>
+              </div>
+            </div>
+            <div className="relative mt-3 h-2 rounded bg-[#ececec]">
+              <div
+                className="absolute inset-y-0 left-0 rounded bg-[#c9c9c9] transition-[width] duration-300"
+                style={{ width: `${captureProgressPercent}%` }}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_32px_-24px_rgba(15,23,42,0.22)]">

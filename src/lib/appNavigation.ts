@@ -31,6 +31,11 @@ import {
   productionWorkspaceModuleDefinitions,
 } from "@/features/production/utils/routes";
 import {
+  EXTRUSION_ROUTE,
+  extrusionWorkspaceModuleDefinitions,
+} from "@/features/production/extrusion/utils/routes";
+import {
+  extrusionMasterModuleDefinitions,
   productionMasterModuleDefinitions,
   PRODUCTION_MASTERS_ROUTE,
 } from "@/features/production-masters/utils/routes";
@@ -181,6 +186,19 @@ export const buildAppNavigation = (
       })), adminMenu, hasFullAccess),
     },
     {
+      key: "production-extrusion",
+      label: "Extrusion",
+      icon: Factory,
+      tag: "MES",
+      to: EXTRUSION_ROUTE,
+      items: filterAccessibleItems(extrusionWorkspaceModuleDefinitions.map(({ to, icon, label, description }) => ({
+        to,
+        icon,
+        label,
+        description,
+      })), adminMenu, hasFullAccess),
+    },
+    {
       key: "store",
       label: "Store",
       icon: Archive,
@@ -324,6 +342,18 @@ export const buildAppNavigation = (
       icon: deviceLabelMasterModuleDefinitions[0]?.icon ?? Database,
       to: DEVICE_LABEL_MASTERS_ROUTE,
       items: filterAccessibleItems(deviceLabelMasterModuleDefinitions.map(({ to, icon, label, description }) => ({
+        to,
+        icon,
+        label,
+        description,
+      })), adminMenu, hasFullAccess),
+    },
+    {
+      key: "extrusion-masters",
+      label: "Extrusion Masters",
+      icon: extrusionMasterModuleDefinitions[0]?.icon ?? Database,
+      to: PRODUCTION_MASTERS_ROUTE,
+      items: filterAccessibleItems(extrusionMasterModuleDefinitions.map(({ to, icon, label, description }) => ({
         to,
         icon,
         label,
