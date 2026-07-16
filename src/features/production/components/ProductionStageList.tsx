@@ -29,7 +29,7 @@ import {
 } from "@/features/production/components/productionListShared";
 import { toast } from "@/components/ui/sonner";
 import { coreApi } from "@/lib/api";
-import { formatDate, getApiErrorMessage } from "@/lib/api-helpers";
+import { formatDate, formatDecimal, getApiErrorMessage } from "@/lib/api-helpers";
 import type { ProductionOrder, ProductionStageRecord } from "@/lib/types";
 
 type ProductionStageListProps = {
@@ -111,23 +111,35 @@ const STAGE_STATUS_OPTIONS: Record<ProductionStageValue, Array<{ value: string; 
 
 const resolvePageSize = (value: StorePageSizeValue) => (value === "all" ? 200 : Number(value));
 
+// Mirrors the "Completed" option each stage exposes in STAGE_STATUS_OPTIONS above.
+const STAGE_COMPLETED_STATUS: Record<ProductionStageValue, string> = {
+  AD: "PLAN_COMPLETED",
+  BL: "COMPLETED",
+  GL: "COMPLETED",
+  PR: "PLAN_COMPLETED",
+};
+
+const resolveProductionName = (row: ProductionStageRecord, orderLookup: Map<number, ProductionOrder>) => {
+  const matchedOrder = orderLookup.get(row.order_id);
+  if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
+    return matchedOrder.production_for;
+  }
+
+  return formatProductionListLabel(row.production_type);
+};
+
 const getExportColumns = (
   stage: ProductionStageValue,
   orderLookup: Map<number, ProductionOrder>,
+  productionQtyByName: Map<string, number>,
 ): StoreExportColumn<ProductionStageRecord>[] => {
-  const getProductionName = (row: ProductionStageRecord) => {
-    const matchedOrder = orderLookup.get(row.order_id);
-    if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
-      return matchedOrder.production_for;
-    }
-
-    return formatProductionListLabel(row.production_type);
-  };
+  const getProductionName = (row: ProductionStageRecord) => resolveProductionName(row, orderLookup);
 
   const columns: StoreExportColumn<ProductionStageRecord>[] = [
     { label: "Prd ID", value: (row) => row.production_id || "-" },
     { label: "Production Name", value: (row) => getProductionName(row) },
     { label: "No.of Batch", value: (row) => getProductionBatchCountLabel(row) },
+    { label: "Production Qty", value: (row) => formatDecimal(productionQtyByName.get(getProductionName(row)) ?? 0) },
     { label: "BOM Varient", value: () => "-" },
     { label: "Started Date", value: (row) => formatDate(row.start_date_time || row.production_date) },
     { label: "Ended Date", value: (row) => formatDate(row.end_date_time) },
@@ -179,6 +191,21 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
     queryKey: ["production-orders-stage-lookup"],
     queryFn: productionWorkspaceApi.listOrders,
   });
+  // Unfiltered/unpaginated so the Production Qty totals reflect every order for this
+  // stage sharing a production name, not just the current page/search/status filter.
+  const allStageRecordsQuery = useQuery({
+    queryKey: ["production-stage-records-all", stage],
+    queryFn: () =>
+      productionWorkspaceApi.listStageRecords({
+        stage,
+        search: "",
+        status: "all",
+        dateFrom: "",
+        dateTo: "",
+        page: 1,
+        pageSize: 200,
+      }),
+  });
 
   const rows = stageQuery.data?.results ?? [];
   const total = stageQuery.data?.count ?? 0;
@@ -188,6 +215,20 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
       new Map((ordersLookupQuery.data ?? []).map((order) => [order.id, order])),
     [ordersLookupQuery.data],
   );
+  const productionQtyByName = useMemo(() => {
+    const completedStatus = STAGE_COMPLETED_STATUS[stage];
+    const totals = new Map<string, number>();
+    for (const record of allStageRecordsQuery.data?.results ?? []) {
+      if (record.status !== completedStatus) {
+        continue;
+      }
+
+      const name = resolveProductionName(record, ordersById);
+      const qty = Number(ordersById.get(record.order_id)?.total_quantity ?? 0);
+      totals.set(name, (totals.get(name) ?? 0) + (Number.isFinite(qty) ? qty : 0));
+    }
+    return totals;
+  }, [allStageRecordsQuery.data, ordersById, stage]);
   const showRowActions = true;
 
   const deleteOrderMutation = useMutation({
@@ -206,21 +247,15 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
     },
   });
 
-  const getProductionName = (row: ProductionStageRecord) => {
-    const matchedOrder = ordersById.get(row.order_id);
-    if (typeof matchedOrder?.production_for === "string" && matchedOrder.production_for.trim().length > 0) {
-      return matchedOrder.production_for;
-    }
-
-    return formatProductionListLabel(row.production_type);
-  };
+  const getProductionName = (row: ProductionStageRecord) => resolveProductionName(row, ordersById);
+  const getProductionQty = (row: ProductionStageRecord) => productionQtyByName.get(getProductionName(row)) ?? 0;
 
   const handleExport = (format: StoreExportFormat) => {
     exportTableData({
       title: headerTitle || meta.label,
       filename: meta.filename,
       rows,
-      columns: getExportColumns(stage, ordersById),
+      columns: getExportColumns(stage, ordersById, productionQtyByName),
       format,
     });
   };
@@ -323,6 +358,7 @@ const ProductionStageList = ({ stage, headerTitle, headerDescription }: Producti
               onDeleteOrder={handleDeleteOrder}
               isDeleting={deleteOrderMutation.isPending}
               getProductionName={getProductionName}
+              getProductionQty={getProductionQty}
             />
           ) : (
             <EmptyState title={meta.label} description={meta.emptyDescription} />

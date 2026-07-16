@@ -7,7 +7,7 @@ const ProductionMastersLandingPage = () => (
   <div className="mx-auto max-w-5xl space-y-6">
     <PageHeader
       title="Production Masters"
-      description="Manage production profiles, sizes, colors, machines, work centres, lines, bins, bags, packing types, and packing materials."
+      description="Manage production profiles, sizes, colors, machines, work centres, lines, bins, bags, packing types, packing materials, and tare masters."
     />
 
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

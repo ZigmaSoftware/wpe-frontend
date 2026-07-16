@@ -87,6 +87,12 @@ export const bagCreationSchema = baseCodeSchema.extend({
   current_status: z.enum(["FREE", "OCCUPIED", "USED"]).default("FREE"),
 });
 
+export const tareMasterSchema = baseCodeSchema.extend({
+  stage: z.enum(["AD", "BL", "GL", "PR"], { required_error: "Stage is required." }),
+  tare_weight: numericRequired("Tare weight", 0),
+  uom: z.literal("KG").default("KG"),
+});
+
 export const packingTypeSchema = baseCodeSchema.extend({
   standard_pcs: z.coerce.number().int().min(0, "Standard PCS must be zero or greater."),
   standard_weight: numericRequired("Standard weight", 0.001),
@@ -107,5 +113,6 @@ export type WorkCentreCreationFormValues = z.infer<typeof workCentreCreationSche
 export type ProductionLineFormValues = z.infer<typeof productionLineSchema>;
 export type BinCreationFormValues = z.infer<typeof binCreationSchema>;
 export type BagCreationFormValues = z.infer<typeof bagCreationSchema>;
+export type TareMasterFormValues = z.infer<typeof tareMasterSchema>;
 export type PackingTypeFormValues = z.infer<typeof packingTypeSchema>;
 export type PackingMaterialFormValues = z.infer<typeof packingMaterialSchema>;
