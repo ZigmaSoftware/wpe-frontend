@@ -7,6 +7,7 @@ export type InternalAxiosRequestConfig = {
   headers?: AxiosRequestHeaders;
   params?: Record<string, unknown>;
   data?: unknown;
+  withCredentials?: boolean;
   _retry?: boolean;
 };
 
@@ -157,6 +158,7 @@ const create = (defaults: InternalAxiosRequestConfig = {}): AxiosInstance => {
       method,
       headers,
       body,
+      credentials: config.withCredentials ? "include" : "same-origin",
     });
 
     const payload = await parseResponseBody(nativeResponse);
