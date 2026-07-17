@@ -12,18 +12,6 @@ import { GRN_PROCESS_ROUTE, GRN_ROUTE, GRN_STATUS_ROUTE } from "@/features/grn/u
 import { INVENTORY_ROUTE, PRODUCTION_INVENTORY_ROUTE, STORE_INVENTORY_ROUTE, WAREHOUSE_INVENTORY_ROUTE } from "@/features/items/utils/routes";
 import { PRODUCTION_MASTERS_ROUTE } from "@/features/production-masters/utils/routes";
 import { PRODUCTION_AD_WEIGHTAGE_ROUTE, PRODUCTION_BL_BLENDING_ROUTE, PRODUCTION_GL_GRANULATION_ROUTE, PRODUCTION_PR_PRODUCTION_ROUTE, PRODUCTION_ROUTE } from "@/features/production/utils/routes";
-import {
-  EXTRUSION_INSPECTIONS_ROUTE,
-  EXTRUSION_KPI_DASHBOARD_ROUTE,
-  EXTRUSION_PACKING_ROUTE,
-  EXTRUSION_ROUTE,
-  EXTRUSION_SCRAP_ROUTE,
-  EXTRUSION_SHIFT_APPROVAL_ROUTE,
-  EXTRUSION_STICKERS_ROUTE,
-  EXTRUSION_WAREHOUSE_ROUTE,
-  EXTRUSION_WEIGHING_ROUTE,
-  EXTRUSION_WORK_ORDERS_ROUTE,
-} from "@/features/production/extrusion/utils/routes";
 import { REQUESTS_HEAD_APPROVAL_ROUTE, REQUESTS_ROUTE, REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
 import { RECIPE_BOM_MASTERS_ROUTE } from "@/features/recipe-bom-masters/utils/routes";
 import {
@@ -79,15 +67,6 @@ export const WORKSPACE_SCREEN_CODES = {
   grnStatus: ["grn-status-workspace"] as const,
   contacts: ["contacts-workspace"] as const,
   regrind: ["regrind-workspace"] as const,
-  extrusionWorkOrders: ["production-extrusion-workorder-workspace"] as const,
-  extrusionInspections: ["production-extrusion-inspection-workspace"] as const,
-  extrusionPacking: ["production-extrusion-packing-workspace"] as const,
-  extrusionWeighing: ["production-extrusion-weighing-workspace"] as const,
-  extrusionStickers: ["production-extrusion-sticker-workspace"] as const,
-  extrusionShiftApproval: ["production-extrusion-shift-approval-workspace"] as const,
-  extrusionScrap: ["production-extrusion-scrap-workspace"] as const,
-  extrusionWarehouse: ["production-extrusion-warehouse-workspace"] as const,
-  extrusionKpiDashboard: ["production-extrusion-kpi-dashboard"] as const,
 };
 
 export const COMMON_MASTER_SCREEN_CODES = {
@@ -132,10 +111,6 @@ export const PRODUCTION_MASTER_SCREEN_CODES = {
   bagCreations: ["bag-creation-master"] as const,
   packingTypes: ["packing-type-master"] as const,
   packingMaterials: ["packing-material-master"] as const,
-  tareMasters: ["tare-master"] as const,
-  extrusionProfileConfigs: ["production-extrusion-profile-config-master"] as const,
-  scrapCategories: ["production-extrusion-scrap-category-master"] as const,
-  scrapReasons: ["production-extrusion-scrap-reason-master"] as const,
 };
 
 export const RECIPE_BOM_MASTER_SCREEN_CODES = {
@@ -176,17 +151,6 @@ export const WORKSPACE_GROUP_SCREEN_CODES = {
   grn: uniqueCodes(WORKSPACE_SCREEN_CODES.grnProcess, WORKSPACE_SCREEN_CODES.grnStatus),
   contacts: uniqueCodes(WORKSPACE_SCREEN_CODES.contacts),
   regrind: uniqueCodes(WORKSPACE_SCREEN_CODES.regrind),
-  extrusion: uniqueCodes(
-    WORKSPACE_SCREEN_CODES.extrusionWorkOrders,
-    WORKSPACE_SCREEN_CODES.extrusionInspections,
-    WORKSPACE_SCREEN_CODES.extrusionPacking,
-    WORKSPACE_SCREEN_CODES.extrusionWeighing,
-    WORKSPACE_SCREEN_CODES.extrusionStickers,
-    WORKSPACE_SCREEN_CODES.extrusionShiftApproval,
-    WORKSPACE_SCREEN_CODES.extrusionScrap,
-    WORKSPACE_SCREEN_CODES.extrusionWarehouse,
-    WORKSPACE_SCREEN_CODES.extrusionKpiDashboard,
-  ),
 };
 
 export const MASTER_GROUP_SCREEN_CODES = {
@@ -236,10 +200,6 @@ export const MASTER_GROUP_SCREEN_CODES = {
     PRODUCTION_MASTER_SCREEN_CODES.bagCreations,
     PRODUCTION_MASTER_SCREEN_CODES.packingTypes,
     PRODUCTION_MASTER_SCREEN_CODES.packingMaterials,
-    PRODUCTION_MASTER_SCREEN_CODES.tareMasters,
-    PRODUCTION_MASTER_SCREEN_CODES.extrusionProfileConfigs,
-    PRODUCTION_MASTER_SCREEN_CODES.scrapCategories,
-    PRODUCTION_MASTER_SCREEN_CODES.scrapReasons,
   ),
   recipeBom: uniqueCodes(
     RECIPE_BOM_MASTER_SCREEN_CODES.recipeCreations,
@@ -326,20 +286,6 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   [`${PRODUCTION_MASTERS_ROUTE}/bag-creations`]: PRODUCTION_MASTER_SCREEN_CODES.bagCreations,
   [`${PRODUCTION_MASTERS_ROUTE}/packing-types`]: PRODUCTION_MASTER_SCREEN_CODES.packingTypes,
   [`${PRODUCTION_MASTERS_ROUTE}/packing-materials`]: PRODUCTION_MASTER_SCREEN_CODES.packingMaterials,
-  [`${PRODUCTION_MASTERS_ROUTE}/tare-masters`]: PRODUCTION_MASTER_SCREEN_CODES.tareMasters,
-  [`${PRODUCTION_MASTERS_ROUTE}/extrusion-profile-configs`]: PRODUCTION_MASTER_SCREEN_CODES.extrusionProfileConfigs,
-  [`${PRODUCTION_MASTERS_ROUTE}/scrap-categories`]: PRODUCTION_MASTER_SCREEN_CODES.scrapCategories,
-  [`${PRODUCTION_MASTERS_ROUTE}/scrap-reasons`]: PRODUCTION_MASTER_SCREEN_CODES.scrapReasons,
-  [EXTRUSION_ROUTE]: WORKSPACE_GROUP_SCREEN_CODES.extrusion,
-  [EXTRUSION_WORK_ORDERS_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionWorkOrders,
-  [EXTRUSION_INSPECTIONS_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionInspections,
-  [EXTRUSION_PACKING_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionPacking,
-  [EXTRUSION_WEIGHING_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionWeighing,
-  [EXTRUSION_STICKERS_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionStickers,
-  [EXTRUSION_SHIFT_APPROVAL_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionShiftApproval,
-  [EXTRUSION_SCRAP_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionScrap,
-  [EXTRUSION_WAREHOUSE_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionWarehouse,
-  [EXTRUSION_KPI_DASHBOARD_ROUTE]: WORKSPACE_SCREEN_CODES.extrusionKpiDashboard,
   [RECIPE_BOM_MASTERS_ROUTE]: MASTER_GROUP_SCREEN_CODES.recipeBom,
   [`${RECIPE_BOM_MASTERS_ROUTE}/recipe-creations`]: RECIPE_BOM_MASTER_SCREEN_CODES.recipeCreations,
   [`${RECIPE_BOM_MASTERS_ROUTE}/recipe-item-creations`]: RECIPE_BOM_MASTER_SCREEN_CODES.recipeItemCreations,
@@ -388,7 +334,6 @@ export const appRouteScreenCodeGroups = {
   grnWorkspace: WORKSPACE_GROUP_SCREEN_CODES.grn,
   contactsWorkspace: WORKSPACE_GROUP_SCREEN_CODES.contacts,
   regrindWorkspace: WORKSPACE_GROUP_SCREEN_CODES.regrind,
-  extrusionWorkspace: WORKSPACE_GROUP_SCREEN_CODES.extrusion,
   adminMasters: MASTER_GROUP_SCREEN_CODES.admin,
   commonMasters: MASTER_GROUP_SCREEN_CODES.common,
   inventoryStoreMasters: MASTER_GROUP_SCREEN_CODES.inventoryStore,

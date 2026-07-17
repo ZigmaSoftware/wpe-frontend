@@ -8,10 +8,7 @@ import {
   Palette,
   Package,
   PackageSearch,
-  Recycle,
   Ruler,
-  Scale,
-  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -84,32 +81,5 @@ export const productionMasterModuleDefinitions: ProductionMasterModuleDefinition
     icon: Droplet,
     label: "Packing Material",
     description: "Configure packing materials and standard consumption.",
-  },
-  {
-    to: `${PRODUCTION_MASTERS_ROUTE}/tare-masters`,
-    icon: Scale,
-    label: "Tare Master",
-    description: "Set the container tare weight used on each production stage's output capture screen.",
-  },
-];
-
-export const extrusionMasterModuleDefinitions: ProductionMasterModuleDefinition[] = [
-  {
-    to: `${PRODUCTION_MASTERS_ROUTE}/extrusion-profile-configs`,
-    icon: SlidersHorizontal,
-    label: "Extrusion Profile Config",
-    description: "Configure section weight, tolerance and default tare/packet size per profile for extrusion weight validation.",
-  },
-  {
-    to: `${PRODUCTION_MASTERS_ROUTE}/scrap-categories`,
-    icon: Recycle,
-    label: "Scrap Category",
-    description: "Maintain the extrusion scrap category master.",
-  },
-  {
-    to: `${PRODUCTION_MASTERS_ROUTE}/scrap-reasons`,
-    icon: Recycle,
-    label: "Scrap Reason",
-    description: "Maintain the extrusion scrap reason master grouped by category.",
   },
 ];

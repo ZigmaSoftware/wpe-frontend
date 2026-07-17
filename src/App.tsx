@@ -62,18 +62,6 @@ import {
   PRODUCTION_PR_LINE_CONNECT_ROUTE,
   PRODUCTION_ROUTE,
 } from "@/features/production/utils/routes";
-import {
-  EXTRUSION_INSPECTIONS_ROUTE,
-  EXTRUSION_KPI_DASHBOARD_ROUTE,
-  EXTRUSION_PACKING_ROUTE,
-  EXTRUSION_ROUTE,
-  EXTRUSION_SCRAP_ROUTE,
-  EXTRUSION_SHIFT_APPROVAL_ROUTE,
-  EXTRUSION_STICKERS_ROUTE,
-  EXTRUSION_WAREHOUSE_ROUTE,
-  EXTRUSION_WEIGHING_ROUTE,
-  EXTRUSION_WORK_ORDERS_ROUTE,
-} from "@/features/production/extrusion/utils/routes";
 import { buildAppNavigation } from "@/lib/appNavigation";
 import {
   ADMIN_SCREEN_CODES,
@@ -122,18 +110,6 @@ const BinCreationPage = lazy(() => import("@/features/production-masters/pages/B
 const BagCreationPage = lazy(() => import("@/features/production-masters/pages/BagCreationPage"));
 const PackingTypePage = lazy(() => import("@/features/production-masters/pages/PackingTypePage"));
 const PackingMaterialPage = lazy(() => import("@/features/production-masters/pages/PackingMaterialPage"));
-const TareMasterPage = lazy(() => import("@/features/production-masters/pages/TareMasterPage"));
-const ExtrusionProfileConfigPage = lazy(() => import("@/features/production-masters/pages/ExtrusionProfileConfigPage"));
-const ScrapCategoryPage = lazy(() => import("@/features/production-masters/pages/ScrapCategoryPage"));
-const ScrapReasonPage = lazy(() => import("@/features/production-masters/pages/ScrapReasonPage"));
-const ExtrusionWorkOrdersPage = lazy(() => import("@/features/production/extrusion/pages/ExtrusionWorkOrdersPage"));
-const ExtrusionInspectionsPage = lazy(() => import("@/features/production/extrusion/pages/ExtrusionInspectionsPage"));
-const ExtrusionPackingWeighingPage = lazy(() => import("@/features/production/extrusion/pages/ExtrusionPackingWeighingPage"));
-const ExtrusionStickerScanPage = lazy(() => import("@/features/production/extrusion/pages/ExtrusionStickerScanPage"));
-const ExtrusionShiftApprovalPage = lazy(() => import("@/features/production/extrusion/pages/ExtrusionShiftApprovalPage"));
-const ExtrusionScrapPage = lazy(() => import("@/features/production/extrusion/pages/ExtrusionScrapPage"));
-const ExtrusionWarehousePage = lazy(() => import("@/features/production/extrusion/pages/ExtrusionWarehousePage"));
-const ExtrusionKpiDashboardPage = lazy(() => import("@/features/production/extrusion/pages/ExtrusionKpiDashboardPage"));
 const DeviceLabelMastersLandingPage = lazy(() => import("@/features/device-label-masters/pages/DeviceLabelMastersLandingPage"));
 const WeighmentScaleCreationPage = lazy(() => import("@/features/device-label-masters/pages/WeighmentScaleCreationPage"));
 const PrinterCreationPage = lazy(() => import("@/features/device-label-masters/pages/PrinterCreationPage"));
@@ -387,37 +363,6 @@ const App = () => (
                     />
                   </Route>
 
-                  <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.extrusionWorkspace} />}>
-                    <Route path={EXTRUSION_ROUTE} element={<WorkspaceGroupRedirect groupKey="production-extrusion" fallback={EXTRUSION_WORK_ORDERS_ROUTE} />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionWorkOrders} />}>
-                    <Route path={EXTRUSION_WORK_ORDERS_ROUTE} element={<ExtrusionWorkOrdersPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionInspections} />}>
-                    <Route path={EXTRUSION_INSPECTIONS_ROUTE} element={<ExtrusionInspectionsPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionPacking} />}>
-                    <Route path={EXTRUSION_PACKING_ROUTE} element={<ExtrusionPackingWeighingPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionWeighing} />}>
-                    <Route path={EXTRUSION_WEIGHING_ROUTE} element={<ExtrusionPackingWeighingPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionStickers} />}>
-                    <Route path={EXTRUSION_STICKERS_ROUTE} element={<ExtrusionStickerScanPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionShiftApproval} />}>
-                    <Route path={EXTRUSION_SHIFT_APPROVAL_ROUTE} element={<ExtrusionShiftApprovalPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionScrap} />}>
-                    <Route path={EXTRUSION_SCRAP_ROUTE} element={<ExtrusionScrapPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionWarehouse} />}>
-                    <Route path={EXTRUSION_WAREHOUSE_ROUTE} element={<ExtrusionWarehousePage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.extrusionKpiDashboard} />}>
-                    <Route path={EXTRUSION_KPI_DASHBOARD_ROUTE} element={<ExtrusionKpiDashboardPage />} />
-                  </Route>
-
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.regrind} />}>
                     <Route path="/app/regrind" element={<RegrindPage />} />
                   </Route>
@@ -607,18 +552,6 @@ const App = () => (
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={PRODUCTION_MASTER_SCREEN_CODES.packingMaterials} />}>
                     <Route path={`${PRODUCTION_MASTERS_ROUTE}/packing-materials`} element={<PackingMaterialPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={PRODUCTION_MASTER_SCREEN_CODES.tareMasters} />}>
-                    <Route path={`${PRODUCTION_MASTERS_ROUTE}/tare-masters`} element={<TareMasterPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={PRODUCTION_MASTER_SCREEN_CODES.extrusionProfileConfigs} />}>
-                    <Route path={`${PRODUCTION_MASTERS_ROUTE}/extrusion-profile-configs`} element={<ExtrusionProfileConfigPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={PRODUCTION_MASTER_SCREEN_CODES.scrapCategories} />}>
-                    <Route path={`${PRODUCTION_MASTERS_ROUTE}/scrap-categories`} element={<ScrapCategoryPage />} />
-                  </Route>
-                  <Route element={<PermissionRouteGuard screenCodes={PRODUCTION_MASTER_SCREEN_CODES.scrapReasons} />}>
-                    <Route path={`${PRODUCTION_MASTERS_ROUTE}/scrap-reasons`} element={<ScrapReasonPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.recipeBomMasters} />}>

@@ -171,20 +171,6 @@ export interface BagCreationWritePayload extends CodeMasterWritePayload {
   is_active?: boolean;
 }
 
-export interface TareMasterRecord extends CodeMasterRecord {
-  stage: "AD" | "BL" | "GL" | "PR";
-  stage_display: string;
-  tare_weight: string;
-  uom: "KG";
-}
-
-export interface TareMasterWritePayload extends CodeMasterWritePayload {
-  stage: "AD" | "BL" | "GL" | "PR";
-  tare_weight: number | string;
-  uom?: "KG";
-  is_active?: boolean;
-}
-
 export interface PackingTypeRecord extends CodeMasterRecord {
   standard_pcs: number;
   standard_weight: string;
