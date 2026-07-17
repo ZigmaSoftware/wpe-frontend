@@ -48,6 +48,8 @@ import {
 } from "@/features/wpe-masters/constants";
 import { inventoryStoreModuleDefinitions } from "@/features/wpe-masters/utils/routes";
 import { hasAnyScreenAccess } from "@/features/admin-master/utils/permissions";
+import { DRIVE_ROUTE } from "@/features/drive/utils/routes";
+import { TASK_TRACKER_ROUTE } from "@/features/task-tracker/utils/routes";
 import { getRouteScreenCodes } from "@/lib/routePermissions";
 
 export type AppNavItem = {
@@ -376,6 +378,10 @@ export const flattenNavigationLinks = (navigation: AppNavigation): AppSearchLink
 };
 
 export const getTopLevelNavKey = (pathname: string, navigation: AppNavigation) => {
+  if (pathname === DRIVE_ROUTE || pathname === TASK_TRACKER_ROUTE) {
+    return "dashboard" as const;
+  }
+
   if (navigation.dashboard && isNavItemActive(pathname, navigation.dashboard)) {
     return "dashboard" as const;
   }
@@ -392,6 +398,20 @@ export const getTopLevelNavKey = (pathname: string, navigation: AppNavigation) =
 };
 
 export const buildBreadcrumbs = (pathname: string, navigation: AppNavigation): AppBreadcrumb[] => {
+  if (pathname === DRIVE_ROUTE) {
+    return [
+      { label: DASHBOARD_SECTION_LABEL, to: "/app/dashboard" },
+      { label: "Drive" },
+    ];
+  }
+
+  if (pathname === TASK_TRACKER_ROUTE) {
+    return [
+      { label: DASHBOARD_SECTION_LABEL, to: "/app/dashboard" },
+      { label: "Task Tracker" },
+    ];
+  }
+
   if (navigation.dashboard && isNavItemActive(pathname, navigation.dashboard)) {
     return [{ label: DASHBOARD_SECTION_LABEL }];
   }

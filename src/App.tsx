@@ -33,6 +33,8 @@ import {
   STORE_INVENTORY_ROUTE,
   WAREHOUSE_INVENTORY_ROUTE,
 } from "@/features/items/utils/routes";
+import { DRIVE_ROUTE } from "@/features/drive/utils/routes";
+import { TASK_TRACKER_ROUTE } from "@/features/task-tracker/utils/routes";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import {
@@ -136,6 +138,8 @@ const BlendingTransactionPage = lazy(() => import("@/pages/BlendingTransactionPa
 const ContactsPage = lazy(() => import("@/pages/ContactsPage"));
 const ContactFormPage = lazy(() => import("@/pages/ContactFormPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const DrivePage = lazy(() => import("@/pages/DrivePage"));
+const TaskTrackerPage = lazy(() => import("@/pages/TaskTrackerPage"));
 const GRNCreatePage = lazy(() => import("@/pages/GRNCreatePage"));
 const GRNDetailPage = lazy(() => import("@/pages/GRNDetailPage"));
 const GRNEditPage = lazy(() => import("@/pages/GRNEditPage"));
@@ -242,6 +246,8 @@ const App = () => (
                     <Route path="/app" element={<DashboardPage />} />
                     <Route path="/app/dashboard" element={<DashboardPage />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path={DRIVE_ROUTE} element={<DrivePage />} />
+                    <Route path={TASK_TRACKER_ROUTE} element={<TaskTrackerPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.contacts} />}>

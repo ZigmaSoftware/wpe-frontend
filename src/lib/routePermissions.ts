@@ -8,6 +8,7 @@ import {
 } from "@/features/blending/utils/routes";
 import { COMMON_MASTERS_ROUTE } from "@/features/common-master/utils/routes";
 import { DEVICE_LABEL_MASTERS_ROUTE } from "@/features/device-label-masters/utils/routes";
+import { DRIVE_ROUTE } from "@/features/drive/utils/routes";
 import { GRN_PROCESS_ROUTE, GRN_ROUTE, GRN_STATUS_ROUTE } from "@/features/grn/utils/routes";
 import { INVENTORY_ROUTE, PRODUCTION_INVENTORY_ROUTE, STORE_INVENTORY_ROUTE, WAREHOUSE_INVENTORY_ROUTE } from "@/features/items/utils/routes";
 import { PRODUCTION_MASTERS_ROUTE } from "@/features/production-masters/utils/routes";
@@ -23,6 +24,7 @@ import {
   STORE_STOCK_ROUTE,
   STORE_TRANSACTIONS_ROUTE,
 } from "@/features/store/utils/routes";
+import { TASK_TRACKER_ROUTE } from "@/features/task-tracker/utils/routes";
 import {
   INVENTORY_STORE_MASTERS_ROUTE,
   WPE_ITEM_VARIANTS_ROUTE,
@@ -219,6 +221,8 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   "/app": DASHBOARD_SCREEN_CODES,
   "/app/dashboard": DASHBOARD_SCREEN_CODES,
   "/dashboard": DASHBOARD_SCREEN_CODES,
+  [DRIVE_ROUTE]: DASHBOARD_SCREEN_CODES,
+  [TASK_TRACKER_ROUTE]: DASHBOARD_SCREEN_CODES,
   [STORE_INVENTORY_ROUTE]: WORKSPACE_SCREEN_CODES.storeInventory,
   [PRODUCTION_INVENTORY_ROUTE]: WORKSPACE_SCREEN_CODES.productionInventory,
   [WAREHOUSE_INVENTORY_ROUTE]: WORKSPACE_GROUP_SCREEN_CODES.inventory,
