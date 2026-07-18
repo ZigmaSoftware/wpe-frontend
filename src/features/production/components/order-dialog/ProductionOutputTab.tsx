@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, PackageCheck, QrCode, Scale } from "lucide-r
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
 import { useScannerInput } from "@/hooks/useScannerInput";
 import { useWeightStream } from "@/hooks/useWeightStream";
@@ -14,6 +15,7 @@ import { CAN_QUERY_LOCAL_SCALE_BRIDGE_STATUS, SCALE_BRIDGE_LOCAL_STATUS_URL } fr
 import type { ProductionBatch, ProductionOutputCapture } from "@/lib/types";
 import { BATCH_STATUS_CLASSES, StatusBadge } from "@/pages/productionShared";
 import ProductionSectionCard from "./ProductionSectionCard";
+import ProductionScrapCapturePanel from "./ProductionScrapCapturePanel";
 import {
   areAllRequiredOutputComponentsCaptured,
   buildCapturedOutputRecord,
@@ -1344,10 +1346,20 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
           ? binlotValue
           : "Not assigned");
   const activeCapture = activeComponent ? capturedWeights.get(activeComponent.id) ?? null : null;
+  const [prCaptureTab, setPrCaptureTab] = useState<"fg" | "scrap">("fg");
 
   return (
     <>
     <ProductionSectionCard title="Output Weight Capture" tone="emerald" icon={Scale}>
+      {isPrMode ? (
+        <Tabs value={prCaptureTab} onValueChange={(value) => setPrCaptureTab(value as "fg" | "scrap")} className="space-y-4">
+          <TabsList className="h-auto w-max gap-0.5">
+            <TabsTrigger value="fg" className="whitespace-nowrap text-xs sm:text-sm">Capture - FG</TabsTrigger>
+            <TabsTrigger value="scrap" className="whitespace-nowrap text-xs sm:text-sm">Capture - Scrap</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      ) : null}
+      <div className={isPrMode && prCaptureTab !== "fg" ? "hidden" : undefined}>
       <div className="space-y-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.25)]">
           <div className="max-w-none">
@@ -1827,6 +1839,22 @@ const ProductionOutputTab = ({ form, context, isActive = true }: ProductionOutpu
           </div>
         </div>
       </div>
+      </div>
+      {isPrMode ? (
+        <div className={prCaptureTab === "scrap" ? undefined : "hidden"}>
+          <ProductionScrapCapturePanel
+            active={isActive && prCaptureTab === "scrap"}
+            orderId={persistedOrderId}
+            activeBatch={activeBatch}
+            weight={weight}
+            connected={connected}
+            statusLabel={statusLabel}
+            scaleCapturePayload={scaleCapturePayload}
+            onTare={tare}
+            onCaptured={invalidateBatchQueries}
+          />
+        </div>
+      ) : null}
     </ProductionSectionCard>
 
     {qrLabelRecord ? (

@@ -95,6 +95,7 @@ const ProductionTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages
 const ProductTypesPage = lazy(() => import("@/features/wpe-masters/pages/ProductTypesPage"));
 const SaleTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/SaleTypeMasterPage"));
 const PurchaseTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/PurchaseTypeMasterPage"));
+const ScrapTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/ScrapTypeMasterPage"));
 const RoleMasterPage = lazy(() => import("@/features/wpe-masters/pages/RoleMasterPage"));
 const DepartmentMasterPage = lazy(() => import("@/features/wpe-masters/pages/DepartmentMasterPage"));
 const DesignationMasterPage = lazy(() => import("@/features/wpe-masters/pages/DesignationMasterPage"));
@@ -524,6 +525,9 @@ const App = () => (
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_MASTER_SCREEN_CODES.purchaseTypes} />}>
                     <Route path="/wpe-masters/purchase-types" element={<PurchaseTypeMasterPage />} />
+                  </Route>
+                  <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_MASTER_SCREEN_CODES.scrapTypes} />}>
+                    <Route path="/wpe-masters/scrap-types" element={<ScrapTypeMasterPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.productionMasters} />}>
