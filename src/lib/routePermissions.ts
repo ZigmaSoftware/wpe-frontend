@@ -94,6 +94,7 @@ export const INVENTORY_STORE_MASTER_SCREEN_CODES = {
   productionTypes: ["production-type-master"] as const,
   saleTypes: ["sale-type-master"] as const,
   purchaseTypes: ["purchase-type-master"] as const,
+  scrapTypes: ["scrap-type-master"] as const,
 };
 
 export const INVENTORY_STORE_ITEM_HIERARCHY_SCREEN_CODES = [
@@ -190,6 +191,7 @@ export const MASTER_GROUP_SCREEN_CODES = {
     INVENTORY_STORE_MASTER_SCREEN_CODES.productionTypes,
     INVENTORY_STORE_MASTER_SCREEN_CODES.saleTypes,
     INVENTORY_STORE_MASTER_SCREEN_CODES.purchaseTypes,
+    INVENTORY_STORE_MASTER_SCREEN_CODES.scrapTypes,
   ),
   production: uniqueCodes(
     PRODUCTION_MASTER_SCREEN_CODES.profileCreations,
@@ -279,6 +281,7 @@ export const routeScreenCodeMap: Record<string, readonly string[]> = {
   "/wpe-masters/production-types": INVENTORY_STORE_MASTER_SCREEN_CODES.productionTypes,
   "/wpe-masters/sale-types": INVENTORY_STORE_MASTER_SCREEN_CODES.saleTypes,
   "/wpe-masters/purchase-types": INVENTORY_STORE_MASTER_SCREEN_CODES.purchaseTypes,
+  "/wpe-masters/scrap-types": INVENTORY_STORE_MASTER_SCREEN_CODES.scrapTypes,
   [PRODUCTION_MASTERS_ROUTE]: MASTER_GROUP_SCREEN_CODES.production,
   [`${PRODUCTION_MASTERS_ROUTE}/profile-creations`]: PRODUCTION_MASTER_SCREEN_CODES.profileCreations,
   [`${PRODUCTION_MASTERS_ROUTE}/profile-sizes`]: PRODUCTION_MASTER_SCREEN_CODES.profileSizes,

@@ -39,6 +39,16 @@ export interface WarehouseMasterWritePayload extends CodeMasterWritePayload {
   warehouse_type: "FG" | "RM" | "SCRAP";
 }
 
+export type ScrapTypeValue = "STARTUP" | "SETUP" | "PROCESS" | "DOWNTIME";
+
+export interface ScrapTypeMasterRecord extends MasterRecord {
+  type: ScrapTypeValue;
+}
+
+export interface ScrapTypeMasterWritePayload extends MasterWritePayload {
+  type: ScrapTypeValue;
+}
+
 export type StoreMasterRecord = CodeMasterRecord;
 
 export interface DepartmentMasterRecord extends CodeMasterRecord {
@@ -231,6 +241,7 @@ export interface LookupItem {
   id: number;
   name: string;
   code?: string | null;
+  type?: ScrapTypeValue;
   username?: string | null;
   uom_code?: string | null;
   decimal_allowed?: boolean;
