@@ -30,6 +30,8 @@ import type {
   ProductTypeSubtypeRecord,
   ProductTypeSubtypeWritePayload,
   ProductTypeTreeCategoryRecord,
+  ScrapTypeMasterRecord,
+  ScrapTypeMasterWritePayload,
   TableParams,
   UnitMasterRecord,
   UnitMasterWritePayload,
@@ -85,7 +87,7 @@ const master = <TRecord extends MasterRecord = MasterRecord, TPayload extends Ma
 
 const codeMaster = <TRecord extends CodeMasterRecord, TPayload extends CodeMasterWritePayload>(resource: string) => ({
   list: (params: TableParams) => listResource<TRecord>(`${BASE}/${resource}/`, params),
-  lookup: () => lookupMaster(`${BASE}/${resource}/lookup/`),
+  lookup: (params?: Record<string, string | number | boolean | null | undefined>) => lookupMaster(`${BASE}/${resource}/lookup/`, params),
   nextCode: () => fetchNextCode(`${BASE}/${resource}/next-code/`),
   create: (payload: TPayload) => createResource<TRecord, TPayload>(`${BASE}/${resource}/`, payload),
   update: (id: number, payload: Partial<TPayload>) => updateResource<TRecord, Partial<TPayload>>(`${BASE}/${resource}/${id}/`, payload),
@@ -146,6 +148,7 @@ export const wpeMastersApi = {
   productionTypes: master("production-types"),
   saleTypes: master("sale-types"),
   purchaseTypes: master("purchase-types"),
+  scrapTypes: master<ScrapTypeMasterRecord, ScrapTypeMasterWritePayload>("scrap-types"),
 
   users: {
     ...resourceEntity<WPEUserRecord, WPEUserWritePayload>(BASE, "users"),
