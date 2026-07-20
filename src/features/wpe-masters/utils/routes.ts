@@ -4,6 +4,7 @@ import {
   Layers,
   MapPin,
   PackageSearch,
+  Recycle,
   Ruler,
   ShoppingCart,
   Store,
@@ -77,6 +78,12 @@ export const inventoryStoreModuleDefinitions: InventoryStoreModuleDefinition[] =
     icon: ShoppingCart,
     label: "Purchase Type",
     description: "Manage existing purchase type records.",
+  },
+  {
+    to: "/wpe-masters/scrap-types",
+    icon: Recycle,
+    label: "Scrap Type",
+    description: "Manage PR scrap type records by startup, setup, process, and downtime.",
   },
 ];
 

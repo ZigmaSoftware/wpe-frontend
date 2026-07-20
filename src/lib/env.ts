@@ -1,4 +1,11 @@
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+const localBackendHost = () => {
+  if (typeof window === "undefined") {
+    return "127.0.0.1";
+  }
+
+  return window.location.hostname === "::1" ? "[::1]" : window.location.hostname;
+};
 
 const isLocalFrontendHost = () => {
   if (typeof window === "undefined") {
@@ -37,7 +44,7 @@ export const CORE_API_URL = trimTrailingSlash(
     ? (import.meta.env.VITE_CORE_API_PROD   ?? "http://115.245.93.26:7904")
     : ENV === "server"
     ? (import.meta.env.VITE_CORE_API_SERVER ?? "http://192.168.5.19:8000")
-    : (import.meta.env.VITE_CORE_API_LOCAL  ?? "http://127.0.0.1:8000"),
+    : (import.meta.env.VITE_CORE_API_LOCAL  ?? `http://${localBackendHost()}:8000`),
 );
 
 export const GRN_API_URL = trimTrailingSlash(

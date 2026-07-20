@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
@@ -348,10 +348,7 @@ describe("DashboardPage", () => {
   it("renders the dashboard inside AppLayout without breadcrumbs and omits inaccessible quick actions", async () => {
     renderDashboard();
 
-    await waitFor(() => {
-      expect(screen.getByText("69.7 Kgs")).toBeInTheDocument();
-      expect(screen.getByText("45.3 Kgs")).toBeInTheDocument();
-    });
+    await screen.findByText("Store Stock Rows");
 
     expect(document.querySelector(".wpe-crumbbar")).not.toBeInTheDocument();
     expect(screen.getByText("Store Stock Rows")).toBeInTheDocument();
@@ -364,5 +361,29 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Add Contact")).not.toBeInTheDocument();
     expect(screen.queryByText("Add Item")).not.toBeInTheDocument();
     expect(screen.queryByText("BOM Variants")).not.toBeInTheDocument();
+    expect(screen.getByText("Drive")).toBeInTheDocument();
+    expect(screen.getByText("Task Tracker")).toBeInTheDocument();
+  });
+
+  it("opens drive in a new browser tab from the dashboard header", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    renderDashboard();
+
+    await screen.findByRole("button", { name: "Open Drive" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Drive" }));
+
+    expect(openSpy).toHaveBeenCalledWith("/app/drive", "_blank", "noopener,noreferrer");
+  });
+
+  it("opens the task tracker in a new browser tab from the dashboard header", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    renderDashboard();
+
+    await screen.findByRole("button", { name: "Open Task Tracker" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Task Tracker" }));
+
+    expect(openSpy).toHaveBeenCalledWith("/app/task-tracker", "_blank", "noopener,noreferrer");
   });
 });

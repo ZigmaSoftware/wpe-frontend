@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, ClipboardList, FolderOpen } from "lucide-react";
 import { format } from "date-fns";
 import {
   Bar,
@@ -37,8 +37,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { hasAnyScreenAccess } from "@/features/admin-master/utils/permissions";
+import { DRIVE_ROUTE } from "@/features/drive/utils/routes";
 import { GRN_PROCESS_ROUTE } from "@/features/grn/utils/routes";
 import { REQUESTS_STORE_REQUEST_ROUTE } from "@/features/requests/utils/routes";
+import { TASK_TRACKER_ROUTE } from "@/features/task-tracker/utils/routes";
 import { WORKSPACE_SCREEN_CODES, getRouteScreenCodes } from "@/lib/routePermissions";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -255,6 +257,36 @@ const DashboardPage = () => {
         </div>
 
         <div className="flex w-full flex-col gap-3 pt-1 sm:mt-2 sm:w-auto sm:flex-row sm:pt-0">
+          <button
+            type="button"
+            onClick={() => window.open(DRIVE_ROUTE, "_blank", "noopener,noreferrer")}
+            className="flex h-[58px] min-w-[158px] items-center gap-3 rounded-2xl border border-[#1C3A6B] bg-[#1C3A6B] px-4 text-left shadow-[0_14px_34px_-24px_rgba(15,23,42,0.4)] transition-colors hover:border-[#d6ad4f] hover:bg-[#173159]"
+            aria-label="Open Drive"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f4d485]/18 text-[#f4d485]">
+              <FolderOpen className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f4d485]">Documents</span>
+              <span className="block truncate text-sm font-semibold text-white">Drive</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.open(TASK_TRACKER_ROUTE, "_blank", "noopener,noreferrer")}
+            className="flex h-[58px] min-w-[188px] items-center gap-3 rounded-2xl border border-[#1C3A6B] bg-[#1C3A6B] px-4 text-left shadow-[0_14px_34px_-24px_rgba(15,23,42,0.4)] transition-colors hover:border-[#d6ad4f] hover:bg-[#173159]"
+            aria-label="Open Task Tracker"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f4d485]/18 text-[#f4d485]">
+              <ClipboardList className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f4d485]">Live Sheet</span>
+              <span className="block truncate text-sm font-semibold text-white">Task Tracker</span>
+            </span>
+          </button>
+
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <button

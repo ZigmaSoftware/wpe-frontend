@@ -34,6 +34,13 @@ type DetailState = {
   search: string;
 };
 
+type DetailColumnDefinition = {
+  key: string;
+  label: string;
+  className?: string;
+  value: (row: ProductionInventoryRow, index: number) => string | number;
+};
+
 const isProductionStage = (value: string): value is ProductionStage =>
   PRODUCTION_INVENTORY_TABS.some((tab) => tab.stage !== "ALL" && tab.stage === value);
 
@@ -72,6 +79,79 @@ const formatTimePart = (value?: string | null) => {
 const getDisplayedBatchId = (row: ProductionInventoryRow) =>
   getInventoryText(row.batch_no || row.batch_code || row.reference_no);
 
+const DEFAULT_DETAIL_COLUMNS: DetailColumnDefinition[] = [
+  { key: "serial", label: "S.No", className: "w-12 text-right text-muted-foreground", value: (_row, index) => index + 1 },
+  { key: "date", label: "Date", value: (row) => formatDatePart(row.created_at) },
+  { key: "time", label: "Time", value: (row) => formatTimePart(row.created_at) },
+  { key: "batch_id", label: "BATCH ID", className: "font-mono text-sm font-medium", value: (row) => getDisplayedBatchId(row) },
+  {
+    key: "captured_weight",
+    label: "Captured WT",
+    className: "text-right font-semibold",
+    value: (row) => formatWeightValue(row.captured_weight, row.uom),
+  },
+  { key: "scancode", label: "Scancode", value: (row) => getInventoryText(row.scancode) },
+  { key: "binlot", label: "Binlot", value: (row) => getInventoryText(row.binlot) },
+  { key: "baglot", label: "Baglot", value: (row) => getInventoryText(row.baglot) },
+  { key: "created_by", label: "Captured By", value: (row) => getInventoryText(row.created_by) },
+];
+
+const CONNECTION_TO_LINE_DETAIL_COLUMNS: DetailColumnDefinition[] = [
+  { key: "serial", label: "S.No", className: "w-12 text-right text-muted-foreground", value: (_row, index) => index + 1 },
+  { key: "date", label: "Date", value: (row) => formatDatePart(row.created_at) },
+  { key: "time", label: "Time", value: (row) => formatTimePart(row.created_at) },
+  { key: "batch_id", label: "BATCH ID", className: "font-mono text-sm font-medium", value: (row) => getDisplayedBatchId(row) },
+  {
+    key: "captured_weight",
+    label: "Captured WT",
+    className: "text-right font-semibold",
+    value: (row) => formatWeightValue(row.captured_weight, row.uom),
+  },
+  { key: "scancode", label: "Scancode", value: (row) => getInventoryText(row.scancode) },
+  { key: "gl_baglot", label: "GL - Baglot", value: (row) => getInventoryText(row.baglot) },
+  {
+    key: "outward_weight",
+    label: "Outward WT",
+    className: "text-right font-semibold",
+    value: (row) => formatWeightValue(row.consumed_weight, row.uom),
+  },
+  { key: "pr_scancode", label: "PR - Scancode", value: (row) => getInventoryText(row.consumed_scancode) },
+  { key: "created_by", label: "Captured By", value: (row) => getInventoryText(row.created_by) },
+];
+
+const LINE_WORK_CENTER_DETAIL_COLUMNS: DetailColumnDefinition[] = [
+  { key: "serial", label: "S.No", className: "w-12 text-right text-muted-foreground", value: (_row, index) => index + 1 },
+  { key: "date", label: "Date", value: (row) => formatDatePart(row.created_at) },
+  { key: "time", label: "Time", value: (row) => formatTimePart(row.created_at) },
+  { key: "batch_id", label: "BATCH ID", className: "font-mono text-sm font-medium", value: (row) => getDisplayedBatchId(row) },
+  {
+    key: "captured_weight",
+    label: "Captured WT",
+    className: "text-right font-semibold",
+    value: (row) => formatWeightValue(row.captured_weight, row.uom),
+  },
+  { key: "scancode", label: "Scancode", value: (row) => getInventoryText(row.scancode) },
+  { key: "gl_baglot", label: "GL - Baglot", value: (row) => getInventoryText(row.baglot) },
+  {
+    key: "outward_weight",
+    label: "Outward WT",
+    className: "text-right font-semibold",
+    value: (row) => formatWeightValue(row.connected_weight || row.captured_weight, row.uom),
+  },
+  { key: "gl_scancode", label: "GL - Scancode", value: (row) => getInventoryText(row.captured_bin_scancode) },
+  { key: "created_by", label: "Captured By", value: (row) => getInventoryText(row.created_by) },
+];
+
+const getDetailColumns = (stage: ProductionStage): DetailColumnDefinition[] => {
+  if (stage === "CONNECTION_TO_LINE") {
+    return CONNECTION_TO_LINE_DETAIL_COLUMNS;
+  }
+  if (stage === "LINE_WORK_CENTER") {
+    return LINE_WORK_CENTER_DETAIL_COLUMNS;
+  }
+  return DEFAULT_DETAIL_COLUMNS;
+};
+
 const filterDetailRows = (rows: ProductionInventoryRow[], search: string) => {
   const normalizedSearch = search.trim().toLowerCase();
   if (!normalizedSearch) {
@@ -87,6 +167,8 @@ const filterDetailRows = (rows: ProductionInventoryRow[], search: string) => {
       row.scancode,
       row.binlot,
       row.baglot,
+      row.consumed_scancode,
+      row.captured_bin_scancode,
       row.created_by,
     ]
       .join(" ")
@@ -140,19 +222,14 @@ const ProductionInventoryDetailPage = () => {
     return <Navigate to={PRODUCTION_INVENTORY_ROUTE} replace />;
   }
 
+  const detailColumns = getDetailColumns(stageDefinition.stage);
+
   const handleExport = async (format: StoreExportFormat) => {
     try {
-      const columns: StoreExportColumn<ProductionInventoryRow>[] = [
-        { label: "S.No", value: (_row, index) => index + 1 },
-        { label: "Date", value: (row) => formatDatePart(row.created_at) },
-        { label: "Time", value: (row) => formatTimePart(row.created_at) },
-        { label: "BATCH ID", value: (row) => getDisplayedBatchId(row) },
-        { label: "Captured WT", value: (row) => formatWeightValue(row.captured_weight, row.uom) },
-        { label: "Scancode", value: (row) => getInventoryText(row.scancode) },
-        { label: "Binlot", value: (row) => getInventoryText(row.binlot) },
-        { label: "Baglot", value: (row) => getInventoryText(row.baglot) },
-        { label: "Captured By", value: (row) => getInventoryText(row.created_by) },
-      ];
+      const columns: StoreExportColumn<ProductionInventoryRow>[] = detailColumns.map((column) => ({
+        label: column.label,
+        value: (row, index) => column.value(row, index),
+      }));
 
       exportTableData({
         title: `${stageDefinition.label} - ${productionId}`,
@@ -202,36 +279,30 @@ const ProductionInventoryDetailPage = () => {
           ) : pagedRows.length ? (
             <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
               <div className="max-h-[calc(100vh-26rem)] overflow-auto">
-                <Table className="min-w-[1080px]">
+                <Table className={
+                  stageDefinition.stage === "CONNECTION_TO_LINE" || stageDefinition.stage === "LINE_WORK_CENTER"
+                    ? "min-w-[1240px]"
+                    : "min-w-[1080px]"
+                }>
                   <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
                     <TableRow className="hover:bg-card">
-                      <TableHead className="w-12 text-right">S.No</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead>BATCH ID</TableHead>
-                      <TableHead className="text-right">Captured WT</TableHead>
-                      <TableHead>Scancode</TableHead>
-                      <TableHead>Binlot</TableHead>
-                      <TableHead>Baglot</TableHead>
-                      <TableHead>Captured By</TableHead>
+                      {detailColumns.map((column) => (
+                        <TableHead key={column.key} className={column.className?.includes("text-right") ? "text-right" : undefined}>
+                          {column.label}
+                        </TableHead>
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pagedRows.map((row, index) => (
                       <TableRow key={`${row.stage}-${row.id}`}>
-                        <TableCell className="text-right text-muted-foreground">
-                          {getPageSerialNumber(state.page, state.pageSize, totalRows, index)}
-                        </TableCell>
-                        <TableCell>{formatDatePart(row.created_at)}</TableCell>
-                        <TableCell>{formatTimePart(row.created_at)}</TableCell>
-                        <TableCell className="font-mono text-sm font-medium">{getDisplayedBatchId(row)}</TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {formatWeightValue(row.captured_weight, row.uom)}
-                        </TableCell>
-                        <TableCell>{getInventoryText(row.scancode)}</TableCell>
-                        <TableCell>{getInventoryText(row.binlot)}</TableCell>
-                        <TableCell>{getInventoryText(row.baglot)}</TableCell>
-                        <TableCell>{getInventoryText(row.created_by)}</TableCell>
+                        {detailColumns.map((column) => (
+                          <TableCell key={column.key} className={column.className}>
+                            {column.key === "serial"
+                              ? getPageSerialNumber(state.page, state.pageSize, totalRows, index)
+                              : column.value(row, index)}
+                          </TableCell>
+                        ))}
                       </TableRow>
                     ))}
                   </TableBody>

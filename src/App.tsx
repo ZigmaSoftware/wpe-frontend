@@ -33,6 +33,8 @@ import {
   STORE_INVENTORY_ROUTE,
   WAREHOUSE_INVENTORY_ROUTE,
 } from "@/features/items/utils/routes";
+import { DRIVE_ROUTE } from "@/features/drive/utils/routes";
+import { TASK_TRACKER_ROUTE } from "@/features/task-tracker/utils/routes";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import {
@@ -93,6 +95,7 @@ const ProductionTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages
 const ProductTypesPage = lazy(() => import("@/features/wpe-masters/pages/ProductTypesPage"));
 const SaleTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/SaleTypeMasterPage"));
 const PurchaseTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/PurchaseTypeMasterPage"));
+const ScrapTypeMasterPage = lazy(() => import("@/features/wpe-masters/pages/ScrapTypeMasterPage"));
 const RoleMasterPage = lazy(() => import("@/features/wpe-masters/pages/RoleMasterPage"));
 const DepartmentMasterPage = lazy(() => import("@/features/wpe-masters/pages/DepartmentMasterPage"));
 const DesignationMasterPage = lazy(() => import("@/features/wpe-masters/pages/DesignationMasterPage"));
@@ -136,6 +139,8 @@ const BlendingTransactionPage = lazy(() => import("@/pages/BlendingTransactionPa
 const ContactsPage = lazy(() => import("@/pages/ContactsPage"));
 const ContactFormPage = lazy(() => import("@/pages/ContactFormPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const DrivePage = lazy(() => import("@/pages/DrivePage"));
+const TaskTrackerPage = lazy(() => import("@/pages/TaskTrackerPage"));
 const GRNCreatePage = lazy(() => import("@/pages/GRNCreatePage"));
 const GRNDetailPage = lazy(() => import("@/pages/GRNDetailPage"));
 const GRNEditPage = lazy(() => import("@/pages/GRNEditPage"));
@@ -242,6 +247,8 @@ const App = () => (
                     <Route path="/app" element={<DashboardPage />} />
                     <Route path="/app/dashboard" element={<DashboardPage />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path={DRIVE_ROUTE} element={<DrivePage />} />
+                    <Route path={TASK_TRACKER_ROUTE} element={<TaskTrackerPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={WORKSPACE_SCREEN_CODES.contacts} />}>
@@ -518,6 +525,9 @@ const App = () => (
                   </Route>
                   <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_MASTER_SCREEN_CODES.purchaseTypes} />}>
                     <Route path="/wpe-masters/purchase-types" element={<PurchaseTypeMasterPage />} />
+                  </Route>
+                  <Route element={<PermissionRouteGuard screenCodes={INVENTORY_STORE_MASTER_SCREEN_CODES.scrapTypes} />}>
+                    <Route path="/wpe-masters/scrap-types" element={<ScrapTypeMasterPage />} />
                   </Route>
 
                   <Route element={<PermissionRouteGuard screenCodes={appRouteScreenCodeGroups.productionMasters} />}>
